@@ -7,7 +7,7 @@ use futures::{
     FutureExt,
 };
 use ggrs::PlayerType;
-use matchbox_peer::WebRtcNonBlockingSocket;
+use matchbox_socket::WebRtcNonBlockingSocket;
 use std::{sync::Arc, task::Context};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;

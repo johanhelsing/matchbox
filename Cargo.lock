@@ -2583,32 +2583,13 @@ dependencies = [
  "ggrs",
  "js-sys",
  "log",
- "matchbox_peer",
+ "matchbox_socket",
  "serde",
  "serde_qs",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
  "winit 0.25.0",
-]
-
-[[package]]
-name = "matchbox_peer"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "futures",
- "futures-channel",
- "futures-util",
- "ggrs",
- "js-sys",
- "serde",
- "serde_json",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "ws_stream_wasm",
 ]
 
 [[package]]
@@ -2626,6 +2607,25 @@ dependencies = [
  "tokio-stream",
  "uuid",
  "warp",
+]
+
+[[package]]
+name = "matchbox_socket"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "futures",
+ "futures-channel",
+ "futures-util",
+ "ggrs",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "ws_stream_wasm",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 [package]
-name = "matchbox_peer"
+name = "matchbox_socket"
 version = "0.1.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "Painless WebRTC peer-to-peer full-mesh networking socket"

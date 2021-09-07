@@ -16,7 +16,7 @@ It is currently an all-in-one solution, it comes with:
 rust, uses only a couple of megabytes of memory. Also available as a docker image.
 - An example browser game, using `bevy`, `bevy_ggrs` and `bevy_webgl2`,
 [matchbox_demo](matchbox_demo)
-- A socket abstraction for rust wasm, [matchbox_peer](matchbox_peer)
+- A socket abstraction for rust wasm, [matchbox_socket](matchbox_socket)
 
 ## Live demo
 
@@ -76,7 +76,7 @@ In rough order:
 
 - [x] Upstream ggrs changes and stop using fork
 - [ ] Remove ggrs git submodule
-- [x] Move socket code from example game into `matchbox_peer`
+- [x] Move socket code from example game into `matchbox_socket`
 - [ ] Decide on how to identify peers, currently we use uuids internally, but
 expose a bogus SocketAddr to the calling code.
 - [ ] Make sure TURN is working (nat relay services)
@@ -97,9 +97,9 @@ players, disregarding rooms)
 ## Thanks!
 
 - A huge thanks to Ernest Wong for his [Dango Tribute
-experiment](https://github.com/ErnWong/dango-tribute)! The `matchbox_peer`
-socket is heavily inspired its wasm-bindgen server_socket and Matchbox would
-probably not exist without it.
+experiment](https://github.com/ErnWong/dango-tribute)! `matchbox_socket` is
+heavily inspired its wasm-bindgen server_socket and Matchbox would probably not
+exist without it.
 
 ## License
 

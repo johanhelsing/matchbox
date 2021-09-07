@@ -44,7 +44,7 @@ fn main() {
 }
 
 async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
-    // read cmd line arguments
+    // read query string or command line arguments
     let args = Args::get();
     log_1(&JsValue::from(format!("{:?}", args)));
 
@@ -123,16 +123,14 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
 
-    app.add_startup_system(setup_system.system());
-    app.insert_resource(MessageTaskPool(Arc::new(Mutex::new(pool))));
-
-    // app.add_startup_system(start_socket);
-    app.add_system(handle_tasks);
-    app.add_plugin(GGRSPlugin);
-    // add your GGRS session
-    app.with_p2p_session(p2p_session);
-    // define frequency of game logic update
-    app.with_rollback_run_criteria(FixedTimestep::steps_per_second(FPS as f64))
+    app.add_startup_system(setup_system.system())
+        .insert_resource(MessageTaskPool(Arc::new(Mutex::new(pool))))
+        .add_system(handle_tasks)
+        .add_plugin(GGRSPlugin)
+        // add your GGRS session
+        .with_p2p_session(p2p_session)
+        // define frequency of game logic update
+        .with_rollback_run_criteria(FixedTimestep::steps_per_second(FPS as f64))
         // define system that represents your inputs as a byte vector, so GGRS can send the inputs around
         .with_input_system(input.system())
         // register components that will be loaded/saved
@@ -143,9 +141,8 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         .register_rollback_type::<FrameCount>()
         // these systems will be executed as part of the advance frame update
         .add_rollback_system(move_cube_system)
-        .add_rollback_system(increase_frame_system);
-
-    app.run();
+        .add_rollback_system(increase_frame_system)
+        .run();
 
     Ok(())
 }

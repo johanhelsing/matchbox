@@ -75,24 +75,24 @@ Similarly, you can send packets to clients using a simple non-blocking method.
 In rough order:
 
 - [x] Upstream ggrs changes and stop using fork
-- [ ] Remove ggrs git submodule
 - [x] Move socket code from example game into `matchbox_socket`
-- [ ] Decide on how to identify peers, currently we use uuids internally, but
-expose a bogus SocketAddr to the calling code.
-- [ ] Make sure TURN is working (nat relay services)
-- [ ] Decouple signalling from message loop (allow alternative signalling mechanisms)
+- [x] Remove the hard dependency on ggrs 
+- [ ] Remove ggrs git submodule from repo
+- [ ] Example: Figure out a less hacky way to wait for enough clients
+- [ ] Example: Track upstream bevyengine/bevy instead of johanhelsing/bevy
+- [ ] Example: Make it work with N clients
+- [ ] Decide on how to identify peers, currently we use use id strings, and
+provide a wrapper with fake SocketAddr mappings for the ggrs socket
+implementation.
 - [ ] Add room separations to signalling server (everything is currently one big room) 
+- [ ] Peer API docs
 - [ ] Proper error handling, everything is littered with expect/unwrap at the moment.
 - [ ] Handle disconnecting peers
+- [ ] Make sure TURN is working (NAT relay services)
+- [ ] Decouple signalling from message loop (allow alternative signalling mechanisms)
 - [ ] Reconnect to signalling server
-- [ ] Remove the hard dependency on ggrs and make the project usable for other
-p2p projects (i.e. backroll?)
-- [ ] Move some sub-projects to separate repos?
-- [ ] Example: Track upstream bevyengine/bevy instead of johanhelsing/bevy
-- [ ] Peer API docs
 - [ ] Publish on crates.io
-- [ ] Alternative abstractions for connecting peers (such just waiting for N
-players, disregarding rooms) 
+- [ ] Server: Alternative ways of connecting peers (i.e. wait for N players)
 
 ## Thanks!
 

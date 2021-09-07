@@ -7,7 +7,7 @@ use futures::{
     FutureExt,
 };
 use ggrs::PlayerType;
-use matchbox_socket::WebRtcNonBlockingSocket;
+use matchbox_socket::WebRtcSocket;
 use std::{sync::Arc, task::Context};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
@@ -46,7 +46,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::get();
     log_1(&JsValue::from(format!("{:?}", args)));
 
-    let (mut socket, message_loop) = WebRtcNonBlockingSocket::new(&args.room_url);
+    let (mut socket, message_loop) = WebRtcSocket::new(&args.room_url);
 
     let mut pool = LocalPool::new();
     pool.spawner()

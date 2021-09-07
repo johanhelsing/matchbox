@@ -25,7 +25,7 @@ mod signal_peer;
 use signal_peer::*;
 
 #[derive(Debug)]
-pub struct WebRtcNonBlockingSocket {
+pub struct WebRtcSocket {
     messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(String, Packet)>,
     new_connected_peers: futures_channel::mpsc::UnboundedReceiver<String>,
     fake_socket_addrs: HashMap<String, SocketAddr>,
@@ -70,7 +70,7 @@ pub enum PeerSignal {
     Answer(String),
 }
 
-impl WebRtcNonBlockingSocket {
+impl WebRtcSocket {
     pub fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
@@ -472,7 +472,7 @@ async fn wait_for_ice_complete(conn: RtcPeerConnection) {
     log_1(&"Ice completed".into());
 }
 
-impl ggrs::NonBlockingSocket for WebRtcNonBlockingSocket {
+impl ggrs::NonBlockingSocket for WebRtcSocket {
     fn send_to(&mut self, msg: &UdpMessage, addr: SocketAddr) {
         let id = self.fake_socket_addrs_reverse[&addr].clone();
         let buf = bincode::serialize(&msg).unwrap();

@@ -47,7 +47,7 @@ futures-lite = "1.12"
 serde = "1.0"
 winit = {version = "0.25.0"}
 
-matchbox_socket = { path = "../matchbox_socket" }
+matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
 
 # ggrs = { git = "https://github.com/gschup/ggrs" }
 ggrs = { path = "../ggrs" }

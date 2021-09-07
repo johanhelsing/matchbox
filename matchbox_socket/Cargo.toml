@@ -10,20 +10,19 @@ categories = ["network-programming", "game-development", "wasm", "web-programmin
 repository = "https://github.com/johanhelsing/matchbox"
 
 [dependencies]
-# TODO: disable default-features where possible
-futures-channel = { version = "0.3", features = ["sink"] }
+futures-channel = { version = "0.3", features = ["sink"], default-features = false }
 futures = { version = "0.3", default-features = false }
-futures-util = { version = "0.3", features = ["sink"] }
-serde = "1.0"
-serde_json = "1.0"
+futures-util = { version = "0.3", features = ["sink"], default-features = false }
+serde = { version = "1.0", default-features = false }
+serde_json = { version = "1.0", default-features = false }
 uuid = { version = "0.8", default-features = false, features = ["v4"] }
-ws_stream_wasm = "0.7"
-wasm-bindgen-futures = "0.4"
+ws_stream_wasm = { version = "0.7", default-features = false }
+wasm-bindgen-futures = { version = "0.4", default-features = false }
 
 # Web stuff, we might want to make these optional one day, if we add native support
-wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ] }
-js-sys = { version = "0.3", features = []}
-web-sys = { version = "0.3.22", features = [
+wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ], default-features = false }
+js-sys = { version = "0.3", default-features = false }
+web-sys = { version = "0.3.22", default-features = false, features = [
     "console", # for console::log_1
     "MessageEvent",
     "RtcPeerConnection",
@@ -33,5 +32,5 @@ web-sys = { version = "0.3.22", features = [
 ] }
 
 # TODO: should be a feature instead
-ggrs = { path = "../ggrs" }
-bincode = "1.3" # for ggrs
+ggrs = { path = "../ggrs", default-features = false }
+bincode = { version = "1.3", default-features = false } # for ggrs

@@ -47,7 +47,6 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     // read cmd line arguments
     let opt = Args::get();
     log_1(&JsValue::from(format!("{:?}", opt)));
-    let num_players = 2;
 
     let (mut socket, message_loop) = WebRtcNonBlockingSocket::new(&opt.room_url);
 
@@ -57,7 +56,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         .expect("couldn't spawn message loop");
 
     {
-        let mut peers_future = Box::pin(socket.wait_for_peers(num_players - 1));
+        let mut peers_future = Box::pin(socket.wait_for_peers(opt.num_players - 1));
         // Super-stupid busy wait before we can start bevy
         // TODO: should add support in bevy_ggrs for starting after bevy has started
         // if it isn't already supported?
@@ -84,7 +83,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
 
     // create a GGRS P2P session
     let mut p2p_session =
-        ggrs::start_p2p_session_with_socket(num_players as u32, INPUT_SIZE, socket)
+        ggrs::start_p2p_session_with_socket(opt.num_players as u32, INPUT_SIZE, socket)
             .expect("failed to start with socket");
 
     // turn on sparse saving

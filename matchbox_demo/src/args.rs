@@ -13,9 +13,12 @@ pub struct Args {
     #[clap(default_value = "0", env)]
     pub player_handle: usize,
 
-    // #[clap(default_value = "ws://127.0.0.1:3536/room_a")]
-    #[clap(default_value = "wss://match.johanhelsing.studio/room_a")]
+    // #[clap(default_value = "wss://match.johanhelsing.studio/room_a")]
+    #[clap(default_value = "ws://127.0.0.1:3536/room_a")]
     pub room_url: String,
+
+    #[clap(default_value = "2")]
+    pub num_players: usize,
 }
 
 impl Default for Args {

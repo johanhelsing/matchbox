@@ -2592,7 +2592,19 @@ dependencies = [
 name = "matchbox_peer"
 version = "0.1.0"
 dependencies = [
- "matchbox",
+ "bincode",
+ "futures",
+ "futures-channel",
+ "futures-util",
+ "ggrs",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "ws_stream_wasm",
 ]
 
 [[package]]
@@ -2619,14 +2631,11 @@ dependencies = [
  "bevy",
  "bevy_ggrs",
  "bevy_webgl2",
- "bincode",
  "clap 3.0.0-beta.4",
  "console_error_panic_hook",
  "console_log",
  "futures",
- "futures-channel",
  "futures-lite",
- "futures-util",
  "getrandom 0.1.16",
  "ggrs",
  "js-sys",
@@ -2634,9 +2643,7 @@ dependencies = [
  "matchbox_peer",
  "rand 0.7.3",
  "serde",
- "serde_json",
  "serde_qs",
- "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

@@ -46,9 +46,6 @@ impl Args {
                 .trim_start_matches("?")
                 .to_owned();
 
-            let js = qs.clone().into();
-            web_sys::console::log_1(&js);
-
             Args::from_query(&qs)
         }
         #[cfg(not(target_arch = "wasm32"))]

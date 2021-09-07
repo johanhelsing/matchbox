@@ -77,7 +77,7 @@ In rough order:
 
 - [x] Upstream ggrs changes and stop using fork
 - [ ] Remove ggrs git submodule
-- [ ] Move socket code from example game into `matchbox_peer`
+- [x] Move socket code from example game into `matchbox_peer`
 - [ ] Decide on how to identify peers, currently we use uuids internally, but
 expose a bogus SocketAddr to the calling code.
 - [ ] Make sure TURN is working (nat relay services)

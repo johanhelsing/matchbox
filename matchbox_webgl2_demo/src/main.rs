@@ -7,15 +7,17 @@ use futures::{
     FutureExt,
 };
 use ggrs::PlayerType;
+use matchbox_peer::WebRtcNonBlockingSocket;
 use std::{sync::Arc, task::Context};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{console::log_2, Request, RequestInit, RequestMode};
-use webrtc_socket::WebRtcNonBlockingSocket;
+use web_sys::{
+    console::{log_1, log_2},
+    Request, RequestInit, RequestMode,
+};
 
 mod args;
 mod box_game;
-mod webrtc_socket;
 
 use args::*;
 use box_game::*;
@@ -44,6 +46,7 @@ fn main() {
 async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     // read cmd line arguments
     let opt = Args::get();
+    log_1(&JsValue::from(format!("{:?}", opt)));
     let num_players = 2;
 
     let (mut socket, message_loop) = WebRtcNonBlockingSocket::new(&opt.room_url);

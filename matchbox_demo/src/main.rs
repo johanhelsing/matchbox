@@ -45,10 +45,10 @@ fn main() {
 
 async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     // read cmd line arguments
-    let opt = Args::get();
-    log_1(&JsValue::from(format!("{:?}", opt)));
+    let args = Args::get();
+    log_1(&JsValue::from(format!("{:?}", args)));
 
-    let (mut socket, message_loop) = WebRtcNonBlockingSocket::new(&opt.room_url);
+    let (mut socket, message_loop) = WebRtcNonBlockingSocket::new(&args.room_url);
 
     let mut pool = LocalPool::new();
     pool.spawner()
@@ -56,7 +56,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         .expect("couldn't spawn message loop");
 
     {
-        let mut peers_future = Box::pin(socket.wait_for_peers(opt.num_players - 1));
+        let mut peers_future = Box::pin(socket.wait_for_peers(args.num_players - 1));
         // Super-stupid busy wait before we can start bevy
         // TODO: should add support in bevy_ggrs for starting after bevy has started
         // if it isn't already supported?
@@ -83,20 +83,20 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
 
     // create a GGRS P2P session
     let mut p2p_session =
-        ggrs::start_p2p_session_with_socket(opt.num_players as u32, INPUT_SIZE, socket)
+        ggrs::start_p2p_session_with_socket(args.num_players as u32, INPUT_SIZE, socket)
             .expect("failed to start with socket");
 
     // turn on sparse saving
     p2p_session.set_sparse_saving(true)?;
 
-    let handle_js = JsValue::from(opt.player_handle as i32);
+    let handle_js = JsValue::from(args.player_handle as i32);
     log_2(&"Adding local player with handle".into(), &handle_js);
     p2p_session
-        .add_player(PlayerType::Local, opt.player_handle)
+        .add_player(PlayerType::Local, args.player_handle)
         .expect("failed to add local player");
 
     for addr in peers {
-        let handle = (opt.player_handle + 1) % 2;
+        let handle = (args.player_handle + 1) % 2;
         // TODO: Need some way of mapping between socket id/addrs and handles
         // (we don't know them before the app starts)
         let handle_js = JsValue::from(handle as i32);
@@ -107,7 +107,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // set input delay for the local player
-    p2p_session.set_frame_delay(2, opt.player_handle)?;
+    p2p_session.set_frame_delay(2, args.player_handle)?;
 
     // set default expected update frequency (affects synchronization timings between players)
     p2p_session.set_fps(FPS)?;

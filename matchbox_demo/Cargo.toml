@@ -32,6 +32,7 @@ web-sys = { version = "0.3.22", features = [
 ] }
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
+console_log = "0.2"
 serde_qs = "0.8.4"
 wasm-bindgen-futures = "0.4"
 log = "0.4"

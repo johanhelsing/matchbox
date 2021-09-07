@@ -2,13 +2,13 @@ use futures::{pin_mut, stream::FuturesUnordered, Future, FutureExt, SinkExt, Str
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use js_sys::Reflect;
+use log::{debug, warn};
 use serde::Serialize;
 use std::{collections::HashMap, pin::Pin};
 use uuid::Uuid;
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    console::{log_1, log_2},
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
     RtcIceGatheringState, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
@@ -58,12 +58,12 @@ impl WebRtcSocket {
 
     // pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<SocketAddr> {
     pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<PeerId> {
-        log_1(&"waiting for peers to join".into());
+        debug!("waiting for peers to join");
         let mut addrs = vec![];
         while let Some(id) = self.new_connected_peers.next().await {
             addrs.push(id.clone());
             if addrs.len() == peers {
-                log_1(&"all peers joined".into());
+                debug!("all peers joined");
                 self.peers.extend(addrs.clone());
                 return addrs;
             }
@@ -87,7 +87,7 @@ impl WebRtcSocket {
     }
 
     pub fn send(&mut self, packet: Packet, id: PeerId) {
-        // log_1(&"sending message on internal channel".into());
+        // debug!("sending message on internal channel");
 
         // self.peer_messages_out
         //     .unbounded_send((id, packet))
@@ -134,7 +134,7 @@ async fn message_loop(
                 check(&res);
                 let peer = res.unwrap();
                 data_channels.insert(peer.0.clone(), peer.1.clone());
-                log_1(&"Notifying about new peer".into());
+                debug!("Notifying about new peer");
                 new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
             },
             res = accept_handshakes.select_next_some() => {
@@ -142,7 +142,7 @@ async fn message_loop(
                 check(&res);
                 let peer = res.unwrap();
                 data_channels.insert(peer.0.clone(), peer.1.clone());
-                log_1(&"Notifying about new peer".into());
+                debug!("Notifying about new peer");
                 new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
             },
 
@@ -152,8 +152,7 @@ async fn message_loop(
                     WsMessage::Binary(_) => panic!("binary data from signal server"),
                 };
 
-                let message_js: JsValue = message.clone().into();
-                web_sys::console::log_1(&message_js);
+                debug!("{}", message);
 
                 let event: PeerEvent = serde_json::from_str(&message)
                     .expect(&format!("couldn't parse peer event {}", message));
@@ -180,18 +179,15 @@ async fn message_loop(
             }
 
             request = next_request => {
-                log_1(&"select next request".into());
                 let request = serde_json::to_string(&request).expect("serializing request");
 
-                let request_js: JsValue = request.clone().into();
-                log_2(&"->".into(), &request_js);
+                debug!("-> {}", request);
 
                 wsio.send(WsMessage::Text(request)).await.expect("request send error");
-                log_1(&"sent request".into());
+                debug!("sent request");
             }
 
             message = next_peer_message_out => {
-                log_1(&"Sending message to peer".into());
                 let message = message.unwrap();
                 let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
                 data_channel.send_with_u8_array(&message.1).expect("failed to send");
@@ -229,7 +225,7 @@ async fn handshake_offer(
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
 ) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
-    log_1(&"making offer".into());
+    debug!("making offer");
     let conn = create_rtc_peer_connection();
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
@@ -258,7 +254,7 @@ async fn handshake_offer(
 
     wait_for_ice_complete(conn.clone()).await;
 
-    log_1(&"created offer for new peer".into());
+    debug!("created offer for new peer");
 
     signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
 
@@ -292,7 +288,7 @@ async fn handshake_accept(
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
 ) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
-    log_1(&"handshake_accept".into());
+    debug!("handshake_accept");
 
     let conn = create_rtc_peer_connection();
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
@@ -312,12 +308,12 @@ async fn handshake_accept(
                 break;
             }
             _ => {
-                log_1(&"ignoring other signal!!!".into());
+                warn!("ignoring other signal!!!");
             }
         }
     }
     let offer = offer.unwrap();
-    log_1(&"received offer".into());
+    debug!("received offer");
 
     // Set remote description
     {
@@ -328,14 +324,14 @@ async fn handshake_accept(
         JsFuture::from(conn.set_remote_description(&remote_description))
             .await
             .expect("failed to set remote description");
-        log_1(&"set remote_description from offer".into());
+        debug!("set remote_description from offer");
     }
 
     let answer = JsFuture::from(conn.create_answer())
         .await
         .expect("error creating answer");
 
-    log_1(&"created answer".into());
+    debug!("created answer");
 
     let mut session_desc_init: RtcSessionDescriptionInit =
         RtcSessionDescriptionInit::new(RtcSdpType::Answer);
@@ -390,7 +386,7 @@ fn create_rtc_peer_connection() -> RtcPeerConnection {
 //     while let Some(s) = signal_receiver.next().await {
 //         match s {
 //             PeerSignal::IceCandidate(ice) => {
-//                 // log_2(&"received ice".into(), &ice);
+//                 //debug!("received ice candidate {:?}", ice);
 //                 let candidate_init = RtcIceCandidateInit::new(&ice);
 //                 let candidate = RtcIceCandidate::new(&candidate_init).unwrap();
 //                 JsFuture::from(
@@ -408,11 +404,11 @@ fn create_rtc_peer_connection() -> RtcPeerConnection {
 //     let conn_clone = conn.clone();
 //     let ice_candidate_func: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
 //         Box::new(move |event: RtcPeerConnectionIceEvent| {
-//             log_1(&"Found new ice candidate".into());
+//             debug!("Found new ice candidate");
 //             // null candidate represents end-of-candidates.
 //             // TODO: do we need to deregister handler?
 //             if event.candidate().is_none() {
-//                 log_1(&"Found all ice candidates - sending answer".into());
+//                 debug!("Found all ice candidates - sending answer");
 //                 let answer_sdp_string = conn_clone.local_description().unwrap().sdp();
 //                 // signal_peer.send(PeerSignal::IceCandidate(answer_sdp_string));
 //             }
@@ -424,7 +420,7 @@ fn create_rtc_peer_connection() -> RtcPeerConnection {
 
 async fn wait_for_ice_complete(conn: RtcPeerConnection) {
     if conn.ice_gathering_state() == RtcIceGatheringState::Complete {
-        log_1(&"Ice already completed".into());
+        debug!("Ice already completed");
         return;
     }
 
@@ -444,7 +440,7 @@ async fn wait_for_ice_complete(conn: RtcPeerConnection) {
     rx.next().await;
 
     conn.set_onicegatheringstatechange(None);
-    log_1(&"Ice completed".into());
+    debug!("Ice completed");
 }
 
 fn create_data_channel(
@@ -467,19 +463,16 @@ fn create_data_channel(
     let incoming_tx = incoming_tx.clone();
     let channel_clone = channel.clone();
     let channel_onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
-        log_1(&"Rtc data channel opened :D :D".into());
+        debug!("Rtc data channel opened :D :D");
         // let mut from_client_sender_clone_2 = from_client_sender_clone.clone();
         let peer_id = peer_id.clone();
         let incoming_tx = incoming_tx.clone();
         let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =
             Box::new(move |event: MessageEvent| {
-                // log_2(&"Received a rtc data message".into(), &event);
+                // web-sys::console::log_2(&"Received a rtc data message".into(), &event);
                 if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
                     let uarray: js_sys::Uint8Array = js_sys::Uint8Array::new(&arraybuf);
-                    // log_2(
-                    //     &"Receive data of length {}".into(),
-                    //     &(uarray.length().into()),
-                    // );
+                    // debug!("Received data of length {}", uarray.length());
 
                     // TODO: There probably are ways to avoid copying/zeroing here...
                     let mut body = vec![0 as u8; uarray.length() as usize];

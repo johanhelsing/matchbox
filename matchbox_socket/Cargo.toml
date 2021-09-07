@@ -33,6 +33,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
     "RtcIceGatheringState",
     "RtcConfiguration", "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType",
 ] }
+log = { version = "0.4", default-features = false }
 
 # ggrs-socket
 # ggrs = { version = "0.5", default-features = false, optional = true }

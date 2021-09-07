@@ -1,4 +1,4 @@
-use bevy::{core::FixedTimestep, prelude::*};
+use bevy::{core::FixedTimestep, log::LogPlugin, prelude::*};
 use bevy_ggrs::{GGRSApp, GGRSPlugin};
 use futures::{
     executor::LocalPool,
@@ -7,14 +7,11 @@ use futures::{
     FutureExt,
 };
 use ggrs::PlayerType;
+use log::info;
 use matchbox_socket::WebRtcNonBlockingSocket;
 use std::{sync::Arc, task::Context};
-use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{
-    console::{log_1, log_2},
-    Request, RequestInit, RequestMode,
-};
+use web_sys::{Request, RequestInit, RequestMode};
 
 mod args;
 mod box_game;
@@ -30,6 +27,8 @@ fn main() {
     {
         // When building for WASM, print panics to the browser console
         console_error_panic_hook::set_once();
+        console_log::init_with_level(log::Level::Debug).expect("Failed to init logs");
+        info!("logs are working");
         wasm_bindgen_futures::spawn_local(async move {
             main_async().await.expect("main failed");
         })
@@ -44,7 +43,7 @@ fn main() {
 async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     // read query string or command line arguments
     let args = Args::get();
-    log_1(&JsValue::from(format!("{:?}", args)));
+    info!("{:?}", args);
 
     let (mut socket, message_loop) = WebRtcNonBlockingSocket::new(&args.room_url);
 
@@ -89,8 +88,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     // turn on sparse saving
     p2p_session.set_sparse_saving(true)?;
 
-    let handle_js = JsValue::from(args.player_handle as i32);
-    log_2(&"Adding local player with handle".into(), &handle_js);
+    info!("Adding local player with handle: {}", args.player_handle);
     p2p_session
         .add_player(PlayerType::Local, args.player_handle)
         .expect("failed to add local player");
@@ -100,8 +98,7 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         // TODO: Need some way of mapping between socket id/addrs and handles
         // (we don't know them before the app starts)
         // Right now we're counting on luck if there are > 2 players
-        let handle_js = JsValue::from(handle as i32);
-        log_2(&"Adding remote player with handle".into(), &handle_js);
+        info!("Adding remote player with handle: {}", handle);
         p2p_session
             .add_player(PlayerType::Remote(addr.clone()), handle)
             .expect("failed to add remote player");
@@ -119,7 +116,10 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new();
 
     app.insert_resource(Msaa { samples: 4 })
-        .add_plugins(DefaultPlugins);
+        // The bevy log plugin is great, so ideally we'd keep it... the only problem is that it gets initialized too late,
+        // so we don't get the log messages before the bevy app starts... which is unfortunate since we currently
+        // needs to do *lots* of stuff that needs logging before bevy starts
+        .add_plugins_with(DefaultPlugins, |group| group.disable::<LogPlugin>());
 
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);

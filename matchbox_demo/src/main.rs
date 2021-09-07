@@ -95,10 +95,11 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         .add_player(PlayerType::Local, args.player_handle)
         .expect("failed to add local player");
 
-    for addr in peers {
-        let handle = (args.player_handle + 1) % 2;
+    for (i, addr) in peers.into_iter().enumerate() {
+        let handle = if i < args.player_handle { i } else { i + 1 };
         // TODO: Need some way of mapping between socket id/addrs and handles
         // (we don't know them before the app starts)
+        // Right now we're counting on luck if there are > 2 players
         let handle_js = JsValue::from(handle as i32);
         log_2(&"Adding remote player with handle".into(), &handle_js);
         p2p_session

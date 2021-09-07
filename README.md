@@ -16,8 +16,7 @@ It is currently an all-in-one solution, it comes with:
 rust, uses only a couple of megabytes of memory. Also available as a docker image.
 - An example browser game, using `bevy`, `bevy_ggrs` and `bevy_webgl2`,
 [matchbox_webgl2_demo](matchbox_webgl2_demo)
-- A socket abstraction for rust wasm, [matchbox_peer](matchbox_peer) (todo: this
-is currently empty, the implementation is still bundled inside the demo game)
+- A socket abstraction for rust wasm, [matchbox_peer](matchbox_peer)
 
 ## Live demo
 

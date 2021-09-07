@@ -1,5 +1,5 @@
 [workspace]
-members = ["matchbox_server", "matchbox_socket", "matchbox_demo", "ggrs"]
+members = ["matchbox_server", "matchbox_socket", "matchbox_demo"]
 
 [patch."https://github.com/bevyengine/bevy.git".bevy]
 # git = "https://github.com/bevyengine/bevy.git"
@@ -14,8 +14,7 @@ branch = "nocd-cherry-picks"
 git = "https://github.com/johanhelsing/bevy.git"
 branch = "nocd-cherry-picks"
 
+# Need to patch ggrs or bevy_ggrs will pick an older version
 [patch.crates-io.ggrs]
-# TODO: stop using submodule
-# git = "https://github.com/gschup/ggrs"
-# branch = "main"
-path = "ggrs"
+git = "https://github.com/gschup/ggrs"
+branch = "main"

@@ -50,7 +50,10 @@ winit = {version = "0.25.0"}
 matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
 
 # ggrs = { git = "https://github.com/gschup/ggrs" }
-ggrs = { path = "../ggrs" }
+# ggrs = { version = "0.5" }
+# TODO: 0.4 doesn't really work, but 0.5 is not yet released.
+# so we specify 0.4 and patch it in the workspace Cargo.toml instead
+ggrs = { version = "0.4" }
 
 # [profile.dev]
 # opt-level = 1

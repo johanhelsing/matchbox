@@ -77,7 +77,7 @@ In rough order:
 - [x] Upstream ggrs changes and stop using fork
 - [x] Move socket code from example game into `matchbox_socket`
 - [x] Remove the hard dependency on ggrs 
-- [ ] Remove ggrs git submodule from repo
+- [x] Remove ggrs git submodule from repo
 - [ ] Example: Figure out a less hacky way to wait for enough clients
 - [ ] Example: Track upstream bevyengine/bevy instead of johanhelsing/bevy
 - [ ] Example: Make it work with N clients

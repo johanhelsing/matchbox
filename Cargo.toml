@@ -1,5 +1,5 @@
 [workspace]
-members = ["matchbox", "matchbox_server", "matchbox_peer", "matchbox_webgl2_demo", "ggrs"]
+members = ["matchbox", "matchbox_server", "matchbox_peer", "matchbox_demo", "ggrs"]
 
 # [patch."https://github.com/johanhelsing/matchbox".matchbox]
 # path = "matchbox"

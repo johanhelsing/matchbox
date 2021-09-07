@@ -2589,6 +2589,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchbox_demo"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_ggrs",
+ "bevy_webgl2",
+ "clap 3.0.0-beta.4",
+ "console_error_panic_hook",
+ "console_log",
+ "futures",
+ "futures-lite",
+ "getrandom 0.1.16",
+ "ggrs",
+ "js-sys",
+ "log",
+ "matchbox_peer",
+ "rand 0.7.3",
+ "serde",
+ "serde_qs",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "winit 0.25.0",
+ "ws_stream_wasm",
+]
+
+[[package]]
 name = "matchbox_peer"
 version = "0.1.0"
 dependencies = [
@@ -2622,33 +2649,6 @@ dependencies = [
  "tokio-stream",
  "uuid",
  "warp",
-]
-
-[[package]]
-name = "matchbox_webgl2_demo"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy_ggrs",
- "bevy_webgl2",
- "clap 3.0.0-beta.4",
- "console_error_panic_hook",
- "console_log",
- "futures",
- "futures-lite",
- "getrandom 0.1.16",
- "ggrs",
- "js-sys",
- "log",
- "matchbox_peer",
- "rand 0.7.3",
- "serde",
- "serde_qs",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "winit 0.25.0",
- "ws_stream_wasm",
 ]
 
 [[package]]

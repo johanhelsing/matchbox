@@ -15,7 +15,7 @@ It is currently an all-in-one solution, it comes with:
 - A tiny signalling server, [matchbox_server](./matchbox_server). Written in
 rust, uses only a couple of megabytes of memory. Also available as a docker image.
 - An example browser game, using `bevy`, `bevy_ggrs` and `bevy_webgl2`,
-[matchbox_webgl2_demo](matchbox_webgl2_demo)
+[matchbox_demo](matchbox_demo)
 - A socket abstraction for rust wasm, [matchbox_peer](matchbox_peer)
 
 ## Live demo

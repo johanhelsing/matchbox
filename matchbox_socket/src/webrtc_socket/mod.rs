@@ -126,12 +126,11 @@ async fn message_loop(
         let next_signal_event = wsio.next().fuse();
         let next_request = requests_receiver.next().fuse();
         let next_peer_message_out = peer_messages_out_rx.next().fuse();
-        // pin_mut!(next_signal_event, next_request, next_peer_message_out);
+
         pin_mut!(next_signal_event, next_request, next_peer_message_out);
 
         select! {
             res = offer_handshakes.select_next_some() => {
-                log_1(&"select handshakes".into());
                 check(&res);
                 let peer = res.unwrap();
                 data_channels.insert(peer.0.clone(), peer.1.clone());
@@ -140,7 +139,6 @@ async fn message_loop(
             },
             res = accept_handshakes.select_next_some() => {
                 // TODO: this could be de-duplicated
-                log_1(&"select handshakes".into());
                 check(&res);
                 let peer = res.unwrap();
                 data_channels.insert(peer.0.clone(), peer.1.clone());
@@ -149,7 +147,6 @@ async fn message_loop(
             },
 
             message = next_signal_event => {
-                log_1(&"select next event".into());
                 let message = match message.unwrap() {
                     WsMessage::Text(message) => message,
                     WsMessage::Binary(_) => panic!("binary data from signal server"),

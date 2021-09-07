@@ -1,5 +1,5 @@
 [workspace]
-members = ["matchbox", "matchbox_server", "matchbox_peer", "matchbox_demo", "ggrs"]
+members = ["matchbox_server", "matchbox_peer", "matchbox_demo", "ggrs"]
 
 [patch."https://github.com/bevyengine/bevy.git".bevy]
 # git = "https://github.com/bevyengine/bevy.git"

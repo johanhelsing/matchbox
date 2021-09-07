@@ -2570,13 +2570,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox"
-version = "0.1.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "matchbox_demo"
 version = "0.1.0"
 dependencies = [

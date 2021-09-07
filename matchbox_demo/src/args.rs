@@ -1,6 +1,6 @@
 use clap::Clap;
 use serde::Deserialize;
-use std::{ffi::OsString, net::SocketAddr};
+use std::ffi::OsString;
 
 #[derive(Clap, Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -10,15 +10,6 @@ use std::{ffi::OsString, net::SocketAddr};
     rename_all_env = "screaming-snake"
 )]
 pub struct Args {
-    #[clap(short, long, default_value = "1235")]
-    pub local_port: u16,
-
-    #[clap(short, long)]
-    pub players: Vec<String>,
-
-    #[clap(short, long)]
-    pub spectators: Vec<SocketAddr>,
-
     #[clap(default_value = "0", env)]
     pub player_handle: usize,
 

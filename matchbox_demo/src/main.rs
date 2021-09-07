@@ -28,8 +28,6 @@ const FPS: u32 = 60;
 fn main() {
     #[cfg(target_arch = "wasm32")]
     {
-        // console_log::init_with_level(log::Level::Debug);
-        warn!("warnings are working");
         // When building for WASM, print panics to the browser console
         console_error_panic_hook::set_once();
         wasm_bindgen_futures::spawn_local(async move {
@@ -124,8 +122,9 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
 
     app.add_startup_system(setup_system.system())
-        .insert_resource(MessageTaskPool(Arc::new(Mutex::new(pool))))
-        .add_system(handle_tasks)
+        .insert_resource(SocketTaskPool(Arc::new(Mutex::new(pool))))
+        // Make sure something polls the message tasks regularly
+        .add_system(process_socket_tasks)
         .add_plugin(GGRSPlugin)
         // add your GGRS session
         .with_p2p_session(p2p_session)
@@ -147,11 +146,14 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-struct MessageTaskPool(Arc<Mutex<LocalPool>>);
-unsafe impl Send for MessageTaskPool {}
-unsafe impl Sync for MessageTaskPool {}
+// In single-threaded wasm it's probably a bit overkill to use an Arc<Mutex>,
+// but if we want to add native support later, this is the way to go.
+// ...or if web-browsers get proper threads someday...
+struct SocketTaskPool(Arc<Mutex<LocalPool>>);
+unsafe impl Send for SocketTaskPool {}
+unsafe impl Sync for SocketTaskPool {}
 
-fn handle_tasks(pool: ResMut<MessageTaskPool>) {
-    let mut pool = pool.0.try_lock().expect("someone had a lock");
+fn process_socket_tasks(pool: ResMut<SocketTaskPool>) {
+    let mut pool = pool.0.try_lock().expect("Couldn't lock socket task pool");
     pool.run_until_stalled();
 }

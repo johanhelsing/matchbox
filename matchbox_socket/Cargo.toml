@@ -36,7 +36,6 @@ web-sys = { version = "0.3.22", default-features = false, features = [
 
 # ggrs-socket
 # ggrs = { version = "0.5", default-features = false, optional = true }
-# TODO: 0.4 doesn't really work, but 0.5 is not yet released.
-# so we specify 0.4 and patch it in the workspace Cargo.toml instead.
-ggrs = { version = "0.4", default-features = false, optional = true }
+# TODO: 0.4 doesn't is missing required patches, and 0.5 is not yet released.
+ggrs = { git = "https://github.com/gschup/ggrs", default-features = false, optional = true }
 bincode = { version = "1.3", default-features = false, optional = true }

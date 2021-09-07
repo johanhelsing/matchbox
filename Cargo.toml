@@ -13,7 +13,3 @@ branch = "nocd-cherry-picks"
 # TODO: stop using fork
 git = "https://github.com/johanhelsing/bevy.git"
 branch = "nocd-cherry-picks"
-
-# Need to patch ggrs or bevy_ggrs will pick an older version
-[patch.crates-io.ggrs]
-git = "https://github.com/gschup/ggrs"

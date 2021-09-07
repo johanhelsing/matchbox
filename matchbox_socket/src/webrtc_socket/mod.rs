@@ -1,15 +1,9 @@
 use futures::{pin_mut, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
-use ggrs::UdpMessage;
 use js_sys::Reflect;
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
-    hash::{Hash, Hasher},
-    net::{Ipv6Addr, SocketAddr},
-    pin::Pin,
-};
+use serde::Serialize;
+use std::{collections::HashMap, pin::Pin};
 use uuid::Uuid;
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
@@ -20,54 +14,21 @@ use web_sys::{
 };
 use ws_stream_wasm::{WsMessage, WsMeta};
 
+mod messages;
 mod signal_peer;
 
+use messages::*;
 use signal_peer::*;
+
+type Packet = Box<[u8]>;
 
 #[derive(Debug)]
 pub struct WebRtcSocket {
     messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(String, Packet)>,
     new_connected_peers: futures_channel::mpsc::UnboundedReceiver<String>,
-    fake_socket_addrs: HashMap<String, SocketAddr>,
-    fake_socket_addrs_reverse: HashMap<SocketAddr, String>,
     // peer_messages_out: futures_channel::mpsc::UnboundedSender<(String, Packet)>,
     peer_messages_out: futures_channel::mpsc::Sender<(String, Packet)>,
-    peers: Vec<SocketAddr>,
-}
-
-// impl std::fmt::Debug for WebRtcNonBlockingSocket {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_struct("WebRtcNonBlockingSocket")
-//             .field("messages_from_peers", &self.messages_from_peers)
-//             .field("new_connected_peers", &self.new_connected_peers)
-//             .field("fake_socket_addrs", &self.fake_socket_addrs)
-//             .field("fake_socket_addrs_reverse", &self.fake_socket_addrs_reverse)
-//             .field("peer_messages_out", &self.peer_messages_out)
-//             .finish()
-//     }
-// }
-
-// TODO: move back into lib
-/// Events go from signalling server to peer
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum PeerEvent {
-    NewPeer(String),
-    Signal { sender: String, data: PeerSignal },
-}
-
-// TODO: move back into lib
-/// Requests go from peer to signalling server
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum PeerRequest {
-    Uuid(String),
-    Signal { receiver: String, data: PeerSignal },
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum PeerSignal {
-    IceCandidate(String),
-    Offer(String),
-    Answer(String),
+    peers: Vec<String>,
 }
 
 impl WebRtcSocket {
@@ -81,8 +42,6 @@ impl WebRtcSocket {
 
         (
             Self {
-                fake_socket_addrs: Default::default(),
-                fake_socket_addrs_reverse: Default::default(),
                 messages_from_peers,
                 peer_messages_out: peer_messages_out_tx,
                 new_connected_peers,
@@ -98,26 +57,45 @@ impl WebRtcSocket {
     }
 
     // pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<SocketAddr> {
-    pub async fn wait_for_peers(&mut self, peers: usize) {
+    pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<String> {
         log_1(&"waiting for peers to join".into());
         let mut addrs = vec![];
         while let Some(id) = self.new_connected_peers.next().await {
-            let fake_addr = make_fake_socket_addr(&id);
-            addrs.push(fake_addr.clone());
-            self.fake_socket_addrs.insert(id.clone(), fake_addr.clone());
-            self.fake_socket_addrs_reverse.insert(fake_addr, id);
+            addrs.push(id.clone());
             if addrs.len() == peers {
                 log_1(&"all peers joined".into());
-                self.peers.extend(addrs);
-                // return addrs;
-                return;
+                self.peers.extend(addrs.clone());
+                return addrs;
             }
         }
         panic!("Signal server died")
     }
 
-    pub fn connected_peers(&self) -> Vec<SocketAddr> {
+    pub fn connected_peers(&self) -> Vec<String> {
         self.peers.clone() // TODO: could probably be an iterator or reference instead?
+    }
+
+    pub fn receive_messages(&mut self) -> Vec<(String, Packet)> {
+        std::iter::repeat_with(|| self.messages_from_peers.try_next())
+            // .map_while(|poll| match p { // map_while is nightly-only :(
+            .take_while(|p| !p.is_err())
+            .map(|p| match p.unwrap() {
+                Some((id, packet)) => (id, packet),
+                None => todo!("Handle connection closed??"),
+            })
+            .collect()
+    }
+
+    pub fn send(&mut self, packet: Packet, id: String) {
+        // log_1(&"sending message on internal channel".into());
+
+        // self.peer_messages_out
+        //     .unbounded_send((id, packet))
+        //     .expect("send_to failed");
+
+        self.peer_messages_out
+            .try_send((id, packet))
+            .expect("send_to failed");
     }
 }
 
@@ -219,7 +197,7 @@ async fn message_loop(
                 log_1(&"Sending message to peer".into());
                 let message = message.unwrap();
                 let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
-                data_channel.send_with_u8_array(&message.1.payload).expect("failed to send");
+                data_channel.send_with_u8_array(&message.1).expect("failed to send");
             }
         }
     }
@@ -472,52 +450,6 @@ async fn wait_for_ice_complete(conn: RtcPeerConnection) {
     log_1(&"Ice completed".into());
 }
 
-impl ggrs::NonBlockingSocket for WebRtcSocket {
-    fn send_to(&mut self, msg: &UdpMessage, addr: SocketAddr) {
-        let id = self.fake_socket_addrs_reverse[&addr].clone();
-        let buf = bincode::serialize(&msg).unwrap();
-        let packet = Packet {
-            payload: buf.into_boxed_slice(),
-        };
-        // log_1(&"sending message on internal channel".into());
-
-        // self.peer_messages_out
-        //     .unbounded_send((id, packet))
-        //     .expect("send_to failed");
-
-        self.peer_messages_out
-            .try_send((id, packet))
-            .expect("send_to failed");
-    }
-
-    fn receive_all_messages(&mut self) -> Vec<(SocketAddr, UdpMessage)> {
-        while let Ok(Some(client_id)) = self.new_connected_peers.try_next() {
-            let fake_addr = make_fake_socket_addr(&client_id);
-            self.fake_socket_addrs
-                .insert(client_id.clone(), fake_addr.clone());
-            self.fake_socket_addrs_reverse.insert(fake_addr, client_id);
-        }
-
-        let fake_socket_addrs = self.fake_socket_addrs.clone();
-        // TODO: Check if there's a stream operator that does just this?
-        // Or maybe just rewrite as a loop?
-        std::iter::repeat_with(|| self.messages_from_peers.try_next())
-            // .map_while(|poll| match p { // map_while is nightly-only :(
-            .take_while(|p| !p.is_err())
-            .map(|p| match p.unwrap() {
-                Some(packet) => {
-                    // log_1(&"received message from peer".into());
-                    let msg = bincode::deserialize(&packet.1.payload).unwrap();
-                    let id = packet.0;
-                    let fake_addr = fake_socket_addrs[&id];
-                    (fake_addr, msg)
-                }
-                None => todo!("Handle connection closed??"),
-            })
-            .collect()
-    }
-}
-
 fn create_data_channel(
     connection: RtcPeerConnection,
     incoming_tx: futures_channel::mpsc::UnboundedSender<(String, Packet)>,
@@ -556,12 +488,7 @@ fn create_data_channel(
                     let mut body = vec![0 as u8; uarray.length() as usize];
                     uarray.copy_to(&mut body[..]);
                     incoming_tx
-                        .unbounded_send((
-                            peer_id.clone(),
-                            Packet {
-                                payload: body.into_boxed_slice(),
-                            },
-                        ))
+                        .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
                         .unwrap();
                 }
             });
@@ -579,24 +506,6 @@ fn create_data_channel(
     channel_onopen_closure.forget();
 
     channel
-}
-
-fn make_fake_socket_addr(id: &str) -> SocketAddr {
-    // TODO: This is a horrible lazy hack, but let's just try to get it working
-    let mut hasher = DefaultHasher::new();
-    id.hash(&mut hasher);
-    let hash = hasher.finish();
-    let a: u16 = hash as u16;
-    SocketAddr::new(Ipv6Addr::new(a, a, a, a, a, a, a, a).into(), 1111)
-}
-
-// TODO: Remove this struct, doesn't make things easier to understand
-// ... or move addrs/id into it and use it at a higher level.
-/// A Packet that can be sent between peers
-#[derive(Debug, Eq, PartialEq)]
-pub struct Packet {
-    /// The raw payload of the packet
-    payload: Box<[u8]>,
 }
 
 // Expect/unwrap is broken in select for some reason :/

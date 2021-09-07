@@ -1061,16 +1061,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "console_log"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "501a375961cef1a0d44767200e66e4a559283097e91d0730b1d75dfb2f8a1494"
-dependencies = [
- "log",
- "web-sys",
-]
-
-[[package]]
 name = "const_fn"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1698,10 +1688,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fc3cb4d91f53b50155bdcfd23f6a4c39ae1969c2ae85982b135750cccaf5fce"
 dependencies = [
  "cfg-if 1.0.0",
- "js-sys",
  "libc",
  "wasi 0.9.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -2597,22 +2585,18 @@ dependencies = [
  "bevy_webgl2",
  "clap 3.0.0-beta.4",
  "console_error_panic_hook",
- "console_log",
  "futures",
  "futures-lite",
- "getrandom 0.1.16",
  "ggrs",
  "js-sys",
  "log",
  "matchbox_peer",
- "rand 0.7.3",
  "serde",
  "serde_qs",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
  "winit 0.25.0",
- "ws_stream_wasm",
 ]
 
 [[package]]

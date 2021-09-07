@@ -28,56 +28,29 @@ web = [
 web-sys = { version = "0.3.22", features = [
     "console", # TODO: for console::log_1
     "Document", "Location", # for getting args from query string
-    "Headers", "RequestInit", "RequestMode", "Response", # TODO: for busy wait hack
+    "Headers", "RequestInit", "RequestMode", "Response", # TODO: only for busy wait hack
 ] }
-js-sys = { version = "0.3", features = []}
+js-sys = "0.3"
 console_error_panic_hook = "0.1"
 serde_qs = "0.8.4"
 wasm-bindgen-futures = "0.4"
-console_log = "0.2"
 log = "0.4"
-wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ] }
+wasm-bindgen = "0.2"
 
 [dependencies]
-bevy = {version="0.5.0", default-features=false}
-bevy_webgl2 = { git = "https://github.com/mrk-its/bevy_webgl2", branch = "master", optional = true }
+bevy = { version="0.5.0", default-features = false }
 bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
-futures-lite = "1.12"
+bevy_webgl2 = { git = "https://github.com/mrk-its/bevy_webgl2", branch = "master", optional = true }
+clap = "3.0.0-beta.2"
 futures = { version = "0.3", default-features = false }
+futures-lite = "1.12"
+serde = "1.0"
+winit = {version = "0.25.0"}
+
+matchbox_peer = { path = "../matchbox_peer" }
 
 # ggrs = { git = "https://github.com/gschup/ggrs" }
 ggrs = { path = "../ggrs" }
-
-matchbox_peer = { path = "../matchbox_peer" }
-ws_stream_wasm = "0.7"
-
-winit = {version = "0.25.0"}
-rand = "0.7"
-getrandom = {version="0.1", features=["wasm-bindgen"]}
-clap = "3.0.0-beta.2"
-serde = "1.0"
-#serde_json = "1.0"
-
-# [patch."https://github.com/bevyengine/bevy.git".bevy]
-# # git = "https://github.com/bevyengine/bevy.git"
-# # branch = "main"
-# git = "https://github.com/johanhelsing/bevy.git"
-# branch = "nocd-cherry-picks"
-
-# [patch.crates-io.bevy]
-# # bevy = { git = "https://github.com/bevyengine/bevy.git", branch = "main" }
-# git = "https://github.com/johanhelsing/bevy.git"
-# branch = "nocd-cherry-picks"
-
-# [patch.crates-io.ggrs]
-# git = "https://github.com/johanhelsing/ggrs"
-# branch = "wip-no-sockets"
-
-#[patch.'https://github.com/bevyengine/bevy']
-# bevy = {git = "https://github.com/bevyengine/bevy//", rev="841755aaf23acfd55b375c37390daeb302c5b30b", default-features=false}
-
-# [patch.'https://github.com/mrk-its/bevy_webgl2']
-# bevy_webgl2 = {git = "https://github.com/mrk-its/bevy_webgl2//", rev="035236b8d7ec52b8e9e20399662e89c73e4521f6", default-features=false}
 
 # [profile.dev]
 # opt-level = 1

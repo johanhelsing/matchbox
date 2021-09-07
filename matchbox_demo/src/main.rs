@@ -58,6 +58,8 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         // Super-stupid busy wait before we can start bevy
         // TODO: should add support in bevy_ggrs for starting after bevy has started
         // if it isn't already supported?
+        // Once we get rid of this hack, we can probably make main non-async again,
+        // and get rid of all the future-related dependencies.
         let waker = noop_waker_ref();
         let mut ctx = Context::from_waker(waker);
         while let std::task::Poll::Pending = peers_future.poll_unpin(&mut ctx) {
@@ -145,6 +147,8 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+// TODO: it would probably make sense to put the below into a bevy_matchbox crate
 
 // In single-threaded wasm it's probably a bit overkill to use an Arc<Mutex>,
 // but if we want to add native support later, this is the way to go.

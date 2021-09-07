@@ -1,10 +1,10 @@
 use futures_channel::mpsc::UnboundedSender;
 
-use super::{PeerRequest, PeerSignal};
+use super::{PeerId, PeerRequest, PeerSignal};
 
 #[derive(Debug, Clone)]
 pub struct SignalPeer {
-    pub id: String,
+    pub id: PeerId,
     pub sender: UnboundedSender<PeerRequest>,
 }
 
@@ -17,7 +17,7 @@ impl SignalPeer {
         self.sender.unbounded_send(req).expect("Send error");
     }
 
-    pub fn new(id: String, sender: UnboundedSender<PeerRequest>) -> Self {
+    pub fn new(id: PeerId, sender: UnboundedSender<PeerRequest>) -> Self {
         Self { id, sender }
     }
 }

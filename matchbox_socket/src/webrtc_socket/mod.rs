@@ -24,11 +24,11 @@ type Packet = Box<[u8]>;
 
 #[derive(Debug)]
 pub struct WebRtcSocket {
-    messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(String, Packet)>,
-    new_connected_peers: futures_channel::mpsc::UnboundedReceiver<String>,
-    // peer_messages_out: futures_channel::mpsc::UnboundedSender<(String, Packet)>,
-    peer_messages_out: futures_channel::mpsc::Sender<(String, Packet)>,
-    peers: Vec<String>,
+    messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
+    new_connected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
+    // peer_messages_out: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
+    peer_messages_out: futures_channel::mpsc::Sender<(PeerId, Packet)>,
+    peers: Vec<PeerId>,
 }
 
 impl WebRtcSocket {
@@ -36,9 +36,9 @@ impl WebRtcSocket {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         // let (peer_messages_out_tx, peer_messages_out_rx) =
-        //     futures_channel::mpsc::unbounded::<(String, Packet)>();
+        //     futures_channel::mpsc::unbounded::<(PeerId, Packet)>();
         let (peer_messages_out_tx, peer_messages_out_rx) =
-            futures_channel::mpsc::channel::<(String, Packet)>(32);
+            futures_channel::mpsc::channel::<(PeerId, Packet)>(32);
 
         (
             Self {
@@ -57,7 +57,7 @@ impl WebRtcSocket {
     }
 
     // pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<SocketAddr> {
-    pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<String> {
+    pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<PeerId> {
         log_1(&"waiting for peers to join".into());
         let mut addrs = vec![];
         while let Some(id) = self.new_connected_peers.next().await {
@@ -71,11 +71,11 @@ impl WebRtcSocket {
         panic!("Signal server died")
     }
 
-    pub fn connected_peers(&self) -> Vec<String> {
+    pub fn connected_peers(&self) -> Vec<PeerId> {
         self.peers.clone() // TODO: could probably be an iterator or reference instead?
     }
 
-    pub fn receive_messages(&mut self) -> Vec<(String, Packet)> {
+    pub fn receive_messages(&mut self) -> Vec<(PeerId, Packet)> {
         std::iter::repeat_with(|| self.messages_from_peers.try_next())
             // .map_while(|poll| match p { // map_while is nightly-only :(
             .take_while(|p| !p.is_err())
@@ -86,7 +86,7 @@ impl WebRtcSocket {
             .collect()
     }
 
-    pub fn send(&mut self, packet: Packet, id: String) {
+    pub fn send(&mut self, packet: Packet, id: PeerId) {
         // log_1(&"sending message on internal channel".into());
 
         // self.peer_messages_out
@@ -101,10 +101,10 @@ impl WebRtcSocket {
 
 async fn message_loop(
     room_url: String,
-    mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(String, Packet)>,
-    // mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(String, Packet)>,
-    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<String>,
-    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(String, Packet)>,
+    mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
+    // mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
+    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
 ) {
     let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
         .await
@@ -120,7 +120,7 @@ async fn message_loop(
     let mut offer_handshakes = FuturesUnordered::new();
     let mut accept_handshakes = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
-    let mut data_channels: HashMap<String, RtcDataChannel> = HashMap::new();
+    let mut data_channels: HashMap<PeerId, RtcDataChannel> = HashMap::new();
 
     loop {
         let next_signal_event = wsio.next().fuse();
@@ -227,8 +227,8 @@ impl<T> JsErrorExt<T> for Result<T, JsValue> {
 async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    messages_from_peers_tx: UnboundedSender<(String, Packet)>,
-) -> Result<(String, RtcDataChannel), Box<dyn std::error::Error>> {
+    messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
+) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
     log_1(&"making offer".into());
     let conn = create_rtc_peer_connection();
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
@@ -290,8 +290,8 @@ async fn handshake_offer(
 async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    messages_from_peers_tx: UnboundedSender<(String, Packet)>,
-) -> Result<(String, RtcDataChannel), Box<dyn std::error::Error>> {
+    messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
+) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
     log_1(&"handshake_accept".into());
 
     let conn = create_rtc_peer_connection();
@@ -449,8 +449,8 @@ async fn wait_for_ice_complete(conn: RtcPeerConnection) {
 
 fn create_data_channel(
     connection: RtcPeerConnection,
-    incoming_tx: futures_channel::mpsc::UnboundedSender<(String, Packet)>,
-    peer_id: String,
+    incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
+    peer_id: PeerId,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
 ) -> RtcDataChannel {
     let mut data_channel_config: RtcDataChannelInit = RtcDataChannelInit::new();
@@ -506,7 +506,7 @@ fn create_data_channel(
 }
 
 // Expect/unwrap is broken in select for some reason :/
-fn check(res: &Result<(String, RtcDataChannel), Box<dyn std::error::Error>>) {
+fn check(res: &Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>>) {
     // but doing it inside a typed function works fine
     res.as_ref().expect("handshake failed");
 }

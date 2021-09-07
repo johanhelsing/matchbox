@@ -1,18 +1,20 @@
 use serde::{Deserialize, Serialize};
 
+pub(crate) type PeerId = String;
+
 /// Events go from signalling server to peer
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerEvent {
-    NewPeer(String),
-    Signal { sender: String, data: PeerSignal },
+    NewPeer(PeerId),
+    Signal { sender: PeerId, data: PeerSignal },
 }
 
 // TODO: move back into lib
 /// Requests go from peer to signalling server
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerRequest {
-    Uuid(String),
-    Signal { receiver: String, data: PeerSignal },
+    Uuid(PeerId),
+    Signal { receiver: PeerId, data: PeerSignal },
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

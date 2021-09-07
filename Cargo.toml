@@ -1,24 +1,21 @@
 [workspace]
 members = ["matchbox", "matchbox_server", "matchbox_peer", "matchbox_demo", "ggrs"]
 
-# [patch."https://github.com/johanhelsing/matchbox".matchbox]
-# path = "matchbox"
-
-# [patch."https://github.com/johanhelsing/matchbox_server".matchbox_server]
-# path = "matchbox_server"
-
 [patch."https://github.com/bevyengine/bevy.git".bevy]
 # git = "https://github.com/bevyengine/bevy.git"
 # branch = "main"
+# TODO: stop using fork
 git = "https://github.com/johanhelsing/bevy.git"
 branch = "nocd-cherry-picks"
 
 [patch.crates-io.bevy]
 # bevy = { git = "https://github.com/bevyengine/bevy.git", branch = "main" }
+# TODO: stop using fork
 git = "https://github.com/johanhelsing/bevy.git"
 branch = "nocd-cherry-picks"
 
 [patch.crates-io.ggrs]
+# TODO: stop using submodule
 # git = "https://github.com/gschup/ggrs"
 # branch = "main"
 path = "ggrs"

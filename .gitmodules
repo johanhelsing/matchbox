@@ -1,0 +1,3 @@
+[submodule "ggrs"]
+	path = ggrs
+	url = https://github.com/gschup/ggrs.git

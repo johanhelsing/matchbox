@@ -1,0 +1,8 @@
+/target
+crates/*/target
+**/*.rs.bk
+.cargo/config
+/.idea
+/.vscode
+/benches/target
+*.code-workspace

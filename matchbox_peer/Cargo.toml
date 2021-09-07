@@ -1,0 +1,12 @@
+[package]
+name = "matchbox_peer"
+version = "0.1.0"
+authors = ["Johan Helsing <johanhelsing@gmail.com>"]
+description = "Painless WebRTC peer-to-peer full-mesh networking socket"
+edition = "2018"
+license = "MIT OR Apache-2.0"
+keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
+
+[dependencies]
+matchbox = { path = "../matchbox" }

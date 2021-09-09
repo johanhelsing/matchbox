@@ -1,27 +1,13 @@
-use std::{collections::HashMap, env, sync::Arc};
-
 use clap::Clap;
-use futures::lock::Mutex;
 use log::info;
-use warp::{http::StatusCode, hyper::Method, ws::Message, Filter, Rejection, Reply};
+use std::env;
+use warp::{http::StatusCode, hyper::Method, Filter, Rejection, Reply};
 
 pub use args::Args;
 pub use signaling::matchbox::PeerId;
 
 mod args;
 mod signaling;
-
-pub struct Peer {
-    pub uuid: PeerId,
-    pub sender:
-        Option<tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>,
-}
-
-type Clients = Arc<Mutex<HashMap<PeerId, Peer>>>;
-
-fn new_clients() -> Clients {
-    Arc::new(Mutex::new(HashMap::new()))
-}
 
 #[tokio::main]
 async fn main() {
@@ -30,8 +16,6 @@ async fn main() {
     }
     pretty_env_logger::init();
     let args = Args::parse();
-
-    let clients = new_clients();
 
     let health_route = warp::path("health").and_then(health_handler);
 
@@ -70,7 +54,7 @@ async fn main() {
     //     .allow_methods(&[Method::GET]);
 
     let routes = health_route
-        .or(signaling::ws_filter(clients))
+        .or(signaling::ws_filter(Default::default()))
         .with(cors)
         .with(log);
 

@@ -1,8 +1,6 @@
-use std::convert::Infallible;
-
-use futures::{stream::SplitSink, StreamExt};
+use futures::{lock::Mutex, stream::SplitSink, StreamExt};
 use log::{error, info};
-// use matchbox::*;
+use std::{collections::HashMap, convert::Infallible, sync::Arc};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::{
@@ -29,30 +27,44 @@ pub mod matchbox {
         Signal { sender: PeerId, data: S },
     }
 }
+use matchbox::*;
 
 type PeerRequest = matchbox::PeerRequest<serde_json::Value>;
 type PeerEvent = matchbox::PeerEvent<serde_json::Value>;
 
-use crate::{Clients, Peer};
+pub struct Peer {
+    pub uuid: PeerId,
+    pub sender:
+        Option<tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>,
+}
 
-pub fn ws_filter(clients: Clients) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+#[derive(Default)]
+pub(crate) struct State {
+    clients: HashMap<PeerId, Peer>,
+}
+
+pub(crate) fn ws_filter(
+    state: Arc<Mutex<State>>,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::ws()
         .and(warp::any())
         .and(warp::path::param())
-        .and(with_clients(clients.clone()))
+        .and(with_state(state.clone()))
         .and_then(ws_handler)
 }
 
-fn with_clients(clients: Clients) -> impl Filter<Extract = (Clients,), Error = Infallible> + Clone {
-    warp::any().map(move || clients.clone())
+fn with_state(
+    state: Arc<Mutex<State>>,
+) -> impl Filter<Extract = (Arc<Mutex<State>>,), Error = Infallible> + Clone {
+    warp::any().map(move || state.clone())
 }
 
-pub async fn ws_handler(
+pub(crate) async fn ws_handler(
     ws: warp::ws::Ws,
     _path: String,
-    clients: Clients,
+    state: Arc<Mutex<State>>,
 ) -> std::result::Result<impl Reply, Rejection> {
-    Ok(ws.on_upgrade(move |websocket| handle_ws(websocket, clients)))
+    Ok(ws.on_upgrade(move |websocket| handle_ws(websocket, state)))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -87,7 +99,7 @@ fn spawn_sender_task(
     client_sender
 }
 
-async fn handle_ws(websocket: WebSocket, clients: Clients) {
+async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>) {
     let (ws_sender, mut ws_receiver) = websocket.split();
     let sender = spawn_sender_task(ws_sender);
     let mut peer_uuid = None;
@@ -110,8 +122,9 @@ async fn handle_ws(websocket: WebSocket, clients: Clients) {
                     continue;
                 }
                 peer_uuid = Some(uuid.clone());
-                let mut clients = clients.lock().await;
-                clients.insert(
+
+                let mut state = state.lock().await;
+                state.clients.insert(
                     uuid.clone(),
                     Peer {
                         uuid: uuid.clone(),
@@ -124,7 +137,7 @@ async fn handle_ws(websocket: WebSocket, clients: Clients) {
                         .expect("error serializing message"),
                 );
 
-                for peer in clients.iter().filter(|peer| peer.1.uuid != uuid) {
+                for peer in state.clients.iter().filter(|peer| peer.1.uuid != uuid) {
                     // Tell everyone about this new peer
                     info!("{:?} -> {:?}", peer.1.uuid, event.to_str().unwrap());
                     if let Err(e) = peer.1.sender.as_ref().unwrap().send(Ok(event.clone())) {
@@ -133,7 +146,6 @@ async fn handle_ws(websocket: WebSocket, clients: Clients) {
                 }
             }
             PeerRequest::Signal { receiver, data } => {
-                let clients = clients.lock().await;
                 let sender = match peer_uuid.clone() {
                     Some(sender) => sender,
                     None => {
@@ -145,7 +157,9 @@ async fn handle_ws(websocket: WebSocket, clients: Clients) {
                     serde_json::to_string(&PeerEvent::Signal { sender, data })
                         .expect("error serializing message"),
                 );
-                if let Err(e) = clients
+                let state = state.lock().await;
+                if let Err(e) = state
+                    .clients
                     .get(&receiver)
                     .unwrap()
                     .sender
@@ -160,19 +174,27 @@ async fn handle_ws(websocket: WebSocket, clients: Clients) {
     }
 
     if let Some(uuid) = peer_uuid {
-        let mut clients = clients.lock().await;
-        clients.remove(&uuid).expect("Couldn't find uuid to remove");
+        let mut state = state.lock().await;
+        state
+            .clients
+            .remove(&uuid)
+            .expect("Couldn't find uuid to remove");
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use warp::{ws::Message, Filter, Rejection, Reply};
 
-    use crate::{new_clients, signaling::PeerEvent};
+    use std::time::Duration;
+
+    use futures::pin_mut;
+    use tokio::{select, time};
+    use warp::{test::WsClient, ws::Message, Filter, Rejection, Reply};
+
+    use crate::signaling::PeerEvent;
 
     fn api() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-        super::ws_filter(new_clients())
+        super::ws_filter(Default::default())
     }
 
     #[tokio::test]

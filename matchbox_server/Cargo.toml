@@ -21,3 +21,6 @@ pretty_env_logger = "0.4"
 thiserror = "1.0"
 tokio-stream = "0.1"
 log = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1.10", features = ["macros", "rt-multi-thread", "time"] }

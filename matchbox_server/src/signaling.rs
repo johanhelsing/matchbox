@@ -271,7 +271,7 @@ mod tests {
         assert_eq!(
             signal_event,
             PeerEvent::Signal {
-                data: "123".to_string(),
+                data: serde_json::Value::String("123".to_string()),
                 sender: "uuid-a".to_string(),
             }
         );

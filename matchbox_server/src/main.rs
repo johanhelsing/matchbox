@@ -6,17 +6,18 @@ use log::info;
 use warp::{http::StatusCode, hyper::Method, ws::Message, Filter, Rejection, Reply};
 
 pub use args::Args;
+pub use signaling::matchbox::PeerId;
 
 mod args;
 mod signaling;
 
 pub struct Peer {
-    pub uuid: String,
+    pub uuid: PeerId,
     pub sender:
         Option<tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>,
 }
 
-type Clients = Arc<Mutex<HashMap<String, Peer>>>;
+type Clients = Arc<Mutex<HashMap<PeerId, Peer>>>;
 
 fn new_clients() -> Clients {
     Arc::new(Mutex::new(HashMap::new()))

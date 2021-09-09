@@ -29,6 +29,7 @@ pub struct WebRtcSocket {
     // peer_messages_out: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_messages_out: futures_channel::mpsc::Sender<(PeerId, Packet)>,
     peers: Vec<PeerId>,
+    id: PeerId,
 }
 
 impl WebRtcSocket {
@@ -40,14 +41,19 @@ impl WebRtcSocket {
         let (peer_messages_out_tx, peer_messages_out_rx) =
             futures_channel::mpsc::channel::<(PeerId, Packet)>(32);
 
+        // Would perhaps be smarter to let signalling server decide this...
+        let id = Uuid::new_v4().to_string();
+
         (
             Self {
+                id: id.clone(),
                 messages_from_peers,
                 peer_messages_out: peer_messages_out_tx,
                 new_connected_peers,
                 peers: vec![],
             },
             Box::pin(message_loop(
+                id,
                 room_url.to_string(),
                 peer_messages_out_rx,
                 new_connected_peers_tx,
@@ -97,9 +103,14 @@ impl WebRtcSocket {
             .try_send((id, packet))
             .expect("send_to failed");
     }
+
+    pub fn id(&self) -> &PeerId {
+        &self.id
+    }
 }
 
 async fn message_loop(
+    id: PeerId,
     room_url: String,
     mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
     // mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
@@ -114,7 +125,7 @@ async fn message_loop(
         futures_channel::mpsc::unbounded::<PeerRequest>();
 
     requests_sender
-        .unbounded_send(PeerRequest::Uuid(Uuid::new_v4().to_string()))
+        .unbounded_send(PeerRequest::Uuid(id))
         .expect("failed to send uuid");
 
     let mut offer_handshakes = FuturesUnordered::new();

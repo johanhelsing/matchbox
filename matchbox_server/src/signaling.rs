@@ -165,19 +165,23 @@ async fn handle_ws(websocket: WebSocket, clients: Clients) {
 
 #[cfg(test)]
 mod tests {
-    use warp::ws::Message;
+    use warp::{ws::Message, Filter, Rejection, Reply};
 
     use crate::{new_clients, signaling::PeerEvent};
+
+    fn api() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+        super::ws_filter(new_clients())
+    }
 
     #[tokio::test]
     async fn ws_connect() {
         let _ = pretty_env_logger::try_init();
+        let api = api();
 
-        let route = super::ws_filter(new_clients());
         // let req = warp::test::ws().path("/echo");
         warp::test::ws()
             .path("/room_a")
-            .handshake(route)
+            .handshake(api)
             // .handshake(ws_echo())
             .await
             .expect("handshake");
@@ -186,13 +190,12 @@ mod tests {
     #[tokio::test]
     async fn new_peer() {
         let _ = pretty_env_logger::try_init();
-
-        let route = super::ws_filter(new_clients());
+        let api = api();
 
         // let req = warp::test::ws().path("/echo");
         let mut client_a = warp::test::ws()
             .path("/room_a")
-            .handshake(route.clone())
+            .handshake(api.clone())
             // .handshake(ws_echo())
             .await
             .expect("handshake");
@@ -203,7 +206,7 @@ mod tests {
 
         let mut client_b = warp::test::ws()
             .path("/room_a")
-            .handshake(route)
+            .handshake(api)
             // .handshake(ws_echo())
             .await
             .expect("handshake");
@@ -222,13 +225,12 @@ mod tests {
     #[tokio::test]
     async fn signal() {
         let _ = pretty_env_logger::try_init();
-
-        let route = super::ws_filter(new_clients());
+        let api = api();
 
         // let req = warp::test::ws().path("/echo");
         let mut client_a = warp::test::ws()
             .path("/room_a")
-            .handshake(route.clone())
+            .handshake(api.clone())
             // .handshake(ws_echo())
             .await
             .expect("handshake");
@@ -239,7 +241,7 @@ mod tests {
 
         let mut client_b = warp::test::ws()
             .path("/room_a")
-            .handshake(route)
+            .handshake(api)
             // .handshake(ws_echo())
             .await
             .expect("handshake");

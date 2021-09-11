@@ -26,7 +26,6 @@ type Packet = Box<[u8]>;
 pub struct WebRtcSocket {
     messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
-    // peer_messages_out: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_messages_out: futures_channel::mpsc::Sender<(PeerId, Packet)>,
     peers: Vec<PeerId>,
     id: PeerId,
@@ -36,8 +35,6 @@ impl WebRtcSocket {
     pub async fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
-        // let (peer_messages_out_tx, peer_messages_out_rx) =
-        //     futures_channel::mpsc::unbounded::<(PeerId, Packet)>();
         let (peer_messages_out_tx, peer_messages_out_rx) =
             futures_channel::mpsc::channel::<(PeerId, Packet)>(32);
 
@@ -66,7 +63,6 @@ impl WebRtcSocket {
         )
     }
 
-    // pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<SocketAddr> {
     pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<PeerId> {
         debug!("waiting for peers to join");
         let mut addrs = vec![];
@@ -106,12 +102,6 @@ impl WebRtcSocket {
     }
 
     pub fn send(&mut self, packet: Packet, id: PeerId) {
-        // debug!("sending message on internal channel");
-
-        // self.peer_messages_out
-        //     .unbounded_send((id, packet))
-        //     .expect("send_to failed");
-
         self.peer_messages_out
             .try_send((id, packet))
             .expect("send_to failed");
@@ -125,13 +115,16 @@ impl WebRtcSocket {
 async fn message_loop(
     id: PeerId,
     mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
-    // mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     mut wsio: WsStream,
 ) {
     debug!("Starting WebRtcSocket message loop");
 
+    // TODO: this is the ideal place to start the websocket connection, unfortunately
+    // *something* isn't quite right when this is polled through a bevy system and the
+    // connection is never established. So it's currently moved outside the messaging loop
+    // when/if I figure out what's wrong, it should ideally be moved back inside again.
     // let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
     //     .await
     //     .expect("failed to connect to signalling server");
@@ -260,7 +253,6 @@ async fn handshake_offer(
         signal_peer.id.clone(),
         channel_ready_tx,
     );
-    // create_ice_handler(conn.clone(), signal_peer.clone());
 
     let offer = JsFuture::from(conn.create_offer()).await.efix()?;
 
@@ -303,7 +295,6 @@ async fn handshake_offer(
         .await
         .efix()?;
 
-    // ice_dance(conn, signal_receiver, signal_peer.clone()).await;
     channel_ready_rx.next().await;
 
     Ok((signal_peer.id, data_channel))
@@ -324,7 +315,6 @@ async fn handshake_accept(
         signal_peer.id.clone(),
         channel_ready_tx,
     );
-    // create_ice_handler(conn.clone(), signal_peer.clone());
 
     let offer: Option<String>;
     loop {
@@ -378,7 +368,6 @@ async fn handshake_accept(
     let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
     signal_peer.send(answer);
 
-    // ice_dance(conn, signal_receiver, signal_peer.clone()).await;
     channel_ready_rx.next().await;
 
     Ok((signal_peer.id, data_channel))
@@ -450,7 +439,6 @@ fn create_data_channel(
     let channel_clone = channel.clone();
     let channel_onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
         debug!("Rtc data channel opened :D :D");
-        // let mut from_client_sender_clone_2 = from_client_sender_clone.clone();
         let peer_id = peer_id.clone();
         let incoming_tx = incoming_tx.clone();
         let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =

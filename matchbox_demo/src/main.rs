@@ -117,10 +117,6 @@ fn lobby_system(
 
     // extract final player list
     let players = socket.players();
-    let player_handle = players
-        .iter()
-        .position(|&player_type| player_type == PlayerType::Local)
-        .unwrap();
 
     // create a GGRS P2P session
     let mut p2p_session =
@@ -134,10 +130,12 @@ fn lobby_system(
         p2p_session
             .add_player(player, i)
             .expect("failed to add player");
-    }
 
-    // set input delay for the local player
-    p2p_session.set_frame_delay(2, player_handle).unwrap();
+        if player == PlayerType::Local {
+            // set input delay for the local player
+            p2p_session.set_frame_delay(2, i).unwrap();
+        }
+    }
 
     // set default expected update frequency (affects synchronization timings between players)
     p2p_session.set_fps(FPS).unwrap();

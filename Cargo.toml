@@ -1,21 +1,2 @@
 [workspace]
 members = ["matchbox_server", "matchbox_socket", "matchbox_demo"]
-
-[patch."https://github.com/bevyengine/bevy.git".bevy]
-# git = "https://github.com/bevyengine/bevy.git"
-# branch = "main"
-# TODO: stop using fork
-git = "https://github.com/johanhelsing/bevy.git"
-branch = "nocd-cherry-picks"
-
-[patch.crates-io.bevy]
-# bevy = { git = "https://github.com/bevyengine/bevy.git", branch = "main" }
-# TODO: stop using fork
-git = "https://github.com/johanhelsing/bevy.git"
-branch = "nocd-cherry-picks"
-
-#[patch."https://github.com/gschup/bevy_ggrs".bevy_ggrs]
-#path = "../bevy_ggrs"
-
-#[patch."https://github.com/gschup/ggrs".ggrs]
-#path = "../ggrs"

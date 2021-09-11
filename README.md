@@ -20,8 +20,8 @@ rust, uses only a couple of megabytes of memory. Also available as a docker imag
 
 ## Live demo
 
-- Player 0: https://s3.johanhelsing.studio/dump/box_game/index.html?player_handle=0
-- Player 1: https://s3.johanhelsing.studio/dump/box_game/index.html?player_handle=1
+- 2-player demo: https://s3.johanhelsing.studio/dump/box_game/index.html
+- 4-player demo: https://s3.johanhelsing.studio/dump/box_game/index.html?players=4
 
 Open each link in a separate tab or machine. You will see only diagonal stripes
 until the second player joins. It's still pretty buggy so if more than two

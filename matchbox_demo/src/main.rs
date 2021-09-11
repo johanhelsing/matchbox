@@ -43,9 +43,9 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::get();
     info!("{:?}", args);
 
-    let room_id = match &args.room_id {
+    let room_id = match &args.room {
         Some(id) => id.clone(),
-        None => format!("next_{}", &args.num_players),
+        None => format!("next_{}", &args.players),
     };
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to {:?}", room_url);
@@ -104,7 +104,7 @@ fn lobby_system(
     socket.as_mut().unwrap().accept_new_connections();
 
     let current_players = socket.as_ref().unwrap().connected_peers().len();
-    if current_players + 1 < args.num_players {
+    if current_players + 1 < args.players {
         info!("not enough players: {}", current_players);
         return;
     }
@@ -129,7 +129,7 @@ fn lobby_system(
 
     // create a GGRS P2P session
     let mut p2p_session =
-        ggrs::new_p2p_session_with_socket(args.num_players as u32, INPUT_SIZE, socket)
+        ggrs::new_p2p_session_with_socket(args.players as u32, INPUT_SIZE, socket)
             .expect("failed to start with socket");
 
     // turn on sparse saving

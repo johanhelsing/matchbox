@@ -19,6 +19,8 @@ enum AppState {
     InGame,
 }
 
+const SKY_COLOR: Color = Color::rgb(0.69, 0.69, 0.69);
+
 fn main() {
     // When building for WASM, print panics to the browser console
     console_error_panic_hook::set_once();
@@ -31,7 +33,7 @@ fn main() {
     let mut app = App::new();
 
     app.insert_resource(Msaa { samples: 4 })
-        .insert_resource(ClearColor(Color::hex("7ca1c0").unwrap()))
+        .insert_resource(ClearColor(SKY_COLOR))
         .add_plugins(bevy_webgl2::DefaultPlugins)
         // Some of our systems need the query parameters
         .insert_resource(args)
@@ -101,7 +103,7 @@ fn lobby_startup(
                 align_items: AlignItems::FlexEnd,
                 ..Default::default()
             },
-            material: materials.add(Color::NONE.into()),
+            material: materials.add(Color::rgb(0.43, 0.41, 0.38).into()),
             ..Default::default()
         })
         .with_children(|parent| {
@@ -117,7 +119,7 @@ fn lobby_startup(
                         TextStyle {
                             font: asset_server.load("fonts/quicksand-light.ttf"),
                             font_size: 96.,
-                            color: Color::WHITE,
+                            color: Color::BLACK,
                         },
                         Default::default(),
                     ),

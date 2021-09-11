@@ -12,7 +12,7 @@ use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
     RtcIceGatheringState, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
-use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
+use ws_stream_wasm::{WsMessage, WsMeta};
 
 mod messages;
 mod signal_peer;
@@ -32,7 +32,7 @@ pub struct WebRtcSocket {
 }
 
 impl WebRtcSocket {
-    pub async fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+    pub fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) =
@@ -40,10 +40,6 @@ impl WebRtcSocket {
 
         // Would perhaps be smarter to let signalling server decide this...
         let id = Uuid::new_v4().to_string();
-
-        let (_ws, wsio) = WsMeta::connect(&room_url, None)
-            .await
-            .expect("failed to connect to signalling server");
 
         (
             Self {
@@ -54,11 +50,11 @@ impl WebRtcSocket {
                 peers: vec![],
             },
             Box::pin(message_loop(
+                room_url.to_string(),
                 id,
                 peer_messages_out_rx,
                 new_connected_peers_tx,
                 messages_from_peers_tx,
-                wsio,
             )),
         )
     }
@@ -113,13 +109,17 @@ impl WebRtcSocket {
 }
 
 async fn message_loop(
+    room_url: String,
     id: PeerId,
     mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
-    mut wsio: WsStream,
 ) {
     debug!("Starting WebRtcSocket message loop");
+
+    let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
+        .await
+        .expect("failed to connect to signalling server");
 
     // TODO: this is the ideal place to start the websocket connection, unfortunately
     // *something* isn't quite right when this is polled through a bevy system and the
@@ -384,8 +384,8 @@ fn create_rtc_peer_connection() -> RtcPeerConnection {
 
     let mut peer_config: RtcConfiguration = RtcConfiguration::new();
     let ice_server_config = IceServerConfig {
-        // urls: ["stun:stun.l.google.com:19302".to_string()],
         urls: [
+            // "stun:stun.l.google.com:19302".to_string(),
             "stun:stun.johanhelsing.studio:3478".to_string(),
             //"turn:stun.johanhelsing.studio:3478".to_string(),
         ],

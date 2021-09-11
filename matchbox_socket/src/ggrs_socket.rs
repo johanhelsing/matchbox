@@ -17,8 +17,8 @@ pub struct WebRtcNonBlockingSocket {
 }
 
 impl WebRtcNonBlockingSocket {
-    pub async fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
-        let (socket, message_loop) = WebRtcSocket::new(room_url).await;
+    pub fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+        let (socket, message_loop) = WebRtcSocket::new(room_url);
         (
             Self {
                 socket,

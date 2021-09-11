@@ -1,10 +1,8 @@
-use bevy::{core::FixedTimestep, prelude::*};
+use bevy::{core::FixedTimestep, prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{CommandsExt, GGRSApp, GGRSPlugin};
-use futures::{executor::LocalPool, lock::Mutex, task::LocalSpawnExt};
 use ggrs::PlayerType;
 use log::info;
 use matchbox_socket::WebRtcNonBlockingSocket;
-use std::sync::Arc;
 
 mod args;
 mod box_game;
@@ -22,55 +20,23 @@ enum AppState {
 }
 
 fn main() {
-    #[cfg(target_arch = "wasm32")]
-    {
-        // When building for WASM, print panics to the browser console
-        console_error_panic_hook::set_once();
-        console_log::init_with_level(log::Level::Debug).expect("Failed to init logs");
-        log::info!("log::info logs are working");
-        wasm_bindgen_futures::spawn_local(async move {
-            main_async().await.expect("main failed");
-        })
-    }
+    // When building for WASM, print panics to the browser console
+    console_error_panic_hook::set_once();
+    console_log::init_with_level(log::Level::Debug).expect("Failed to init logs");
 
-    #[cfg(not(target_arch = "wasm32"))]
-    futures::executor::block_on(async move {
-        main_async().await.expect("main failed");
-    })
-}
-
-async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     // read query string or command line arguments
     let args = Args::get();
     info!("{:?}", args);
 
-    let room_id = match &args.room {
-        Some(id) => id.clone(),
-        None => format!("next_{}", &args.players),
-    };
-    let room_url = format!("{}/{}", &args.matchbox, room_id);
-    info!("connecting to {:?}", room_url);
-    let (socket, message_loop) = WebRtcNonBlockingSocket::new(&room_url).await;
-
-    let pool = LocalPool::new();
-    pool.spawner()
-        .spawn_local(message_loop)
-        .expect("couldn't spawn message loop");
-
     let mut app = App::new();
 
     app.insert_resource(Msaa { samples: 4 })
-        .add_plugins(DefaultPlugins);
-
-    #[cfg(target_arch = "wasm32")]
-    app.add_plugin(bevy_webgl2::WebGL2Plugin);
-
-    app.insert_resource(args)
-        .insert_resource(SocketTaskPool(Arc::new(Mutex::new(pool))))
+        .insert_resource(ClearColor(Color::hex("7ca1c0").unwrap()))
+        .add_plugins(bevy_webgl2::DefaultPlugins)
+        // Some of our systems need the query parameters
+        .insert_resource(args)
         // Make sure something polls the message tasks regularly
-        .add_system(process_socket_tasks)
         .add_plugin(GGRSPlugin)
-        .insert_resource(Some(socket))
         // define frequency of game logic update
         .with_rollback_run_criteria(FixedTimestep::steps_per_second(FPS as f64))
         // define system that represents your inputs as a byte vector, so GGRS can send the inputs around
@@ -86,12 +52,86 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         .add_rollback_system(increase_frame_system);
 
     app.add_state(AppState::Lobby)
+        .add_system_set(
+            SystemSet::on_enter(AppState::Lobby)
+                .with_system(lobby_startup)
+                .with_system(start_matchbox_socket),
+        )
         .add_system_set(SystemSet::on_update(AppState::Lobby).with_system(lobby_system))
+        .add_system_set(SystemSet::on_exit(AppState::Lobby).with_system(lobby_cleanup))
         .add_system_set(SystemSet::on_enter(AppState::InGame).with_system(setup_scene_system));
 
     app.run();
+}
 
-    Ok(())
+fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, thread_pool: Res<IoTaskPool>) {
+    let room_id = match &args.room {
+        Some(id) => id.clone(),
+        None => format!("next_{}", &args.players),
+    };
+
+    let room_url = format!("{}/{}", &args.matchbox, room_id);
+    info!("connecting to matchbox server: {:?}", room_url);
+    let (socket, message_loop) = WebRtcNonBlockingSocket::new(&room_url);
+
+    // The message loop needs to be awaited, or nothing will happen.
+    // We do this here using bevy's task system.
+    thread_pool.spawn(message_loop).detach();
+
+    commands.insert_resource(Some(socket));
+}
+
+// Marker components for UI
+struct LobbyText;
+struct LobbyUI;
+
+fn lobby_startup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    // All this is just for spawning centered text.
+    commands.spawn_bundle(UiCameraBundle::default());
+    commands
+        .spawn_bundle(NodeBundle {
+            style: Style {
+                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+                position_type: PositionType::Absolute,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::FlexEnd,
+                ..Default::default()
+            },
+            material: materials.add(Color::NONE.into()),
+            ..Default::default()
+        })
+        .with_children(|parent| {
+            parent
+                .spawn_bundle(TextBundle {
+                    style: Style {
+                        align_self: AlignSelf::Center,
+                        justify_content: JustifyContent::Center,
+                        ..Default::default()
+                    },
+                    text: Text::with_section(
+                        "Entering lobby...",
+                        TextStyle {
+                            font: asset_server.load("fonts/quicksand-light.ttf"),
+                            font_size: 96.,
+                            color: Color::WHITE,
+                        },
+                        Default::default(),
+                    ),
+                    ..Default::default()
+                })
+                .insert(LobbyText);
+        })
+        .insert(LobbyUI);
+}
+
+fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
+    for e in query.iter() {
+        commands.entity(e).despawn_recursive();
+    }
 }
 
 fn lobby_system(
@@ -99,14 +139,16 @@ fn lobby_system(
     args: Res<Args>,
     mut socket: ResMut<Option<WebRtcNonBlockingSocket>>,
     mut commands: Commands,
+    mut query: Query<&mut Text, With<LobbyText>>,
 ) {
     let socket = socket.as_mut();
 
     socket.as_mut().unwrap().accept_new_connections();
+    let connected_peers = socket.as_ref().unwrap().connected_peers().len();
+    let remaining = args.players - (connected_peers + 1);
+    query.single_mut().sections[0].value = format!("Waiting for {} more player(s)", remaining);
 
-    let current_players = socket.as_ref().unwrap().connected_peers().len();
-    if current_players + 1 < args.players {
-        info!("not enough players: {}", current_players);
+    if remaining > 0 {
         return;
     }
 
@@ -147,18 +189,4 @@ fn lobby_system(
     app_state
         .set(AppState::InGame)
         .expect("Tried to go in-game while already in-game");
-}
-
-// TODO: it would probably make sense to put the below into a bevy_matchbox crate
-
-// In single-threaded wasm it's probably a bit overkill to use an Arc<Mutex>,
-// but if we want to add native support later, this is the way to go.
-// ...or if web-browsers get proper threads someday...
-struct SocketTaskPool(Arc<Mutex<LocalPool>>);
-unsafe impl Send for SocketTaskPool {}
-unsafe impl Sync for SocketTaskPool {}
-
-fn process_socket_tasks(pool: ResMut<SocketTaskPool>) {
-    let mut pool = pool.0.try_lock().expect("Couldn't lock socket task pool");
-    pool.run_until_stalled();
 }

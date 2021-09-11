@@ -5,8 +5,8 @@ Painless peer-to-peer WebRTC networking for rust wasm applications.
 The goal of the Matchbox project is to enable udp-like, unordered, unreliable
 p2p connections in web browsers to facilitate low-latency multiplayer games.
 
-**WARNING:** This project is still in its infancy, it will break repeatedly as I
-clean it up and move things around.
+**WARNING:** This project is in early stages, it will break repeatedly as things
+are cleaned up and moved around.
 
 It is currently an all-in-one solution, it comes with:
 
@@ -15,6 +15,8 @@ rust, uses only a couple of megabytes of memory. Also available as a docker imag
 - An example browser game, using `bevy`, `bevy_ggrs` and `bevy_webgl2`,
 [matchbox_demo](matchbox_demo)
 - A socket abstraction for rust wasm, [matchbox_socket](matchbox_socket)
+  - With a feature, `ggrs` for providing a [ggrs](https://github.com/gschup/ggrs)
+  compatible socket.
 
 ## Live demo
 

@@ -31,7 +31,6 @@ web-sys = { version = "0.3.22", features = [
 console_error_panic_hook = "0.1"
 console_log = "0.2"
 serde_qs = "0.8.4"
-wasm-bindgen-futures = "0.4"
 wasm-bindgen = "0.2"
 
 [dependencies]
@@ -39,8 +38,6 @@ bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-fe
 bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs", branch = "main" }
 bevy_webgl2 = { git = "https://github.com/mrk-its/bevy_webgl2", branch = "master", optional = true }
 clap = "3.0.0-beta.2"
-futures = { version = "0.3", default-features = false }
-futures-lite = "1.12"
 serde = "1.0"
 winit = {version = "0.25.0"}
 log = "0.4"

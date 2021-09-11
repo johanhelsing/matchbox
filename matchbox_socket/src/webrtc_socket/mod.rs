@@ -12,7 +12,7 @@ use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
     RtcIceGatheringState, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
-use ws_stream_wasm::{WsMessage, WsMeta};
+use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 
 mod messages;
 mod signal_peer;
@@ -33,7 +33,7 @@ pub struct WebRtcSocket {
 }
 
 impl WebRtcSocket {
-    pub fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+    pub async fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         // let (peer_messages_out_tx, peer_messages_out_rx) =
@@ -43,6 +43,10 @@ impl WebRtcSocket {
 
         // Would perhaps be smarter to let signalling server decide this...
         let id = Uuid::new_v4().to_string();
+
+        let (_ws, wsio) = WsMeta::connect(&room_url, None)
+            .await
+            .expect("failed to connect to signalling server");
 
         (
             Self {
@@ -54,10 +58,10 @@ impl WebRtcSocket {
             },
             Box::pin(message_loop(
                 id,
-                room_url.to_string(),
                 peer_messages_out_rx,
                 new_connected_peers_tx,
                 messages_from_peers_tx,
+                wsio,
             )),
         )
     }
@@ -75,6 +79,15 @@ impl WebRtcSocket {
             }
         }
         panic!("Signal server died")
+    }
+
+    pub fn process_new_connections(&mut self) -> Vec<PeerId> {
+        let mut ids = Vec::new();
+        while let Ok(Some(id)) = self.new_connected_peers.try_next() {
+            self.peers.push(id.clone());
+            ids.push(id);
+        }
+        ids
     }
 
     pub fn connected_peers(&self) -> Vec<PeerId> {
@@ -111,15 +124,17 @@ impl WebRtcSocket {
 
 async fn message_loop(
     id: PeerId,
-    room_url: String,
     mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
     // mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
+    mut wsio: WsStream,
 ) {
-    let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
-        .await
-        .expect("failed to connect to signalling server");
+    debug!("Starting WebRtcSocket message loop");
+
+    // let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
+    //     .await
+    //     .expect("failed to connect to signalling server");
 
     let (requests_sender, mut requests_receiver) =
         futures_channel::mpsc::unbounded::<PeerRequest>();

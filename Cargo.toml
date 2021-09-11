@@ -13,3 +13,9 @@ branch = "nocd-cherry-picks"
 # TODO: stop using fork
 git = "https://github.com/johanhelsing/bevy.git"
 branch = "nocd-cherry-picks"
+
+[patch."https://github.com/gschup/bevy_ggrs".bevy_ggrs]
+path = "../bevy_ggrs"
+
+[patch."https://github.com/gschup/ggrs".ggrs]
+path = "../ggrs"

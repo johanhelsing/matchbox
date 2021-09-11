@@ -1,17 +1,9 @@
-use bevy::{core::FixedTimestep, log::LogPlugin, prelude::*};
-use bevy_ggrs::{GGRSApp, GGRSPlugin};
-use futures::{
-    executor::LocalPool,
-    lock::Mutex,
-    task::{noop_waker_ref, LocalSpawnExt},
-    FutureExt,
-};
-use ggrs::PlayerType;
+use bevy::{core::FixedTimestep, prelude::*};
+use bevy_ggrs::{CommandsExt, GGRSApp, GGRSPlugin};
+use futures::{executor::LocalPool, lock::Mutex, task::LocalSpawnExt};
 use log::info;
 use matchbox_socket::WebRtcNonBlockingSocket;
-use std::{sync::Arc, task::Context};
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode};
+use std::sync::Arc;
 
 mod args;
 mod box_game;
@@ -22,13 +14,19 @@ use box_game::*;
 const INPUT_SIZE: usize = std::mem::size_of::<u8>();
 const FPS: u32 = 60;
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+enum AppState {
+    Lobby,
+    InGame,
+}
+
 fn main() {
     #[cfg(target_arch = "wasm32")]
     {
         // When building for WASM, print panics to the browser console
         console_error_panic_hook::set_once();
         console_log::init_with_level(log::Level::Debug).expect("Failed to init logs");
-        info!("logs are working");
+        log::info!("log::info logs are working");
         wasm_bindgen_futures::spawn_local(async move {
             main_async().await.expect("main failed");
         })
@@ -45,92 +43,33 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::get();
     info!("{:?}", args);
 
-    let (mut socket, message_loop) = WebRtcNonBlockingSocket::new(&args.room_url);
+    let room_id = match &args.room_id {
+        Some(id) => id.clone(),
+        None => format!("next_{}", &args.num_players),
+    };
+    let room_url = format!("{}/{}", &args.matchbox, room_id);
+    info!("connecting to {:?}", room_url);
+    let (socket, message_loop) = WebRtcNonBlockingSocket::new(&room_url).await;
 
-    let mut pool = LocalPool::new();
+    let pool = LocalPool::new();
     pool.spawner()
         .spawn_local(message_loop)
         .expect("couldn't spawn message loop");
 
-    {
-        let mut peers_future = Box::pin(socket.wait_for_peers(args.num_players - 1));
-        // Super-stupid busy wait before we can start bevy
-        // TODO: should add support in bevy_ggrs for starting after bevy has started
-        // if it isn't already supported?
-        // Once we get rid of this hack, we can probably make main non-async again,
-        // and get rid of all the future-related dependencies.
-        let waker = noop_waker_ref();
-        let mut ctx = Context::from_waker(waker);
-        while let std::task::Poll::Pending = peers_future.poll_unpin(&mut ctx) {
-            {
-                let mut opts = RequestInit::new();
-                opts.method("GET");
-                opts.mode(RequestMode::Cors);
-
-                // This is just a bogus request in order to pass the time
-                let window = web_sys::window().unwrap();
-                let url = window.location().href().unwrap();
-                let request = Request::new_with_str_and_init(&url, &opts).unwrap();
-                request.headers().set("Accept", "text/html").unwrap();
-                let _ = JsFuture::from(window.fetch_with_request(&request)).await;
-            }
-            pool.run_until_stalled();
-        }
-    }
-
-    let peers = socket.connected_peers();
-
-    // create a GGRS P2P session
-    let mut p2p_session =
-        ggrs::start_p2p_session_with_socket(args.num_players as u32, INPUT_SIZE, socket)
-            .expect("failed to start with socket");
-
-    // turn on sparse saving
-    p2p_session.set_sparse_saving(true)?;
-
-    info!("Adding local player with handle: {}", args.player_handle);
-    p2p_session
-        .add_player(PlayerType::Local, args.player_handle)
-        .expect("failed to add local player");
-
-    for (i, addr) in peers.into_iter().enumerate() {
-        let handle = if i < args.player_handle { i } else { i + 1 };
-        // TODO: Need some way of mapping between socket id/addrs and handles
-        // (we don't know them before the app starts)
-        // Right now we're counting on luck if there are > 2 players
-        info!("Adding remote player with handle: {}", handle);
-        p2p_session
-            .add_player(PlayerType::Remote(addr.clone()), handle)
-            .expect("failed to add remote player");
-    }
-
-    // set input delay for the local player
-    p2p_session.set_frame_delay(2, args.player_handle)?;
-
-    // set default expected update frequency (affects synchronization timings between players)
-    p2p_session.set_fps(FPS)?;
-
-    // start the GGRS session
-    p2p_session.start_session()?;
-
     let mut app = App::new();
 
     app.insert_resource(Msaa { samples: 4 })
-        // The bevy log plugin is great, so ideally we'd keep it... the only problem is that it gets initialized too late,
-        // so we don't get the log messages before the bevy app starts... which is unfortunate since we currently
-        // needs to do *lots* of stuff that needs logging before bevy starts
-        .add_plugins_with(DefaultPlugins, |group| group.disable::<LogPlugin>());
+        .add_plugins(DefaultPlugins);
 
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
 
-    app.add_startup_system(setup_system.system())
+    app.insert_resource(args)
         .insert_resource(SocketTaskPool(Arc::new(Mutex::new(pool))))
         // Make sure something polls the message tasks regularly
         .add_system(process_socket_tasks)
         .add_plugin(GGRSPlugin)
-        // add your GGRS session
-        .with_p2p_session(p2p_session)
+        .insert_resource(Some(socket))
         // define frequency of game logic update
         .with_rollback_run_criteria(FixedTimestep::steps_per_second(FPS as f64))
         // define system that represents your inputs as a byte vector, so GGRS can send the inputs around
@@ -143,10 +82,80 @@ async fn main_async() -> Result<(), Box<dyn std::error::Error>> {
         .register_rollback_type::<FrameCount>()
         // these systems will be executed as part of the advance frame update
         .add_rollback_system(move_cube_system)
-        .add_rollback_system(increase_frame_system)
-        .run();
+        .add_rollback_system(increase_frame_system);
+
+    app.add_state(AppState::Lobby)
+        .add_system_set(SystemSet::on_update(AppState::Lobby).with_system(lobby_system))
+        .add_system_set(SystemSet::on_enter(AppState::InGame).with_system(setup_scene_system));
+
+    app.run();
 
     Ok(())
+}
+
+fn lobby_system(
+    mut app_state: ResMut<State<AppState>>,
+    args: Res<Args>,
+    mut socket: ResMut<Option<WebRtcNonBlockingSocket>>,
+    mut commands: Commands,
+) {
+    let socket = socket.as_mut();
+
+    socket.as_mut().unwrap().accept_new_connections();
+
+    let current_players = socket.as_ref().unwrap().connected_peers().len();
+    if current_players + 1 < args.num_players {
+        info!("not enough players: {}", current_players);
+        return;
+    }
+
+    info!("All peers have joined, going in-game");
+
+    // consume the socket (currently required because ggrs takes ownership of its socket)
+    let socket = socket.take().unwrap();
+
+    // extract final player list
+    let players = socket.players();
+    let player_handle = players
+        .iter()
+        .enumerate()
+        .filter(|(_, player_type)| match player_type {
+            ggrs::PlayerType::Local => true,
+            _ => false,
+        })
+        .map(|(i, _)| i)
+        .next()
+        .expect("Couldn't get local player handle");
+
+    // create a GGRS P2P session
+    let mut p2p_session =
+        ggrs::new_p2p_session_with_socket(args.num_players as u32, INPUT_SIZE, socket)
+            .expect("failed to start with socket");
+
+    // turn on sparse saving
+    p2p_session.set_sparse_saving(true).unwrap();
+
+    info!("Adding local player with handle: {}", player_handle);
+
+    for (i, player) in players.into_iter().enumerate() {
+        p2p_session
+            .add_player(player, i)
+            .expect("failed to add local player");
+    }
+
+    // set input delay for the local player
+    p2p_session.set_frame_delay(2, player_handle).unwrap();
+
+    // set default expected update frequency (affects synchronization timings between players)
+    p2p_session.set_fps(FPS).unwrap();
+
+    // start the GGRS session
+    commands.start_p2p_session(p2p_session);
+
+    // transition to in-game state
+    app_state
+        .set(AppState::InGame)
+        .expect("Tried to go in-game while already in-game");
 }
 
 // TODO: it would probably make sense to put the below into a bevy_matchbox crate

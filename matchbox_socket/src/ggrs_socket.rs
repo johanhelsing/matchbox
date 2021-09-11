@@ -1,5 +1,5 @@
 use futures::Future;
-use ggrs::UdpMessage;
+use ggrs::{PlayerType, UdpMessage};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
@@ -17,8 +17,8 @@ pub struct WebRtcNonBlockingSocket {
 }
 
 impl WebRtcNonBlockingSocket {
-    pub fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
-        let (socket, message_loop) = WebRtcSocket::new(room_url);
+    pub async fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+        let (socket, message_loop) = WebRtcSocket::new(room_url).await;
         (
             Self {
                 socket,
@@ -39,11 +39,35 @@ impl WebRtcNonBlockingSocket {
         }
     }
 
+    pub fn accept_new_connections(&mut self) {
+        let new_peers = self.socket.process_new_connections();
+        for peer in new_peers {
+            self.handle_new_peer_id(peer);
+        }
+    }
+
     pub fn connected_peers(&self) -> Vec<SocketAddr> {
         self.socket
             .connected_peers()
             .iter()
             .map(|id| self.fake_socket_addrs.get(id).unwrap().clone())
+            .collect()
+    }
+
+    pub fn players(&self) -> Vec<PlayerType> {
+        // needs to be consistent order across all peers
+        let mut ids = self.socket.connected_peers();
+        ids.push(self.socket.id().to_owned());
+        ids.sort();
+        ids.iter()
+            .map(|id| {
+                if id == self.socket.id() {
+                    PlayerType::Local
+                } else {
+                    let addr = self.fake_socket_addrs.get(id).unwrap().clone();
+                    PlayerType::Remote(addr)
+                }
+            })
             .collect()
     }
 

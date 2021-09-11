@@ -345,7 +345,6 @@ dependencies = [
 [[package]]
 name = "bevy_ggrs"
 version = "0.1.0"
-source = "git+https://github.com/gschup/bevy_ggrs#10354b1235545c44623c961650f838e412589af4"
 dependencies = [
  "bevy",
  "ggrs",
@@ -1745,7 +1744,6 @@ dependencies = [
 [[package]]
 name = "ggrs"
 version = "0.4.4"
-source = "git+https://github.com/gschup/ggrs#d7ba71fb36ae57c2656cc6d698728f3846544d6e"
 dependencies = [
  "bincode",
  "bitfield-rle",
@@ -2272,7 +2270,6 @@ dependencies = [
  "futures",
  "futures-lite",
  "ggrs",
- "js-sys",
  "log",
  "matchbox_socket",
  "serde",

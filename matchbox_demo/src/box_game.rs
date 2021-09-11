@@ -64,7 +64,7 @@ pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> 
 
 /// set up a simple 3D scene
 #[allow(dead_code)]
-pub fn setup_system(
+pub fn setup_scene_system(
     mut commands: Commands,
     mut rip: ResMut<RollbackIdProvider>,
     mut meshes: ResMut<Assets<Mesh>>,

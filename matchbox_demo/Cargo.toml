@@ -26,16 +26,12 @@ web = [
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3.22", features = [
-    "console", # TODO: for console::log_1
     "Document", "Location", # for getting args from query string
-    "Headers", "RequestInit", "RequestMode", "Response", # TODO: only for busy wait hack
 ] }
-js-sys = "0.3"
 console_error_panic_hook = "0.1"
 console_log = "0.2"
 serde_qs = "0.8.4"
 wasm-bindgen-futures = "0.4"
-log = "0.4"
 wasm-bindgen = "0.2"
 
 [dependencies]
@@ -47,6 +43,7 @@ futures = { version = "0.3", default-features = false }
 futures-lite = "1.12"
 serde = "1.0"
 winit = {version = "0.25.0"}
+log = "0.4"
 
 matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
 

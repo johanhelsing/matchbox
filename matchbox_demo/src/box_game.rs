@@ -116,7 +116,7 @@ pub fn setup_scene_system(
 
     // light
     commands.spawn_bundle(PointLightBundle {
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        transform: Transform::from_xyz(-4.0, 8.0, 4.0),
         ..Default::default()
     });
     // camera

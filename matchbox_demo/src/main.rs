@@ -1,6 +1,7 @@
 use bevy::{core::FixedTimestep, prelude::*};
 use bevy_ggrs::{CommandsExt, GGRSApp, GGRSPlugin};
 use futures::{executor::LocalPool, lock::Mutex, task::LocalSpawnExt};
+use ggrs::PlayerType;
 use log::info;
 use matchbox_socket::WebRtcNonBlockingSocket;
 use std::sync::Arc;
@@ -118,14 +119,8 @@ fn lobby_system(
     let players = socket.players();
     let player_handle = players
         .iter()
-        .enumerate()
-        .filter(|(_, player_type)| match player_type {
-            ggrs::PlayerType::Local => true,
-            _ => false,
-        })
-        .map(|(i, _)| i)
-        .next()
-        .expect("Couldn't get local player handle");
+        .position(|&player_type| player_type == PlayerType::Local)
+        .unwrap();
 
     // create a GGRS P2P session
     let mut p2p_session =
@@ -135,12 +130,10 @@ fn lobby_system(
     // turn on sparse saving
     p2p_session.set_sparse_saving(true).unwrap();
 
-    info!("Adding local player with handle: {}", player_handle);
-
     for (i, player) in players.into_iter().enumerate() {
         p2p_session
             .add_player(player, i)
-            .expect("failed to add local player");
+            .expect("failed to add player");
     }
 
     // set input delay for the local player

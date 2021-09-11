@@ -129,7 +129,7 @@ fn lobby_system(
 
     // create a GGRS P2P session
     let mut p2p_session =
-        ggrs::new_p2p_session_with_socket(args.players as u32, INPUT_SIZE, socket)
+        ggrs::P2PSession::new_with_socket(args.players as u32, INPUT_SIZE, socket)
             .expect("failed to start with socket");
 
     // turn on sparse saving

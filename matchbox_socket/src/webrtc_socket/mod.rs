@@ -291,10 +291,12 @@ async fn handshake_offer(
 
     remote_description.sdp(&sdp);
 
+    debug!("setting remote description");
     JsFuture::from(conn.set_remote_description(&remote_description))
         .await
         .efix()?;
 
+    debug!("waiting for data channel to open");
     channel_ready_rx.next().await;
 
     Ok((signal_peer.id, data_channel))
@@ -368,6 +370,7 @@ async fn handshake_accept(
     let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
     signal_peer.send(answer);
 
+    debug!("waiting for data channel to open");
     channel_ready_rx.next().await;
 
     Ok((signal_peer.id, data_channel))

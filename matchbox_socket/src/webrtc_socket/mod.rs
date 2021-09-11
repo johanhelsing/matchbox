@@ -404,46 +404,6 @@ fn create_rtc_peer_connection() -> RtcPeerConnection {
     connection
 }
 
-// async fn ice_dance(
-//     connection: RtcPeerConnection,
-//     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-//     signal_peer: SignalPeer,
-// ) {
-//     while let Some(s) = signal_receiver.next().await {
-//         match s {
-//             PeerSignal::IceCandidate(ice) => {
-//                 //debug!("received ice candidate {:?}", ice);
-//                 let candidate_init = RtcIceCandidateInit::new(&ice);
-//                 let candidate = RtcIceCandidate::new(&candidate_init).unwrap();
-//                 JsFuture::from(
-//                     connection.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate)),
-//                 )
-//                 .await
-//                 .expect("ice error");
-//             }
-//             _ => todo! {},
-//         }
-//     }
-// }
-
-// fn create_ice_handler(conn: RtcPeerConnection, signal_peer: SignalPeer) {
-//     let conn_clone = conn.clone();
-//     let ice_candidate_func: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
-//         Box::new(move |event: RtcPeerConnectionIceEvent| {
-//             debug!("Found new ice candidate");
-//             // null candidate represents end-of-candidates.
-//             // TODO: do we need to deregister handler?
-//             if event.candidate().is_none() {
-//                 debug!("Found all ice candidates - sending answer");
-//                 let answer_sdp_string = conn_clone.local_description().unwrap().sdp();
-//                 // signal_peer.send(PeerSignal::IceCandidate(answer_sdp_string));
-//             }
-//         });
-//     let ice_candidate_callback = Closure::wrap(ice_candidate_func);
-//     conn.set_onicecandidate(Some(ice_candidate_callback.as_ref().unchecked_ref()));
-//     ice_candidate_callback.forget();
-// }
-
 async fn wait_for_ice_complete(conn: RtcPeerConnection) {
     if conn.ice_gathering_state() == RtcIceGatheringState::Complete {
         debug!("Ice already completed");

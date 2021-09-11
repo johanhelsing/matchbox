@@ -6,9 +6,7 @@ The goal of the Matchbox project is to enable udp-like, unordered, unreliable
 p2p connections in web browsers to facilitate low-latency multiplayer games.
 
 **WARNING:** This project is still in its infancy, it will break repeatedly as I
-clean it up and move things around. It uses submodules pointing to feature
-branches that I will most likely delete at some point, so it might even have
-dangling refs, or I will force-push the main branch once things have settled.
+clean it up and move things around.
 
 It is currently an all-in-one solution, it comes with:
 
@@ -78,21 +76,19 @@ In rough order:
 - [x] Move socket code from example game into `matchbox_socket`
 - [x] Remove the hard dependency on ggrs 
 - [x] Remove ggrs git submodule from repo
-- [ ] Example: Figure out a less hacky way to wait for enough clients
+- [x] Example: Figure out a less hacky way to wait for enough clients
+- [x] Example: Make it work with N clients
+- [x] Add room separations to signalling server
+- [x] Server: Alternative ways of connecting peers (i.e. wait for N players)
 - [ ] Example: Track upstream bevyengine/bevy instead of johanhelsing/bevy
-- [ ] Example: Make it work with N clients
-- [ ] Decide on how to identify peers, currently we use use id strings, and
-provide a wrapper with fake SocketAddr mappings for the ggrs socket
-implementation.
-- [ ] Add room separations to signalling server (everything is currently one big room) 
-- [ ] Peer API docs
 - [ ] Proper error handling, everything is littered with expect/unwrap at the moment.
 - [ ] Handle disconnecting peers
-- [ ] Make sure TURN is working (NAT relay services)
+- [ ] Make sure TURN is working (NAT relay services, when direct p2p is not possible)
 - [ ] Decouple signalling from message loop (allow alternative signalling mechanisms)
 - [ ] Reconnect to signalling server
 - [ ] Publish on crates.io
-- [ ] Server: Alternative ways of connecting peers (i.e. wait for N players)
+- [ ] ggrs: Decide on how to identify peers, currently we use use id strings, and
+provide a wrapper with fake `SocketAddr` for the ggrs socket implementation.
 
 ## Thanks!
 

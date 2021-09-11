@@ -70,28 +70,6 @@ Packets include a boxed `u8` slice and the corresponding client's id.
 
 Similarly, you can send packets to clients using a simple non-blocking method.
 
-## Roadmap
-
-In rough order:
-
-- [x] Upstream ggrs changes and stop using fork
-- [x] Move socket code from example game into `matchbox_socket`
-- [x] Remove the hard dependency on ggrs 
-- [x] Remove ggrs git submodule from repo
-- [x] Example: Figure out a less hacky way to wait for enough clients
-- [x] Example: Make it work with N clients
-- [x] Add room separations to signalling server
-- [x] Server: Alternative ways of connecting peers (i.e. wait for N players)
-- [ ] Example: Track upstream bevyengine/bevy instead of johanhelsing/bevy
-- [ ] Proper error handling, everything is littered with expect/unwrap at the moment.
-- [ ] Handle disconnecting peers
-- [ ] Make sure TURN is working (NAT relay services, when direct p2p is not possible)
-- [ ] Decouple signalling from message loop (allow alternative signalling mechanisms)
-- [ ] Reconnect to signalling server
-- [ ] Publish on crates.io
-- [ ] ggrs: Decide on how to identify peers, currently we use use id strings, and
-provide a wrapper with fake `SocketAddr` for the ggrs socket implementation.
-
 ## Thanks!
 
 - A huge thanks to Ernest Wong for his [Dango Tribute

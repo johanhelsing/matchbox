@@ -18,21 +18,21 @@ rust, uses only a couple of megabytes of memory. Also available as a docker imag
   - With a feature, `ggrs` for providing a [ggrs](https://github.com/gschup/ggrs)
   compatible socket.
 
+[Introductory blog post](https://johanhelsing.studio/posts/introducing-matchbox)
+
 ## Live demo
 
 - 2-player demo: https://s3.johanhelsing.studio/dump/box_game/index.html
 - 4-player demo: https://s3.johanhelsing.studio/dump/box_game/index.html?players=4
 
-Open each link in a separate tab or machine. You will see only diagonal stripes
-until the second player joins. It's still pretty buggy so if more than two
-players try to play at once it will break, so make sure you only have two tabs,
-and close them when you're done, so others can have a go ;)
+Open each link in a separate browser window (or machine). You will see only
+diagonal stripes until the second player joins.
 
-When the second player joins, you should see two boxes which you can move
-around using the `WASD` keys.
+When enough players have joined, you should see a couple of boxes, one of which
+you can move around using the `WASD` keys.
 
 You can open the browser console to get some rough idea about what's happening
-(or not happening if that's the case).
+(or not happening if that's the unfortunate case).
 
 ## How it works
 

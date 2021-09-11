@@ -8,6 +8,8 @@ license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
 repository = "https://github.com/johanhelsing/matchbox"
+homepage = "https://github.com/johanhelsing/matchbox"
+readme = "../README.md"
 
 [dependencies]
 warp = "0.3.1"

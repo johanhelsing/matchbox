@@ -41,7 +41,7 @@ impl WebRtcNonBlockingSocket {
     }
 
     pub fn accept_new_connections(&mut self) {
-        let new_peers = self.socket.process_new_connections();
+        let new_peers = self.socket.accept_new_connections();
         for peer in new_peers {
             self.handle_new_peer_id(peer);
         }

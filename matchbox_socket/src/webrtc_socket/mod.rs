@@ -74,7 +74,7 @@ impl WebRtcSocket {
         panic!("Signal server died")
     }
 
-    pub fn process_new_connections(&mut self) -> Vec<PeerId> {
+    pub fn accept_new_connections(&mut self) -> Vec<PeerId> {
         let mut ids = Vec::new();
         while let Ok(Some(id)) = self.new_connected_peers.try_next() {
             self.peers.push(id.clone());

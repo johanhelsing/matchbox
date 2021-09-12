@@ -97,9 +97,9 @@ impl WebRtcSocket {
             .collect()
     }
 
-    pub fn send(&mut self, packet: Packet, id: PeerId) {
+    pub fn send<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
         self.peer_messages_out
-            .try_send((id, packet))
+            .try_send((id.into(), packet))
             .expect("send_to failed");
     }
 

@@ -5,8 +5,10 @@ Painless peer-to-peer WebRTC networking for rust wasm applications.
 The goal of the Matchbox project is to enable udp-like, unordered, unreliable
 p2p connections in web browsers to facilitate low-latency multiplayer games.
 
-**WARNING:** This project is in early stages, it will break repeatedly as things
-are cleaned up and moved around.
+[Introductory blog post](https://johanhelsing.studio/posts/introducing-matchbox)
+
+**WARNING:** This project is in early stages, it will break as things are
+cleaned up and moved around.
 
 It is currently an all-in-one solution, it comes with:
 
@@ -15,18 +17,15 @@ rust, uses only a couple of megabytes of memory. Also available as a docker imag
 - An example browser game, using `bevy`, `bevy_ggrs` and `bevy_webgl2`,
 [matchbox_demo](matchbox_demo)
 - A socket abstraction for rust wasm, [matchbox_socket](matchbox_socket)
-  - With a feature, `ggrs` for providing a [ggrs](https://github.com/gschup/ggrs)
-  compatible socket.
-
-[Introductory blog post](https://johanhelsing.studio/posts/introducing-matchbox)
+  - With a feature, `ggrs-socket` for providing a
+  [ggrs](https://github.com/gschup/ggrs) compatible socket.
 
 ## Live demo
 
 - 2-player demo: https://helsing.studio/box_game/
 - 4-player demo: https://helsing.studio/box_game/?players=4
 
-Open each link in a separate browser window (or machine). You will see only
-diagonal stripes until the second player joins.
+Open each link in a separate browser window (or machine).
 
 When enough players have joined, you should see a couple of boxes, one of which
 you can move around using the `WASD` keys.
@@ -60,9 +59,10 @@ All of this, however, is hidden from rust application code. All you will need to
 do on the client side, is:
 
 - Create a new socket, and give it a signalling server url and a room id
-- Regularly call a function that processes new messages. Typically once a frame, or
-simply `.await` it if the game engine is async friendly (has a non-blocking run
-function).
+- Regularly poll a message loop future that processes new messages. You should
+do this as often as possible, and at least once per frame. If you have an async
+runtime, you can simply `.await` it. If you are using Bevy, it can be spawned as
+a Bevy io task (see demo).
 
 You will then get notified whenever a new peer data connection has been
 established, and you will get all packets from peers in a single channel.
@@ -93,6 +93,6 @@ dual licensed as above, without any additional terms or conditions.
 The demo game is derived from
 https://github.com/mrk-its/bevy_webgl2_app_template, and is fully available
 under the MIT license. See LICENSE file in that directory. Modifications from
-the original version are available under the Apache 2 license, but some small
-parts of it are still MIT-only. See:
+the original version are available under the Apache 2 license as well, but some
+small parts of it are still MIT-only. See:
 https://github.com/mrk-its/bevy_webgl2_app_template/issues/3

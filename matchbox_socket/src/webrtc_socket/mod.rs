@@ -32,7 +32,7 @@ pub struct WebRtcSocket {
 }
 
 impl WebRtcSocket {
-    pub fn new(room_url: &str) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+    pub fn new<T: Into<String>>(room_url: T) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) =
@@ -50,7 +50,7 @@ impl WebRtcSocket {
                 peers: vec![],
             },
             Box::pin(message_loop(
-                room_url.to_string(),
+                room_url.into(),
                 id,
                 peer_messages_out_rx,
                 new_connected_peers_tx,

@@ -98,7 +98,7 @@ impl ggrs::NonBlockingSocket for WebRtcNonBlockingSocket {
     fn receive_all_messages(&mut self) -> Vec<(SocketAddr, UdpMessage)> {
         // let fake_socket_addrs = self.fake_socket_addrs.clone();
         let mut messages = vec![];
-        for (id, packet) in self.socket.receive_messages().into_iter() {
+        for (id, packet) in self.socket.receive().into_iter() {
             let msg = bincode::deserialize(&packet).unwrap();
             let addr = self.get_or_create_fake_addr(&id);
             messages.push((addr, msg));

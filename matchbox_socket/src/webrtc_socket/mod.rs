@@ -87,7 +87,7 @@ impl WebRtcSocket {
         self.peers.clone() // TODO: could probably be an iterator or reference instead?
     }
 
-    pub fn receive_messages(&mut self) -> Vec<(PeerId, Packet)> {
+    pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
         std::iter::repeat_with(|| self.messages_from_peers.try_next())
             // .map_while(|poll| match p { // map_while is nightly-only :(
             .take_while(|p| !p.is_err())

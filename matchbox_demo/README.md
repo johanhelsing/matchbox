@@ -5,8 +5,8 @@ working browser "game" (if moving cubes around on a plane can be called a game).
 
 There is a live version here (move the cube with WASD):
 
-- 2-Player: https://s3.johanhelsing.studio/dump/box_game/index.html
-- 3-Player: https://s3.johanhelsing.studio/dump/box_game/index.html?players=3
+- 2-Player: https://helsing.studio/box_game/
+- 3-Player: https://helsing.studio/box_game/?players=3
 - N-player: Edit the link above.
 
 ## Prerequisites

@@ -34,18 +34,15 @@ serde_qs = "0.8.4"
 wasm-bindgen = "0.2"
 
 [dependencies]
+matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
 bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-features = false }
+ggrs = "0.5"
 bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs", branch = "main" }
 bevy_webgl2 = { git = "https://github.com/mrk-its/bevy_webgl2", branch = "master", optional = true }
 clap = "3.0.0-beta.2"
 serde = "1.0"
 winit = {version = "0.25.0"}
 log = "0.4"
-
-matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
-
-# TODO: 0.4 is missing required patches, and 0.5 is not yet released.
-ggrs = { git = "https://github.com/gschup/ggrs", branch = "main" }
 
 # [profile.dev]
 # opt-level = 1

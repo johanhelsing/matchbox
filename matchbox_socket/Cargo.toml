@@ -26,7 +26,6 @@ wasm-bindgen-futures = { version = "0.4", default-features = false }
 wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ], default-features = false }
 js-sys = { version = "0.3", default-features = false }
 web-sys = { version = "0.3.22", default-features = false, features = [
-    "console", # for console::log_1
     "MessageEvent",
     "RtcPeerConnection",
     "RtcSdpType", "RtcSessionDescription", "RtcSessionDescriptionInit",

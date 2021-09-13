@@ -1,6 +1,6 @@
 [package]
 name = "matchbox_server"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 edition = "2018"
 description = "A signalling server for WebRTC peer-to-peer full-mesh networking"

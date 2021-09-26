@@ -2,7 +2,7 @@ use futures::{pin_mut, stream::FuturesUnordered, Future, FutureExt, SinkExt, Str
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use js_sys::Reflect;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use serde::Serialize;
 use std::{collections::HashMap, pin::Pin};
 use uuid::Uuid;
@@ -167,35 +167,37 @@ async fn message_loop(
             },
 
             message = next_signal_event => {
-                let message = match message.unwrap() {
-                    WsMessage::Text(message) => message,
-                    WsMessage::Binary(_) => panic!("binary data from signal server"),
+                match message.unwrap() {
+                    WsMessage::Text(message) => {
+                        debug!("{}", message);
+
+                        let event: PeerEvent = serde_json::from_str(&message)
+                            .expect(&format!("couldn't parse peer event {}", message));
+
+                        match event {
+                            PeerEvent::NewPeer(peer_uuid) => {
+                                let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
+                                handshake_signals.insert(peer_uuid.clone(), signal_sender);
+                                let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
+                                offer_handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone()));
+                            }
+                            PeerEvent::Signal { sender, data } => {
+                                let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
+                                    let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
+                                    let signal_peer = SignalPeer::new(sender, requests_sender.clone());
+                                    // We didn't start signalling with this peer, assume we're the accepting part
+                                    accept_handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone()));
+                                    from_peer_sender
+                                });
+                                from_peer_sender.unbounded_send(data)
+                                    .expect("failed to forward signal to handshaker");
+                            }
+                        }
+                    },
+                    WsMessage::Binary(_) => {
+                        error!("Received binary data from signal server (expected text). Ignoring.");
+                    },
                 };
-
-                debug!("{}", message);
-
-                let event: PeerEvent = serde_json::from_str(&message)
-                    .expect(&format!("couldn't parse peer event {}", message));
-
-                match event {
-                    PeerEvent::NewPeer(peer_uuid) => {
-                        let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
-                        handshake_signals.insert(peer_uuid.clone(), signal_sender);
-                        let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                        offer_handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone()));
-                    }
-                    PeerEvent::Signal { sender, data } => {
-                        let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
-                            let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
-                            let signal_peer = SignalPeer::new(sender, requests_sender.clone());
-                            // We didn't start signalling with this peer, assume we're the accepting part
-                            accept_handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone()));
-                            from_peer_sender
-                        });
-                        from_peer_sender.unbounded_send(data)
-                            .expect("failed to forward signal to handshaker");
-                    }
-                }
             }
 
             request = next_request => {

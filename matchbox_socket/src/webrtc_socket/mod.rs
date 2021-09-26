@@ -167,8 +167,8 @@ async fn message_loop(
             },
 
             message = next_signal_event => {
-                match message.unwrap() {
-                    WsMessage::Text(message) => {
+                match message {
+                    Some(WsMessage::Text(message)) => {
                         debug!("{}", message);
 
                         let event: PeerEvent = serde_json::from_str(&message)
@@ -194,9 +194,10 @@ async fn message_loop(
                             }
                         }
                     },
-                    WsMessage::Binary(_) => {
+                    Some(WsMessage::Binary(_)) => {
                         error!("Received binary data from signal server (expected text). Ignoring.");
                     },
+                    None => {} // Disconnected from signalling server
                 };
             }
 

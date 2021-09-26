@@ -66,7 +66,7 @@ fn main() {
     app.run();
 }
 
-fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, thread_pool: Res<IoTaskPool>) {
+fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, task_pool: Res<IoTaskPool>) {
     let room_id = match &args.room {
         Some(id) => id.clone(),
         None => format!("next_{}", &args.players),
@@ -78,7 +78,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, thread_pool: R
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.
-    thread_pool.spawn(message_loop).detach();
+    task_pool.spawn(message_loop).detach();
 
     commands.insert_resource(Some(socket));
 }

@@ -1,4 +1,4 @@
-use bevy::{core::FixedTimestep, prelude::*, tasks::IoTaskPool};
+use bevy::{prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{CommandsExt, GGRSApp, GGRSPlugin};
 use ggrs::PlayerType;
 use log::info;
@@ -40,7 +40,7 @@ fn main() {
         // Make sure something polls the message tasks regularly
         .add_plugin(GGRSPlugin)
         // define frequency of game logic update
-        .with_rollback_run_criteria(FixedTimestep::steps_per_second(FPS as f64))
+        .with_fps(FPS)
         // define system that represents your inputs as a byte vector, so GGRS can send the inputs around
         .with_input_system(input.system())
         // register components that will be loaded/saved

@@ -122,14 +122,6 @@ async fn message_loop(
         .await
         .expect("failed to connect to signalling server");
 
-    // TODO: this is the ideal place to start the websocket connection, unfortunately
-    // *something* isn't quite right when this is polled through a bevy system and the
-    // connection is never established. So it's currently moved outside the messaging loop
-    // when/if I figure out what's wrong, it should ideally be moved back inside again.
-    // let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
-    //     .await
-    //     .expect("failed to connect to signalling server");
-
     let (requests_sender, mut requests_receiver) =
         futures_channel::mpsc::unbounded::<PeerRequest>();
 

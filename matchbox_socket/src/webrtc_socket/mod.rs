@@ -277,7 +277,7 @@ async fn handshake_offer(
 
     signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
 
-    let sdp: Option<String>;
+    let sdp: String;
 
     loop {
         let signal = signal_receiver
@@ -287,7 +287,7 @@ async fn handshake_offer(
 
         match signal {
             PeerSignal::Answer(answer) => {
-                sdp = Some(answer);
+                sdp = answer;
                 break;
             }
             PeerSignal::Offer(_) => {
@@ -304,7 +304,7 @@ async fn handshake_offer(
     let mut remote_description: RtcSessionDescriptionInit =
         RtcSessionDescriptionInit::new(RtcSdpType::Answer);
 
-    remote_description.sdp(&sdp.unwrap());
+    remote_description.sdp(&sdp);
 
     debug!("setting remote description");
     JsFuture::from(conn.set_remote_description(&remote_description))

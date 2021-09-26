@@ -277,20 +277,34 @@ async fn handshake_offer(
 
     signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
 
-    let signal = signal_receiver.next().await.ok_or("No more signals :(")?;
+    let sdp: Option<String>;
 
-    let answer = match signal {
-        PeerSignal::Answer(answer) => answer,
-        PeerSignal::Offer(_) => panic!("offers shouldn't get here... I think"),
-        PeerSignal::IceCandidate(_) => panic!("HELP ICE"),
-    };
+    loop {
+        let signal = signal_receiver
+            .next()
+            .await
+            .ok_or("Signal server connection lost in the middle of a handshake")?;
 
-    let sdp = answer;
+        match signal {
+            PeerSignal::Answer(answer) => {
+                sdp = Some(answer);
+                break;
+            }
+            PeerSignal::Offer(_) => {
+                warn!("Got an unexpected Offer, while waiting for Answer. Ignoring.")
+            }
+            PeerSignal::IceCandidate(_) => {
+                warn!(
+                    "Got an ice candidate message, but ice trickle is not yet supported. Ignoring."
+                )
+            }
+        };
+    }
 
     let mut remote_description: RtcSessionDescriptionInit =
         RtcSessionDescriptionInit::new(RtcSdpType::Answer);
 
-    remote_description.sdp(&sdp);
+    remote_description.sdp(&sdp.unwrap());
 
     debug!("setting remote description");
     JsFuture::from(conn.set_remote_description(&remote_description))

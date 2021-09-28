@@ -6,16 +6,16 @@ use log::debug;
 
 mod messages;
 mod signal_peer;
-// #[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 mod wasm_message_loop;
-// #[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 mod wasm_signalling_loop;
 
 use messages::*;
 use uuid::Uuid;
-// #[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 use wasm_message_loop::*;
-// #[cfg(target_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 use wasm_signalling_loop::*;
 
 type Packet = Box<[u8]>;

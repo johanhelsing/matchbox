@@ -12,7 +12,7 @@ use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
     RtcIceGatheringState, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
-use ws_stream_wasm::{WsMessage, WsMeta};
+use ws_stream_wasm::{WsMessage, WsMeta, WsStream, WsStreamIo};
 
 mod messages;
 mod signal_peer;
@@ -50,7 +50,7 @@ impl WebRtcSocket {
                 new_connected_peers,
                 peers: vec![],
             },
-            Box::pin(message_loop(
+            Box::pin(run_socket(
                 room_url.into(),
                 id,
                 peer_messages_out_rx,
@@ -109,10 +109,10 @@ impl WebRtcSocket {
     }
 }
 
-async fn message_loop(
+async fn run_socket(
     room_url: String,
     id: PeerId,
-    mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
+    peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
 ) {
@@ -124,6 +124,63 @@ async fn message_loop(
 
     let (requests_sender, mut requests_receiver) =
         futures_channel::mpsc::unbounded::<PeerRequest>();
+    let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
+
+    let message_loop_future = message_loop(
+        id,
+        requests_sender,
+        events_receiver,
+        peer_messages_out_rx,
+        new_connected_peers_tx,
+        messages_from_peers_tx,
+    );
+
+    let mut loop_done = Box::pin(message_loop_future.fuse());
+    loop {
+        let next_request = requests_receiver.next().fuse();
+        let next_websocket_message = wsio.next().fuse();
+
+        pin_mut!(next_request, next_websocket_message);
+
+        select! {
+            _ = loop_done => {
+                debug!("Message loop completed");
+                break;
+            }
+
+            request = next_request => {
+                let request = serde_json::to_string(&request).expect("serializing request");
+                debug!("-> {}", request);
+                wsio.send(WsMessage::Text(request)).await.expect("request send error");
+            }
+
+            message = next_websocket_message => {
+                match message {
+                    Some(WsMessage::Text(message)) => {
+                        debug!("{}", message);
+                        let event: PeerEvent = serde_json::from_str(&message)
+                            .expect(&format!("couldn't parse peer event {}", message));
+                        events_sender.unbounded_send(event).unwrap();
+                    },
+                    Some(WsMessage::Binary(_)) => {
+                        error!("Received binary data from signal server (expected text). Ignoring.");
+                    },
+                    None => {} // Disconnected from signalling server
+                };
+            }
+        }
+    }
+}
+
+async fn message_loop(
+    id: PeerId,
+    requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
+    mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
+    mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
+    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
+) {
+    debug!("Entering WebRtcSocket message loop");
 
     requests_sender
         .unbounded_send(PeerRequest::Uuid(id))
@@ -135,11 +192,10 @@ async fn message_loop(
     let mut data_channels: HashMap<PeerId, RtcDataChannel> = HashMap::new();
 
     loop {
-        let next_signal_event = wsio.next().fuse();
-        let next_request = requests_receiver.next().fuse();
+        let next_signal_event = events_receiver.next().fuse();
         let next_peer_message_out = peer_messages_out_rx.next().fuse();
 
-        pin_mut!(next_signal_event, next_request, next_peer_message_out);
+        pin_mut!(next_signal_event, next_peer_message_out);
 
         select! {
             res = offer_handshakes.select_next_some() => {
@@ -160,11 +216,8 @@ async fn message_loop(
 
             message = next_signal_event => {
                 match message {
-                    Some(WsMessage::Text(message)) => {
-                        debug!("{}", message);
-
-                        let event: PeerEvent = serde_json::from_str(&message)
-                            .unwrap_or_else(|_| panic!("couldn't parse peer event {}", message));
+                    Some(event) => {
+                        debug!("{:?}", event);
 
                         match event {
                             PeerEvent::NewPeer(peer_uuid) => {
@@ -186,20 +239,8 @@ async fn message_loop(
                             }
                         }
                     },
-                    Some(WsMessage::Binary(_)) => {
-                        error!("Received binary data from signal server (expected text). Ignoring.");
-                    },
                     None => {} // Disconnected from signalling server
                 };
-            }
-
-            request = next_request => {
-                let request = serde_json::to_string(&request).expect("serializing request");
-
-                debug!("-> {}", request);
-
-                wsio.send(WsMessage::Text(request)).await.expect("request send error");
-                debug!("sent request");
             }
 
             message = next_peer_message_out => {

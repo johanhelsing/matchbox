@@ -42,7 +42,7 @@ fn main() {
         // define frequency of game logic update
         .with_fps(FPS)
         // define system that represents your inputs as a byte vector, so GGRS can send the inputs around
-        .with_input_system(input.system())
+        .with_input_system(input)
         // register components that will be loaded/saved
         .register_rollback_type::<Transform>()
         .register_rollback_type::<Velocity>()

@@ -12,7 +12,7 @@ use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
     RtcIceGatheringState, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
-use ws_stream_wasm::{WsMessage, WsMeta, WsStream, WsStreamIo};
+use ws_stream_wasm::{WsMessage, WsMeta};
 
 mod messages;
 mod signal_peer;
@@ -118,15 +118,10 @@ async fn run_socket(
 ) {
     debug!("Starting WebRtcSocket message loop");
 
-    let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
-        .await
-        .expect("failed to connect to signalling server");
-
-    let (requests_sender, mut requests_receiver) =
-        futures_channel::mpsc::unbounded::<PeerRequest>();
+    let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
-    let message_loop_future = message_loop(
+    let message_loop_fut = message_loop(
         id,
         requests_sender,
         events_receiver,
@@ -135,7 +130,36 @@ async fn run_socket(
         messages_from_peers_tx,
     );
 
-    let mut loop_done = Box::pin(message_loop_future.fuse());
+    let signalling_loop_fut = ws_signalling_loop(room_url, requests_receiver, events_sender);
+
+    let mut message_loop_done = Box::pin(message_loop_fut.fuse());
+    let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());
+    loop {
+        select! {
+            _ = message_loop_done => {
+                debug!("Message loop completed");
+                break;
+            }
+
+            _ = signalling_loop_done => {
+                debug!("Message loop completed");
+                // todo!{"reconnect?"}
+            }
+
+            complete => break
+        }
+    }
+}
+
+async fn ws_signalling_loop(
+    room_url: String,
+    mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
+    events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
+) {
+    let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
+        .await
+        .expect("failed to connect to signalling server");
+
     loop {
         let next_request = requests_receiver.next().fuse();
         let next_websocket_message = wsio.next().fuse();
@@ -143,11 +167,6 @@ async fn run_socket(
         pin_mut!(next_request, next_websocket_message);
 
         select! {
-            _ = loop_done => {
-                debug!("Message loop completed");
-                break;
-            }
-
             request = next_request => {
                 let request = serde_json::to_string(&request).expect("serializing request");
                 debug!("-> {}", request);
@@ -168,6 +187,8 @@ async fn run_socket(
                     None => {} // Disconnected from signalling server
                 };
             }
+
+            complete => break
         }
     }
 }
@@ -248,6 +269,8 @@ async fn message_loop(
                 let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
                 data_channel.send_with_u8_array(&message.1).expect("failed to send");
             }
+
+            complete => break
         }
     }
 }

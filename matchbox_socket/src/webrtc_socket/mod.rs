@@ -1,6 +1,5 @@
 use std::pin::Pin;
 
-use async_compat::CompatExt;
 use futures::{Future, FutureExt, StreamExt};
 use futures_util::select;
 use log::debug;
@@ -63,16 +62,13 @@ impl WebRtcSocket {
                 new_connected_peers,
                 peers: vec![],
             },
-            Box::pin(
-                run_socket(
-                    room_url.into(),
-                    id,
-                    peer_messages_out_rx,
-                    new_connected_peers_tx,
-                    messages_from_peers_tx,
-                )
-                .compat(),
-            ),
+            Box::pin(run_socket(
+                room_url.into(),
+                id,
+                peer_messages_out_rx,
+                new_connected_peers_tx,
+                messages_from_peers_tx,
+            )),
         )
     }
 

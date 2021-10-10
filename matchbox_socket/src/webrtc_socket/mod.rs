@@ -43,9 +43,15 @@ pub struct WebRtcSocket {
     id: PeerId,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+// TODO: figure out if it's possible to implement Send in wasm as well
+#[cfg(target_arch = "wasm32")]
+pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()>>>;
+
 impl WebRtcSocket {
     #[must_use]
-    pub fn new<T: Into<String>>(room_url: T) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+    pub fn new<T: Into<String>>(room_url: T) -> (Self, MessageLoopFuture) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) =

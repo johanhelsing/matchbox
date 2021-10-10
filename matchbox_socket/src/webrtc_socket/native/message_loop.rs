@@ -30,6 +30,26 @@ use crate::webrtc_socket::{
 pub async fn message_loop(
     id: PeerId,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
+    events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
+    peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
+    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
+) {
+    message_loop_impl(
+        id,
+        requests_sender,
+        events_receiver,
+        peer_messages_out_rx,
+        new_connected_peers_tx,
+        messages_from_peers_tx,
+    )
+    .compat()
+    .await
+}
+
+async fn message_loop_impl(
+    id: PeerId,
+    requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
@@ -262,6 +282,7 @@ async fn create_data_channel(
 
     channel
         .on_open(Box::new(move || {
+            debug!("Data channel ready");
             channel_ready.try_send(1).unwrap();
             Box::pin(async move {})
         }))
@@ -307,6 +328,10 @@ async fn peer_loop(
     mut to_peer_message_rx: UnboundedReceiver<Packet>,
 ) {
     let (peer_id, data_channel) = handshake_fut.compat().await.unwrap();
+    debug!(
+        "peer_loop: sending new_peer, data channel state: {:?}",
+        data_channel.ready_state()
+    );
     new_peer_tx.send(peer_id.clone()).await.unwrap();
     data_channel
         .on_message(Box::new(move |message| {

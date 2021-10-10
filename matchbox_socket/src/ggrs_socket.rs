@@ -1,10 +1,8 @@
-use futures::Future;
 use ggrs::{PlayerType, UdpMessage};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
     net::{Ipv6Addr, SocketAddr},
-    pin::Pin,
 };
 
 use crate::{webrtc_socket::MessageLoopFuture, WebRtcSocket};

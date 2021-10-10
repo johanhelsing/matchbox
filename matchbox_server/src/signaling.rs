@@ -185,6 +185,12 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
     while let Some(request) = ws_receiver.next().await {
         let request = match parse_request(request) {
             Ok(request) => request,
+            Err(RequestError::WarpError(e)) => {
+                error!("Warp error while receiving request: {:?}", e);
+                // Most likely a ConnectionReset or similar.
+                // just give up on this peer.
+                break;
+            }
             Err(e) => {
                 error!("Error untangling request: {:?}", e);
                 continue;

@@ -253,6 +253,7 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
         }
     }
 
+    info!("Removing peer: {:?}", peer_uuid);
     if let Some(uuid) = peer_uuid {
         let mut state = state.lock().await;
         state.remove_peer(&uuid);

@@ -1,22 +1,37 @@
 use std::pin::Pin;
 
+use async_compat::CompatExt;
 use futures::{Future, FutureExt, StreamExt};
 use futures_util::select;
 use log::debug;
 
 mod messages;
 mod signal_peer;
+
+// TODO: maybe use cfg-if to make this slightly tidier
+#[cfg(not(target_arch = "wasm32"))]
+mod native {
+    mod message_loop;
+    mod signalling_loop;
+    pub use message_loop::*;
+    pub use signalling_loop::*;
+}
+
 #[cfg(target_arch = "wasm32")]
-mod wasm_message_loop;
+mod wasm {
+    mod message_loop;
+    mod signalling_loop;
+    pub use message_loop::*;
+    pub use signalling_loop::*;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+use native::*;
 #[cfg(target_arch = "wasm32")]
-mod wasm_signalling_loop;
+use wasm::*;
 
 use messages::*;
 use uuid::Uuid;
-#[cfg(target_arch = "wasm32")]
-use wasm_message_loop::*;
-#[cfg(target_arch = "wasm32")]
-use wasm_signalling_loop::*;
 
 type Packet = Box<[u8]>;
 
@@ -48,13 +63,16 @@ impl WebRtcSocket {
                 new_connected_peers,
                 peers: vec![],
             },
-            Box::pin(run_socket(
-                room_url.into(),
-                id,
-                peer_messages_out_rx,
-                new_connected_peers_tx,
-                messages_from_peers_tx,
-            )),
+            Box::pin(
+                run_socket(
+                    room_url.into(),
+                    id,
+                    peer_messages_out_rx,
+                    new_connected_peers_tx,
+                    messages_from_peers_tx,
+                )
+                .compat(),
+            ),
         )
     }
 
@@ -140,7 +158,7 @@ async fn run_socket(
             }
 
             _ = signalling_loop_done => {
-                debug!("Message loop completed");
+                debug!("Signalling loop completed");
                 // todo!{"reconnect?"}
             }
 

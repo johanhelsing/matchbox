@@ -6,17 +6,31 @@ use log::debug;
 
 mod messages;
 mod signal_peer;
+
+// TODO: maybe use cfg-if to make this slightly tidier
+#[cfg(not(target_arch = "wasm32"))]
+mod native {
+    mod message_loop;
+    mod signalling_loop;
+    pub use message_loop::*;
+    pub use signalling_loop::*;
+}
+
 #[cfg(target_arch = "wasm32")]
-mod wasm_message_loop;
+mod wasm {
+    mod message_loop;
+    mod signalling_loop;
+    pub use message_loop::*;
+    pub use signalling_loop::*;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+use native::*;
 #[cfg(target_arch = "wasm32")]
-mod wasm_signalling_loop;
+use wasm::*;
 
 use messages::*;
 use uuid::Uuid;
-#[cfg(target_arch = "wasm32")]
-use wasm_message_loop::*;
-#[cfg(target_arch = "wasm32")]
-use wasm_signalling_loop::*;
 
 type Packet = Box<[u8]>;
 
@@ -29,9 +43,15 @@ pub struct WebRtcSocket {
     id: PeerId,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+// TODO: figure out if it's possible to implement Send in wasm as well
+#[cfg(target_arch = "wasm32")]
+pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()>>>;
+
 impl WebRtcSocket {
     #[must_use]
-    pub fn new<T: Into<String>>(room_url: T) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+    pub fn new<T: Into<String>>(room_url: T) -> (Self, MessageLoopFuture) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) =
@@ -140,7 +160,7 @@ async fn run_socket(
             }
 
             _ = signalling_loop_done => {
-                debug!("Message loop completed");
+                debug!("Signalling loop completed");
                 // todo!{"reconnect?"}
             }
 

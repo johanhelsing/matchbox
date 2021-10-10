@@ -12,9 +12,8 @@ use web_sys::{
     RtcIceGatheringState, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
 
-use crate::webrtc_socket::signal_peer::SignalPeer;
-
-use super::{
+use crate::webrtc_socket::{
+    signal_peer::SignalPeer,
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     Packet,
 };

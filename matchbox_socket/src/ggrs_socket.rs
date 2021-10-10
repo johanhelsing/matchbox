@@ -1,13 +1,11 @@
-use futures::Future;
 use ggrs::{PlayerType, UdpMessage};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
     net::{Ipv6Addr, SocketAddr},
-    pin::Pin,
 };
 
-use crate::WebRtcSocket;
+use crate::{webrtc_socket::MessageLoopFuture, WebRtcSocket};
 
 #[derive(Debug)]
 pub struct WebRtcNonBlockingSocket {
@@ -18,7 +16,7 @@ pub struct WebRtcNonBlockingSocket {
 
 impl WebRtcNonBlockingSocket {
     #[must_use]
-    pub fn new<T: Into<String>>(room_url: T) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+    pub fn new<T: Into<String>>(room_url: T) -> (Self, MessageLoopFuture) {
         let (socket, message_loop) = WebRtcSocket::new(room_url);
         (
             Self {

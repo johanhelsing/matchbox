@@ -79,7 +79,7 @@ exist without it.
 
 ## License
 
-Except for the demo game all code in this repository dual-licensed under either:
+All code in this repository dual-licensed under either:
 
 - MIT License (LICENSE-MIT or http://opensource.org/licenses/MIT)
 - Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
@@ -87,12 +87,3 @@ Except for the demo game all code in this repository dual-licensed under either:
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
-
-### Demo license
-
-The demo game is derived from
-https://github.com/mrk-its/bevy_webgl2_app_template, and is fully available
-under the MIT license. See LICENSE file in that directory. Modifications from
-the original version are available under the Apache 2 license as well, but some
-small parts of it are still MIT-only. See:
-https://github.com/mrk-its/bevy_webgl2_app_template/issues/3

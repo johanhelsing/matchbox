@@ -1,4 +1,3 @@
-use async_compat::CompatExt;
 use bytes::Bytes;
 use futures::{pin_mut, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -43,7 +42,6 @@ pub async fn message_loop(
         new_connected_peers_tx,
         messages_from_peers_tx,
     )
-    .compat()
     .await
 }
 
@@ -105,7 +103,7 @@ async fn message_loop_impl(
                                     let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                                     handshake_signals.insert(peer_uuid.clone(), signal_sender);
                                     let signal_peer = SignalPeer::new(peer_uuid.clone(), requests_sender.clone());
-                                    let handshake_fut = handshake_offer(signal_peer, signal_receiver).compat();
+                                    let handshake_fut = handshake_offer(signal_peer, signal_receiver);
                                     let (to_peer_data_tx, to_peer_data_rx) = futures_channel::mpsc::unbounded();
                                     connected_peers.insert(peer_uuid, to_peer_data_tx);
                                     peer_loops_a.push(peer_loop(handshake_fut, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), to_peer_data_rx));
@@ -115,7 +113,7 @@ async fn message_loop_impl(
                                         let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
                                         let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                         // We didn't start signalling with this peer, assume we're the accepting part
-                                        let handshake_fut = handshake_accept(signal_peer, from_peer_receiver).compat();
+                                        let handshake_fut = handshake_accept(signal_peer, from_peer_receiver);
                                         let (to_peer_data_tx, to_peer_data_rx) = futures_channel::mpsc::unbounded();
                                         connected_peers.insert(sender, to_peer_data_tx);
                                         let peer_loop_fut = peer_loop(handshake_fut, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), to_peer_data_rx);
@@ -327,7 +325,7 @@ async fn peer_loop(
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
     mut to_peer_message_rx: UnboundedReceiver<Packet>,
 ) {
-    let (peer_id, data_channel) = handshake_fut.compat().await.unwrap();
+    let (peer_id, data_channel) = handshake_fut.await.unwrap();
     debug!(
         "peer_loop: sending new_peer, data channel state: {:?}",
         data_channel.ready_state()
@@ -342,13 +340,12 @@ async fn peer_loop(
                 .unwrap();
             Box::pin(async move {})
         }))
-        .compat()
         .await;
 
     while let Some(message) = to_peer_message_rx.next().await {
         let message = Bytes::from(message);
         debug!("sending message");
-        data_channel.send(&message).compat().await.unwrap();
+        data_channel.send(&message).await.unwrap();
     }
 
     // TODO: clear on_message?

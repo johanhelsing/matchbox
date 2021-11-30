@@ -20,12 +20,13 @@ const FRICTION: f32 = 0.9;
 const PLANE_SIZE: f32 = 5.0;
 const CUBE_SIZE: f32 = 0.2;
 
+#[derive(Default, Component)]
 pub struct Player {
     pub handle: u32,
 }
 
 // Components that should be saved/loaded need to implement the `Reflect` trait
-#[derive(Default, Reflect)]
+#[derive(Default, Reflect, Component)]
 pub struct Velocity {
     pub x: f32,
     pub y: f32,
@@ -34,7 +35,7 @@ pub struct Velocity {
 
 // You can also register resources. If your Component / Resource implements Hash, you can make use of `#[reflect(Hash)]`
 // in order to allow a GGRS `SyncTestSession` to construct a checksum for a world snapshot
-#[derive(Default, Reflect, Hash)]
+#[derive(Default, Reflect, Hash, Component)]
 #[reflect(Hash)]
 pub struct FrameCount {
     pub frame: u32,

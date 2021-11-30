@@ -40,7 +40,7 @@ fn main() {
         // Make sure something polls the message tasks regularly
         .add_plugin(GGRSPlugin)
         // define frequency of game logic update
-        .with_fps(FPS)
+        .with_update_frequency(FPS)
         // define system that represents your inputs as a byte vector, so GGRS can send the inputs around
         .with_input_system(input)
         // register components that will be loaded/saved
@@ -50,8 +50,14 @@ fn main() {
         .insert_resource(FrameCount { frame: 0 })
         .register_rollback_type::<FrameCount>()
         // these systems will be executed as part of the advance frame update
-        .add_rollback_system(move_cube_system)
-        .add_rollback_system(increase_frame_system);
+        .with_rollback_schedule(
+            Schedule::default().with_stage(
+                "rollback_default",
+                SystemStage::single_threaded()
+                        .with_system(move_cube_system)
+                        .with_system(increase_frame_system)
+            )
+        );
 
     app.add_state(AppState::Lobby)
         .add_system_set(
@@ -84,7 +90,9 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, task_pool: Res
 }
 
 // Marker components for UI
+#[derive(Component)]
 struct LobbyText;
+#[derive(Component)]
 struct LobbyUI;
 
 fn lobby_startup(

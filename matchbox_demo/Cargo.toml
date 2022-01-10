@@ -6,7 +6,7 @@ description = "A demo game where two web browser can connect and move boxes arou
 edition = "2018"
 repository = "https://github.com/mrk-its/bevy_webgl2_app_template"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
-license = "MIT" # TODO: get permission to dual-license as Apache 2 as well
+license = "MIT OR Apache-2.0"
 
 [features]
 default = [

@@ -16,13 +16,8 @@ default = [
   "bevy/png",
 ]
 
-native = [
-  "bevy/bevy_wgpu",
-]
-
-web = [
-  "bevy_webgl2"
-]
+native = []
+web = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3.22", features = [
@@ -35,13 +30,12 @@ wasm-bindgen = "0.2"
 
 [dependencies]
 matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-features = false }
-ggrs = "0.5"
-bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs", branch = "main" }
-bevy_webgl2 = { git = "https://github.com/mrk-its/bevy_webgl2", branch = "master", optional = true }
+bevy = { version = "0.6", default-features = false }
+ggrs = "0.6"
+bevy_ggrs = "0.1"
 clap = { version = "3.0", features = ["derive"] }
 serde = "1.0"
-winit = {version = "0.25.0"}
+winit = "0.26.0"
 log = "0.4"
 
 # [profile.dev]

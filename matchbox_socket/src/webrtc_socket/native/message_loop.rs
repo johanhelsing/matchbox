@@ -6,17 +6,15 @@ use log::{debug, warn};
 use std::{collections::HashMap, sync::Arc};
 use webrtc::{
     api::APIBuilder,
-    data::data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
-    peer::{
+    data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
+    ice_transport::{
+        ice_gatherer_state::RTCIceGathererState, ice_gathering_state::RTCIceGatheringState,
+        ice_server::RTCIceServer,
+    },
+    peer_connection::{
         configuration::RTCConfiguration,
-        ice::{
-            ice_gather::{
-                ice_gatherer_state::RTCIceGathererState, ice_gathering_state::RTCIceGatheringState,
-            },
-            ice_server::RTCIceServer,
-        },
-        peer_connection::RTCPeerConnection,
         sdp::{sdp_type::RTCSdpType, session_description::RTCSessionDescription},
+        RTCPeerConnection,
     },
 };
 

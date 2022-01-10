@@ -1180,11 +1180,8 @@ version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "670ad68c9088c2a963aaa298cb369688cf3f9465ce5e2d4ca10e6e0098a1ce73"
 dependencies = [
- "libc",
  "num-integer",
  "num-traits",
- "time",
- "winapi",
 ]
 
 [[package]]
@@ -2514,9 +2511,9 @@ dependencies = [
 
 [[package]]
 name = "interceptor"
-version = "0.4.1"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b96444996b096af68277a2bbd7928d1bf72d973d942311f54036efdd1d23b531"
+checksum = "67aae430ab7682cc1edb3a193a036c777efff63d4450479023d281632fc5b52b"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3596,9 +3593,9 @@ dependencies = [
 
 [[package]]
 name = "rtcp"
-version = "0.5.2"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32147942891a952fa118df14a8f9e0b07915577dfde8ca19f77792cf46d90b21"
+checksum = "5270e9ba068d168d719037b2eb425edacf833aa5a8262f1147032f06ae942116"
 dependencies = [
  "bytes",
  "thiserror",
@@ -3712,11 +3709,12 @@ dependencies = [
 
 [[package]]
 name = "sdp"
-version = "0.3.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5564ad4b3706e07397900a3e03d374003b28818de099aa9058ba1e4621421a43"
+checksum = "6b079873978bd58399b80c17acf2a78d3cbba54254aa9b522a63996f29b5199d"
 dependencies = [
  "rand",
+ "substring",
  "thiserror",
  "url",
 ]
@@ -3952,6 +3950,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "substring"
+version = "1.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42ee6433ecef213b2e72f587ef64a2f5943e7cd16fbd82dbe8bc07486c534c86"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "subtle"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4048,17 +4055,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8018d24e04c95ac8790716a5987d0fec4f8b27249ffa0f7d33f1369bdfb88cbd"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "time"
-version = "0.1.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db9e6914ab8b1ae1c260a4ae7a49b6c5611b40328a735b21862567685e73255"
-dependencies = [
- "libc",
- "wasi 0.10.0+wasi-snapshot-preview1",
- "winapi",
 ]
 
 [[package]]
@@ -4648,14 +4644,13 @@ dependencies = [
 
 [[package]]
 name = "webrtc"
-version = "0.2.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75ba210443b69381a2c532104fbb127558e44f7821bf916cdf3a7da98c13b75e"
+checksum = "c5ba0c1cc8a2daa7bbf049e0785c06a0c4a144d466d6d0a7e1bb2f9cade4b759"
 dependencies = [
  "async-trait",
- "base64",
  "bytes",
- "chrono",
+ "hex",
  "interceptor",
  "lazy_static",
  "log",
@@ -4742,9 +4737,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc-ice"
-version = "0.5.1"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be648284cb03eecf0f22f442a60b57223091600af5af2a07d083902a1428b62a"
+checksum = "cd63d6c77e2cbdc205ca87d948850349a1dda614c5f72737c7f1d7b927189d47"
 dependencies = [
  "async-trait",
  "crc",
@@ -4808,9 +4803,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc-srtp"
-version = "0.7.1"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d54bf19750b911dfd56643aa4f449a0b5c73f1065ad2fb405932eeaef54e0c5"
+checksum = "63f08e57b5ccf291e85100777c36ea00b3fd105ba097c89cc76601a646c3b19d"
 dependencies = [
  "aead 0.4.3",
  "aes 0.7.5",

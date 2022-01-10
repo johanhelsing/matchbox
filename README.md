@@ -1,5 +1,10 @@
 # Matchbox
 
+[![crates.io](https://img.shields.io/crates/v/matchbox_socket.svg)](https://crates.io/crates/matchbox_socket)
+![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)
+[![crates.io](https://img.shields.io/crates/d/matchbox_socket.svg)](https://crates.io/crates/matchbox_socket)
+[![docs.rs](https://img.shields.io/docsrs/matchbox_socket)](https://docs.rs/matchbox_socket)
+
 Painless peer-to-peer WebRTC networking for rust wasm applications.
 
 The goal of the Matchbox project is to enable udp-like, unordered, unreliable

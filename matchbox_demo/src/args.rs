@@ -1,8 +1,8 @@
-use clap::Clap;
+use clap::Parser;
 use serde::Deserialize;
 use std::ffi::OsString;
 
-#[derive(Clap, Debug, Clone, Deserialize)]
+#[derive(Parser, Debug, Clone, Deserialize)]
 #[serde(default)]
 #[clap(
     name = "box_game_web",

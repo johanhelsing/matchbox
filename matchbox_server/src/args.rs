@@ -1,7 +1,7 @@
-use clap::Clap;
+use clap::Parser;
 use std::net::SocketAddr;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 #[clap(
     name = "made_in_heaven",
     rename_all = "kebab-case",

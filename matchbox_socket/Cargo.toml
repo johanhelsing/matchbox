@@ -43,7 +43,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-tungstenite = { version = "0.15", default-features = false, features = [ "async-std-runtime" ] }
-webrtc = { version = "0.2", default-features = false } # todo enable tls
+webrtc = { version = "0.3", default-features = false } # todo enable tls
 bytes = { version = "1.1", default-features = false }
 async-compat = { version = "0.2.1", default-features = false }
 

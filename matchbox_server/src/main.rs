@@ -1,4 +1,4 @@
-use clap::Clap;
+use clap::Parser;
 use log::info;
 use std::env;
 use warp::{http::StatusCode, hyper::Method, Filter, Rejection, Reply};

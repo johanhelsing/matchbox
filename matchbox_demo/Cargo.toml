@@ -39,7 +39,7 @@ bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-fe
 ggrs = "0.5"
 bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs", branch = "main" }
 bevy_webgl2 = { git = "https://github.com/mrk-its/bevy_webgl2", branch = "master", optional = true }
-clap = "3.0.0-beta.2"
+clap = { version = "3.0", features = ["derive"] }
 serde = "1.0"
 winit = {version = "0.25.0"}
 log = "0.4"

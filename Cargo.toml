@@ -1,5 +1,3 @@
 [workspace]
 members = ["matchbox_server", "matchbox_socket", "matchbox_demo"]
-
-[patch.crates-io]
-ggrs = { git = "https://github.com/gschup/ggrs", branch = "main" }
+resolver = "2"

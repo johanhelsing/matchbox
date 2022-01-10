@@ -22,10 +22,6 @@ enum AppState {
 const SKY_COLOR: Color = Color::rgb(0.69, 0.69, 0.69);
 
 fn main() {
-    // When building for WASM, print panics to the browser console
-    console_error_panic_hook::set_once();
-    console_log::init_with_level(log::Level::Debug).expect("Failed to init logs");
-
     // read query string or command line arguments
     let args = Args::get();
     info!("{:?}", args);
@@ -34,7 +30,7 @@ fn main() {
 
     app.insert_resource(Msaa { samples: 4 })
         .insert_resource(ClearColor(SKY_COLOR))
-        .add_plugins(bevy_webgl2::DefaultPlugins)
+        .add_plugins(DefaultPlugins)
         // Some of our systems need the query parameters
         .insert_resource(args)
         // Make sure something polls the message tasks regularly
@@ -54,9 +50,9 @@ fn main() {
             Schedule::default().with_stage(
                 "rollback_default",
                 SystemStage::single_threaded()
-                        .with_system(move_cube_system)
-                        .with_system(increase_frame_system)
-            )
+                    .with_system(move_cube_system)
+                    .with_system(increase_frame_system),
+            ),
         );
 
     app.add_state(AppState::Lobby)
@@ -95,11 +91,7 @@ struct LobbyText;
 #[derive(Component)]
 struct LobbyUI;
 
-fn lobby_startup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
+fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // All this is just for spawning centered text.
     commands.spawn_bundle(UiCameraBundle::default());
     commands
@@ -111,7 +103,7 @@ fn lobby_startup(
                 align_items: AlignItems::FlexEnd,
                 ..Default::default()
             },
-            material: materials.add(Color::rgb(0.43, 0.41, 0.38).into()),
+            color: Color::rgb(0.43, 0.41, 0.38).into(),
             ..Default::default()
         })
         .with_children(|parent| {
@@ -172,8 +164,7 @@ fn lobby_system(
 
     // create a GGRS P2P session
     let mut p2p_session =
-        ggrs::P2PSession::new_with_socket(args.players as u32, INPUT_SIZE, socket)
-            .expect("failed to start with socket");
+        ggrs::P2PSession::new_with_socket(args.players as u32, INPUT_SIZE, socket);
 
     // turn on sparse saving
     p2p_session.set_sparse_saving(true).unwrap();

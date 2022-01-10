@@ -4,7 +4,7 @@ version = "0.2.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "A demo game where two web browser can connect and move boxes around"
 edition = "2018"
-repository = "https://github.com/mrk-its/bevy_webgl2_app_template"
+repository = "https://github.com/johanhelsing/matchbox"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
 license = "MIT OR Apache-2.0"
 

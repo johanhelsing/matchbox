@@ -24,5 +24,3 @@ cargo make serve
 then point your browser to http://127.0.0.1:4000/
 
 Note: you also need to run a Matchbox signalling server at http://127.0.0.1:3536
-
-<!-- ![Screenshot](https://mrk.sed.pl/bevy-showcase/assets/bevy_webgl2_app_template.png?v=3) -->

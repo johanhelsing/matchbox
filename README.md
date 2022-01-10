@@ -19,7 +19,7 @@ It is currently an all-in-one solution, it comes with:
 
 - A tiny signalling server, [matchbox_server](./matchbox_server). Written in
 rust, uses only a couple of megabytes of memory. Also available as a docker image.
-- An example browser game, using `bevy`, `bevy_ggrs` and `bevy_webgl2`,
+- An example browser game, using `bevy`, `bevy_ggrs`,
 [matchbox_demo](matchbox_demo)
 - A socket abstraction for rust wasm, [matchbox_socket](matchbox_socket)
   - With a feature, `ggrs-socket` for providing a

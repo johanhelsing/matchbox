@@ -1,6 +1,6 @@
 [package]
 name = "matchbox_demo"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "A demo game where two web browser can connect and move boxes around"
 edition = "2018"

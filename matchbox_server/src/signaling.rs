@@ -108,7 +108,7 @@ impl State {
                 return;
             }
         };
-        if let Err(e) = peer.sender.as_ref().unwrap().send(Ok(message.clone())) {
+        if let Err(e) = peer.sender.as_ref().unwrap().send(Ok(message)) {
             error!("Error sending message {:?}", e);
         }
     }
@@ -127,7 +127,7 @@ pub(crate) fn ws_filter(
     warp::ws()
         .and(warp::any())
         .and(warp::path::param().map(parse_room_id))
-        .and(with_state(state.clone()))
+        .and(with_state(state))
         .and_then(ws_handler)
 }
 

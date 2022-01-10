@@ -35,7 +35,7 @@ impl WebRtcNonBlockingSocket {
 
         for id in new_peers {
             let fake_addr = make_fake_socket_addr(&id);
-            self.fake_socket_addrs.insert(id.clone(), fake_addr.clone());
+            self.fake_socket_addrs.insert(id.clone(), fake_addr);
             self.fake_socket_addrs_reverse.insert(fake_addr, id);
         }
     }
@@ -51,7 +51,7 @@ impl WebRtcNonBlockingSocket {
         self.socket
             .connected_peers()
             .iter()
-            .map(|id| self.fake_socket_addrs.get(id).unwrap().clone())
+            .map(|id| *self.fake_socket_addrs.get(id).unwrap())
             .collect()
     }
 
@@ -65,7 +65,7 @@ impl WebRtcNonBlockingSocket {
                 if id == self.socket.id() {
                     PlayerType::Local
                 } else {
-                    let addr = self.fake_socket_addrs.get(id).unwrap().clone();
+                    let addr = *self.fake_socket_addrs.get(id).unwrap();
                     PlayerType::Remote(addr)
                 }
             })
@@ -74,15 +74,15 @@ impl WebRtcNonBlockingSocket {
 
     fn get_or_create_fake_addr(&mut self, id: &str) -> SocketAddr {
         match self.fake_socket_addrs.get(id) {
-            Some(fake_addr) => fake_addr.clone(),
+            Some(fake_addr) => *fake_addr,
             None => self.handle_new_peer_id(id.to_string()),
         }
     }
 
     fn handle_new_peer_id(&mut self, id: String) -> SocketAddr {
         let fake_addr = make_fake_socket_addr(&id);
-        self.fake_socket_addrs.insert(id.clone(), fake_addr.clone());
-        self.fake_socket_addrs_reverse.insert(fake_addr.clone(), id);
+        self.fake_socket_addrs.insert(id.clone(), fake_addr);
+        self.fake_socket_addrs_reverse.insert(fake_addr, id);
         fake_addr
     }
 }

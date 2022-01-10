@@ -164,7 +164,7 @@ async fn message_loop(
                         debug!("{}", message);
 
                         let event: PeerEvent = serde_json::from_str(&message)
-                            .expect(&format!("couldn't parse peer event {}", message));
+                            .unwrap_or_else(|_| panic!("couldn't parse peer event {}", message));
 
                         match event {
                             PeerEvent::NewPeer(peer_uuid) => {
@@ -402,8 +402,7 @@ fn create_rtc_peer_connection() -> RtcPeerConnection {
     };
     let ice_server_config_list = [ice_server_config];
     peer_config.ice_servers(&JsValue::from_serde(&ice_server_config_list).unwrap());
-    let connection = RtcPeerConnection::new_with_configuration(&peer_config).unwrap();
-    connection
+    RtcPeerConnection::new_with_configuration(&peer_config).unwrap()
 }
 
 async fn wait_for_ice_complete(conn: RtcPeerConnection) {
@@ -447,8 +446,8 @@ fn create_data_channel(
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 
-    let peer_id = peer_id.clone();
-    let incoming_tx = incoming_tx.clone();
+    let peer_id = peer_id;
+    let incoming_tx = incoming_tx;
     let channel_clone = channel.clone();
     let channel_onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
         debug!("Rtc data channel opened :D :D");
@@ -462,7 +461,7 @@ fn create_data_channel(
                     // debug!("Received data of length {}", uarray.length());
 
                     // TODO: There probably are ways to avoid copying/zeroing here...
-                    let mut body = vec![0 as u8; uarray.length() as usize];
+                    let mut body = vec![0_u8; uarray.length() as usize];
                     uarray.copy_to(&mut body[..]);
                     incoming_tx
                         .unbounded_send((peer_id.clone(), body.into_boxed_slice()))

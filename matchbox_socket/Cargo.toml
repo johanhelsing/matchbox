@@ -19,7 +19,7 @@ futures = { version = "0.3", default-features = false }
 futures-util = { version = "0.3", features = ["sink"], default-features = false }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
-uuid = { version = "0.8", default-features = false, features = ["v4"] }
+uuid = { version = "0.8", default-features = false, features = ["v4", "wasm-bindgen"] }
 ws_stream_wasm = { version = "0.7", default-features = false }
 wasm-bindgen-futures = { version = "0.4", default-features = false }
 

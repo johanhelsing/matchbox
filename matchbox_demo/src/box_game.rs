@@ -70,9 +70,9 @@ pub fn setup_scene_system(
     mut rip: ResMut<RollbackIdProvider>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    p2p_session: Option<Res<P2PSession>>,
+    p2p_session: Option<Res<P2PSession<Vec<u8>, String>>>,
     synctest_session: Option<Res<SyncTestSession>>,
-    spectator_session: Option<Res<P2PSpectatorSession>>,
+    spectator_session: Option<Res<P2PSpectatorSession<String>>>,
 ) {
     let num_players = p2p_session
         .map(|s| s.num_players())

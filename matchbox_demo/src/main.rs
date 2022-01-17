@@ -165,15 +165,19 @@ fn lobby_system(
     let max_prediction = 12;
 
     // create a GGRS P2P session
-    let mut p2p_session =
-        ggrs::P2PSession::new_with_socket(args.players as u32, INPUT_SIZE, max_prediction, socket);
+    let mut p2p_session = ggrs::P2PSession::<Vec<u8>, String>::new_with_socket(
+        args.players as u32,
+        INPUT_SIZE,
+        max_prediction,
+        socket,
+    );
 
     // turn on sparse saving
     p2p_session.set_sparse_saving(true).unwrap();
 
     for (i, player) in players.into_iter().enumerate() {
         p2p_session
-            .add_player(player, i)
+            .add_player(player.clone(), i)
             .expect("failed to add player");
 
         if player == PlayerType::Local {

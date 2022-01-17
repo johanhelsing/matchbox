@@ -12,15 +12,19 @@ There is a live version here (move the cube with WASD):
 ## Prerequisites
 
 ```
-cargo install cargo-make
+rustup target install wasm32-unknown-unknown
+```
+
+```
+cargo install wasm-server-runner
 ```
 
 ## Build and serve
 
 ```
-cargo make serve
+cargo run --target wasm32-unknown-unknown
 ```
 
-then point your browser to http://127.0.0.1:4000/
+then point your browser to http://127.0.0.1:1334/
 
 Note: you also need to run a Matchbox signalling server at http://127.0.0.1:3536

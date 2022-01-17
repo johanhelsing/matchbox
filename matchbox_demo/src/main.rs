@@ -162,9 +162,11 @@ fn lobby_system(
     // extract final player list
     let players = socket.players();
 
+    let max_prediction = 12;
+
     // create a GGRS P2P session
     let mut p2p_session =
-        ggrs::P2PSession::new_with_socket(args.players as u32, INPUT_SIZE, socket);
+        ggrs::P2PSession::new_with_socket(args.players as u32, INPUT_SIZE, max_prediction, socket);
 
     // turn on sparse saving
     p2p_session.set_sparse_saving(true).unwrap();

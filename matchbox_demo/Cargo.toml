@@ -28,8 +28,8 @@ wasm-bindgen = "0.2"
 [dependencies]
 matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
 bevy = { version = "0.6", default-features = false }
-ggrs = "0.6"
-bevy_ggrs = "0.1"
+ggrs = "0.8"
+bevy_ggrs = "=0.1.3"
 clap = { version = "3.0", features = ["derive"] }
 serde = "1.0"
 winit = "0.26.0"

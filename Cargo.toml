@@ -1,3 +1,6 @@
 [workspace]
 members = ["matchbox_server", "matchbox_socket", "matchbox_demo"]
 resolver = "2"
+
+[patch.crates-io]
+bevy_ggrs = { path = "../bevy_ggrs" }

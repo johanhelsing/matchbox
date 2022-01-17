@@ -356,8 +356,6 @@ dependencies = [
 [[package]]
 name = "bevy_ggrs"
 version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16afceed8bd55b372711b870ec33caa2d2c901b708490674455088e2b167f667"
 dependencies = [
  "bevy",
  "ggrs",

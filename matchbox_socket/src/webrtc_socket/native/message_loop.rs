@@ -299,8 +299,7 @@ async fn handshake_accept(
 > {
     debug!("handshake_accept");
     let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone()).await?;
-    let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
-    let data_channel = create_data_channel(&connection, channel_ready_tx).await;
+
     let offer;
     loop {
         match signal_receiver.next().await.ok_or("error")? {
@@ -331,15 +330,17 @@ async fn handshake_accept(
             .fuse(),
     );
 
-    let mut channel_ready_fut = channel_ready_rx.next();
-    loop {
+    let data_channel_fut = wait_for_data_channel(&connection).fuse();
+    pin_mut!(data_channel_fut);
+
+    let data_channel = loop {
         select! {
-            _ = channel_ready_fut => break,
+            data_channel = data_channel_fut => break data_channel,
             // TODO: this means that the signalling is down, should return an
             // error
             _ = trickle_fut => continue,
         };
-    }
+    };
 
     Ok((signal_peer.id, data_channel, trickle_fut))
 }
@@ -400,7 +401,6 @@ async fn create_data_channel(
     let mut config: RTCDataChannelInit = RTCDataChannelInit::default();
     config.ordered = Some(false);
     config.max_retransmits = Some(0);
-    config.negotiated = Some(true);
     config.id = Some(0);
 
     let channel = connection
@@ -433,6 +433,31 @@ async fn create_data_channel(
         .await;
 
     channel
+}
+
+async fn wait_for_data_channel(connection: &RTCPeerConnection) -> Arc<RTCDataChannel> {
+    let (channel_tx, mut channel_rx) = futures_channel::mpsc::channel(1);
+
+    connection
+        .on_data_channel(Box::new(move |channel| {
+            debug!("new data channel");
+            let mut channel_tx = channel_tx.clone();
+            Box::pin(async move {
+                let channel2 = Arc::clone(&channel);
+
+                // TODO: register close & error callbacks
+                channel
+                    .on_open(Box::new(move || {
+                        debug!("Data channel ready");
+                        channel_tx.try_send(channel2).unwrap();
+                        Box::pin(async move {})
+                    }))
+                    .await;
+            })
+        }))
+        .await;
+
+    channel_rx.next().await.unwrap()
 }
 
 async fn peer_loop(

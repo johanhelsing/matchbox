@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use log::info;
 use matchbox_socket::WebRtcSocket;
-use tokio::select;
+use tokio::{select, time::sleep};
 
 #[tokio::main]
 async fn main() {
@@ -8,6 +10,8 @@ async fn main() {
 
     info!("Connecting to matchbox");
     let (mut socket, loop_fut) = WebRtcSocket::new("ws://localhost:3536/native_example_room");
+
+    info!("my id is {:?}", socket.id());
 
     tokio::pin!(loop_fut);
 
@@ -18,7 +22,12 @@ async fn main() {
             info!("Received from {:?}: {:?}", peer, packet);
         }
 
+        let timeout = sleep(Duration::from_millis(100));
+        tokio::pin!(timeout);
         select! {
+            _ = timeout => {}
+            // TODO: restarting this future inside `select!` probably isn't a
+            // good idea
             peers = socket.wait_for_peers(1) => {
                 info!("Found a peer {:?}", peers);
                 let peer = &peers[0];

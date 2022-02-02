@@ -13,8 +13,8 @@ use web_sys::{
 };
 
 use crate::webrtc_socket::{
-    signal_peer::SignalPeer,
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+    signal_peer::SignalPeer,
     Packet,
 };
 

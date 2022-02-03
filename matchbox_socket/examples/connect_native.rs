@@ -16,9 +16,13 @@ async fn main() {
     tokio::pin!(loop_fut);
 
     loop {
-        let packets = socket.receive();
+        for peer in socket.accept_new_connections() {
+            info!("Found a peer {:?}", peer);
+            let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
+            socket.send(packet, peer);
+        }
 
-        for (peer, packet) in packets {
+        for (peer, packet) in socket.receive() {
             info!("Received from {:?}: {:?}", peer, packet);
         }
 
@@ -26,14 +30,6 @@ async fn main() {
         tokio::pin!(timeout);
         select! {
             _ = timeout => {}
-            // TODO: restarting this future inside `select!` probably isn't a
-            // good idea
-            peers = socket.wait_for_peers(1) => {
-                info!("Found a peer {:?}", peers);
-                let peer = &peers[0];
-                let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
-                socket.send(packet, peer);
-            },
             _ = &mut loop_fut => {
                 break;
             }

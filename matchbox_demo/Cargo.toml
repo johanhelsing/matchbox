@@ -25,9 +25,6 @@ console_log = "0.2"
 serde_qs = "0.8.4"
 wasm-bindgen = "0.2"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-pretty_env_logger = "0.4"
-
 [dependencies]
 matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
 bevy = { version = "0.6", default-features = false }

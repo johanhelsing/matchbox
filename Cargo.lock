@@ -2660,7 +2660,6 @@ dependencies = [
  "ggrs",
  "log",
  "matchbox_socket",
- "pretty_env_logger",
  "serde",
  "serde_qs",
  "wasm-bindgen",

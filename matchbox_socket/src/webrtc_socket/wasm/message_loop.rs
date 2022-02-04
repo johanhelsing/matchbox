@@ -61,32 +61,31 @@ pub async fn message_loop(
             },
 
             message = next_signal_event => {
-                match message {
-                    Some(event) => {
-                        debug!("{:?}", event);
+                if let Some(event) = message {
+                    debug!("{:?}", event);
 
-                        match event {
-                            PeerEvent::NewPeer(peer_uuid) => {
-                                let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
-                                handshake_signals.insert(peer_uuid.clone(), signal_sender);
-                                let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                                offer_handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone()));
-                            }
-                            PeerEvent::Signal { sender, data } => {
-                                let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
-                                    let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
-                                    let signal_peer = SignalPeer::new(sender, requests_sender.clone());
-                                    // We didn't start signalling with this peer, assume we're the accepting part
-                                    accept_handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone()));
-                                    from_peer_sender
-                                });
-                                from_peer_sender.unbounded_send(data)
-                                    .expect("failed to forward signal to handshaker");
-                            }
+                    match event {
+                        PeerEvent::NewPeer(peer_uuid) => {
+                            let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
+                            handshake_signals.insert(peer_uuid.clone(), signal_sender);
+                            let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
+                            offer_handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone()));
                         }
-                    },
-                    None => {} // Disconnected from signalling server
-                };
+                        PeerEvent::Signal { sender, data } => {
+                            let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
+                                let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
+                                let signal_peer = SignalPeer::new(sender, requests_sender.clone());
+                                // We didn't start signalling with this peer, assume we're the accepting part
+                                accept_handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone()));
+                                from_peer_sender
+                            });
+                            from_peer_sender.unbounded_send(data)
+                                .expect("failed to forward signal to handshaker");
+                        }
+                    }
+                } else {
+                    // Disconnected from signalling server
+                }
             }
 
             message = next_peer_message_out => {

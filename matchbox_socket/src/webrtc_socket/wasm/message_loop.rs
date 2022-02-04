@@ -320,11 +320,8 @@ fn create_data_channel(
         let incoming_tx = incoming_tx.clone();
         let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =
             Box::new(move |event: MessageEvent| {
-                // web-sys::console::log_2(&"Received a rtc data message".into(), &event);
                 if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
                     let uarray: js_sys::Uint8Array = js_sys::Uint8Array::new(&arraybuf);
-                    // debug!("Received data of length {}", uarray.length());
-
                     // TODO: There probably are ways to avoid copying/zeroing here...
                     let mut body = vec![0_u8; uarray.length() as usize];
                     uarray.copy_to(&mut body[..]);
@@ -340,7 +337,6 @@ fn create_data_channel(
         channel_ready
             .try_send(1)
             .expect("failed to notify about open connection");
-        // channel_clone.send_with_str("Hello from data channel :D:D");
     });
     let channel_onopen_closure = Closure::wrap(channel_onopen_func);
     channel.set_onopen(Some(channel_onopen_closure.as_ref().unchecked_ref()));

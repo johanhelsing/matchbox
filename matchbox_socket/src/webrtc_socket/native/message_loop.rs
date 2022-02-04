@@ -61,12 +61,9 @@ async fn message_loop_impl(
         .unbounded_send(PeerRequest::Uuid(id))
         .expect("failed to send uuid");
 
-    // let mut offer_handshakes = FuturesUnordered::new();
-    // let mut accept_handshakes = FuturesUnordered::new();
     let mut peer_loops_a = FuturesUnordered::new();
     let mut peer_loops_b = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
-    // let mut data_channels: HashMap<PeerId, RTCDataChannel> = HashMap::new();
     let mut connected_peers = HashMap::new();
 
     loop {
@@ -77,23 +74,10 @@ async fn message_loop_impl(
 
         select! {
                 _ = peer_loops_a.select_next_some() => {
-                    debug!("peer finished")
-                //     check(&res);
-                //     let peer = res.unwrap();
-                //     data_channels.insert(peer.0.clone(), peer.1);
-                //     debug!("Notifying about new peer");
-                //     new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
-                //     todo!{}
+                    debug!("peer finished");
                 },
                 _ = peer_loops_b.select_next_some() => {
-                    debug!("peer finished")
-                //     // TODO: this could be de-duplicated
-                //     check(&res);
-                //     let peer = res.unwrap();
-                //     data_channels.insert(peer.0.clone(), peer.1);
-                //     debug!("Notifying about new peer");
-                //     new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
-                //     todo!{};
+                    debug!("peer finished");
                 },
 
                 message = next_signal_event => {
@@ -142,13 +126,6 @@ async fn message_loop_impl(
         }
     }
 }
-
-// Expect/unwrap is broken in select for some reason :/
-// fn check(res: &Result<(PeerId, RTCDataChannel), Box<dyn std::error::Error>>) {
-//     // but doing it inside a typed function works fine
-//     res.as_ref().expect("handshake failed");
-// }
-
 struct CandidateTrickle {
     signal_peer: SignalPeer,
     pending: Mutex<Vec<String>>,

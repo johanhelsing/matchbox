@@ -73,56 +73,56 @@ async fn message_loop_impl(
         pin_mut!(next_signal_event, next_peer_message_out);
 
         select! {
-                _ = peer_loops_a.select_next_some() => {
-                    debug!("peer finished");
-                },
-                _ = peer_loops_b.select_next_some() => {
-                    debug!("peer finished");
-                },
+            _ = peer_loops_a.select_next_some() => {
+                debug!("peer finished");
+            },
+            _ = peer_loops_b.select_next_some() => {
+                debug!("peer finished");
+            },
 
-                message = next_signal_event => {
-                    match message {
-                        Some(event) => {
-                            debug!("{:?}", event);
-                            match event {
-                                PeerEvent::NewPeer(peer_uuid) => {
-                                    let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
-                                    handshake_signals.insert(peer_uuid.clone(), signal_sender);
-                                    let signal_peer = SignalPeer::new(peer_uuid.clone(), requests_sender.clone());
-                                    let handshake_fut = handshake_offer(signal_peer, signal_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone());
-                                    let (to_peer_data_tx, to_peer_data_rx) = futures_channel::mpsc::unbounded();
-                                    connected_peers.insert(peer_uuid, to_peer_data_tx);
-                                    peer_loops_a.push(peer_loop(handshake_fut, to_peer_data_rx));
-                                }
-                                PeerEvent::Signal { sender, data } => {
-                                    let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
-                                        let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
-                                        let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
-                                        let (to_peer_data_tx, to_peer_data_rx) = futures_channel::mpsc::unbounded();
-                                        // We didn't start signalling with this peer, assume we're the accepting part
-                                        let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone());
-                                        connected_peers.insert(sender, to_peer_data_tx);
-                                        let peer_loop_fut = peer_loop(handshake_fut, to_peer_data_rx);
-                                        peer_loops_b.push(peer_loop_fut);
-                                        from_peer_sender
-                                    });
-                                    from_peer_sender.unbounded_send(data)
-                                        .expect("failed to forward signal to handshaker");
-                                }
+            message = next_signal_event => {
+                match message {
+                    Some(event) => {
+                        debug!("{:?}", event);
+                        match event {
+                            PeerEvent::NewPeer(peer_uuid) => {
+                                let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
+                                handshake_signals.insert(peer_uuid.clone(), signal_sender);
+                                let signal_peer = SignalPeer::new(peer_uuid.clone(), requests_sender.clone());
+                                let handshake_fut = handshake_offer(signal_peer, signal_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone());
+                                let (to_peer_data_tx, to_peer_data_rx) = futures_channel::mpsc::unbounded();
+                                connected_peers.insert(peer_uuid, to_peer_data_tx);
+                                peer_loops_a.push(peer_loop(handshake_fut, to_peer_data_rx));
                             }
-                        },
-                        None => {} // Disconnected from signalling server
-                    };
-                }
+                            PeerEvent::Signal { sender, data } => {
+                                let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
+                                    let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
+                                    let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
+                                    let (to_peer_data_tx, to_peer_data_rx) = futures_channel::mpsc::unbounded();
+                                    // We didn't start signalling with this peer, assume we're the accepting part
+                                    let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone());
+                                    connected_peers.insert(sender, to_peer_data_tx);
+                                    let peer_loop_fut = peer_loop(handshake_fut, to_peer_data_rx);
+                                    peer_loops_b.push(peer_loop_fut);
+                                    from_peer_sender
+                                });
+                                from_peer_sender.unbounded_send(data)
+                                    .expect("failed to forward signal to handshaker");
+                            }
+                        }
+                    },
+                    None => {} // Disconnected from signalling server
+                };
+            }
 
-                // TODO: maybe use some forward trait instead?
-                message = next_peer_message_out => {
-                    let message = message.unwrap();
-                    let sender = &connected_peers.get(&message.0).unwrap();
-                    sender.unbounded_send(message.1).unwrap();
-                }
+            // TODO: maybe use some forward trait instead?
+            message = next_peer_message_out => {
+                let message = message.unwrap();
+                let sender = &connected_peers.get(&message.0).unwrap();
+                sender.unbounded_send(message.1).unwrap();
+            }
 
-                complete => break
+            complete => break
         }
     }
 }

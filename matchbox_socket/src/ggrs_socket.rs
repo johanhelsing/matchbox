@@ -87,7 +87,7 @@ impl WebRtcNonBlockingSocket {
 
 impl ggrs::NonBlockingSocket<SocketAddr> for WebRtcNonBlockingSocket {
     fn send_to(&mut self, msg: &UdpMessage, addr: &SocketAddr) {
-        let id = self.fake_socket_addrs_reverse[&addr].clone();
+        let id = self.fake_socket_addrs_reverse[addr].clone();
         let buf = bincode::serialize(&msg).unwrap();
         let packet = buf.into_boxed_slice();
         self.socket.send(packet, id);

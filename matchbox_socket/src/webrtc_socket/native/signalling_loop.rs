@@ -33,7 +33,7 @@ pub async fn signalling_loop(
                     Some(Ok(Message::Text(message))) => {
                         debug!("{}", message);
                         let event: PeerEvent = serde_json::from_str(&message)
-                            .expect(&format!("couldn't parse peer event {}", message));
+                            .unwrap_or_else(|err| panic!("couldn't parse peer event: {}.\nEvent: {}", err, message));
                         events_sender.unbounded_send(event).unwrap();
                     },
                     Some(Ok(message)) => {

@@ -1,11 +1,13 @@
-use std::time::Duration;
-
 use log::info;
 use matchbox_socket::WebRtcSocket;
+use std::{env, time::Duration};
 use tokio::{select, time::sleep};
 
 #[tokio::main]
 async fn main() {
+    if env::var_os("RUST_LOG").is_none() {
+        env::set_var("RUST_LOG", "connect_native=info,matchbox_socket=info");
+    }
     pretty_env_logger::init();
 
     info!("Connecting to matchbox");

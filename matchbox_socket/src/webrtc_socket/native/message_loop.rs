@@ -1,3 +1,4 @@
+use async_compat::CompatExt;
 use bytes::Bytes;
 use futures::{
     future::FusedFuture, pin_mut, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt,
@@ -42,6 +43,8 @@ pub async fn message_loop(
         new_connected_peers_tx,
         messages_from_peers_tx,
     )
+    // web-rtc is tokio-based so we use compat here to make it work with other async run-times
+    .compat()
     .await
 }
 

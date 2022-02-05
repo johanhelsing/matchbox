@@ -1,13 +1,11 @@
-use futures::Future;
 use ggrs::{PlayerType, UdpMessage};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
     net::{Ipv6Addr, SocketAddr},
-    pin::Pin,
 };
 
-use crate::WebRtcSocket;
+use crate::{webrtc_socket::MessageLoopFuture, WebRtcSocket};
 
 #[derive(Debug)]
 pub struct WebRtcNonBlockingSocket {
@@ -18,7 +16,7 @@ pub struct WebRtcNonBlockingSocket {
 
 impl WebRtcNonBlockingSocket {
     #[must_use]
-    pub fn new<T: Into<String>>(room_url: T) -> (Self, Pin<Box<dyn Future<Output = ()>>>) {
+    pub fn new<T: Into<String>>(room_url: T) -> (Self, MessageLoopFuture) {
         let (socket, message_loop) = WebRtcSocket::new(room_url);
         (
             Self {
@@ -89,7 +87,7 @@ impl WebRtcNonBlockingSocket {
 
 impl ggrs::NonBlockingSocket<SocketAddr> for WebRtcNonBlockingSocket {
     fn send_to(&mut self, msg: &UdpMessage, addr: &SocketAddr) {
-        let id = self.fake_socket_addrs_reverse[&addr].clone();
+        let id = self.fake_socket_addrs_reverse[addr].clone();
         let buf = bincode::serialize(&msg).unwrap();
         let packet = buf.into_boxed_slice();
         self.socket.send(packet, id);

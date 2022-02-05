@@ -27,7 +27,6 @@ fn main() {
     info!("{:?}", args);
 
     let mut app = App::new();
-
     app.insert_resource(Msaa { samples: 4 })
         .insert_resource(ClearColor(SKY_COLOR))
         .add_plugins(DefaultPlugins)
@@ -53,9 +52,8 @@ fn main() {
                     .with_system(move_cube_system)
                     .with_system(increase_frame_system),
             ),
-        );
-
-    app.add_state(AppState::Lobby)
+        )
+        .add_state(AppState::Lobby)
         .add_system_set(
             SystemSet::on_enter(AppState::Lobby)
                 .with_system(lobby_startup)
@@ -63,9 +61,8 @@ fn main() {
         )
         .add_system_set(SystemSet::on_update(AppState::Lobby).with_system(lobby_system))
         .add_system_set(SystemSet::on_exit(AppState::Lobby).with_system(lobby_cleanup))
-        .add_system_set(SystemSet::on_enter(AppState::InGame).with_system(setup_scene_system));
-
-    app.run();
+        .add_system_set(SystemSet::on_enter(AppState::InGame).with_system(setup_scene_system))
+        .run();
 }
 
 fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, task_pool: Res<IoTaskPool>) {

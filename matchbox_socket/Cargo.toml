@@ -35,9 +35,9 @@ wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ], default-feat
 js-sys = { version = "0.3", default-features = false }
 web-sys = { version = "0.3.22", default-features = false, features = [
     "MessageEvent",
-    "RtcPeerConnection",
+    "RtcPeerConnection", "RtcPeerConnectionIceEvent",
     "RtcSdpType", "RtcSessionDescription", "RtcSessionDescriptionInit",
-    "RtcIceGatheringState",
+    "RtcIceCandidate", "RtcIceCandidateInit",
     "RtcConfiguration", "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType",
 ] }
 

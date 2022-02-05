@@ -419,7 +419,7 @@ fn create_data_channel(
     let mut data_channel_config: RtcDataChannelInit = RtcDataChannelInit::new();
     data_channel_config.ordered(false);
     data_channel_config.max_retransmits(0);
-    data_channel_config.negotiated(true);
+    data_channel_config.negotiated(false);
     data_channel_config.id(0);
 
     let channel: RtcDataChannel =

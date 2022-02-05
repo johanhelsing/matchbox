@@ -171,7 +171,15 @@ impl CandidateTrickle {
         peer_connection: &RTCPeerConnection,
         candidate: RTCIceCandidate,
     ) {
-        let candidate = candidate.to_json().await.unwrap().candidate;
+        // Can't directly serialize/deserialize the candidate, as
+        // webrtc-rs' to_json uses snake_case and so isn't compatible
+        // with browsers
+        // let candidate = candidate.to_json().await.unwrap();
+        // let candidate = serde_json::to_string(&candidate).unwrap();
+
+        let candidate = candidate.to_json().await.unwrap();
+        assert_eq!(candidate.sdp_mline_index, 0); // we're assuming this on the other side
+        let candidate = candidate.candidate;
 
         // Local candidates can only be sent after the remote description
         if peer_connection.remote_description().await.is_some() {
@@ -200,9 +208,19 @@ impl CandidateTrickle {
             match signal {
                 PeerSignal::IceCandidate(candidate) => {
                     debug!("got an IceCandidate signal! {}", candidate);
+                    // Can't directly serialize/deserialize the candidate, as
+                    // webrtc-rs' to_json uses snake_case and so isn't compatible
+                    // with browsers
+                    // let candidate = serde_json::from_str(&candidate).unwrap(); // todo: error handling
+                    // peer_connection
+                    //     .add_ice_candidate(candidate)
+                    //     .await?;
+                    // TODO: this looks like it's fixed in webrtc-rs 0.5
+
                     peer_connection
                         .add_ice_candidate(RTCIceCandidateInit {
                             candidate,
+                            sdp_mline_index: 0,
                             ..Default::default()
                         })
                         .await?;

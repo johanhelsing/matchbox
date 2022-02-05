@@ -38,9 +38,9 @@ uuid = { version = "1.0", default-features = false, features = ["v4", "js"] }
 js-sys = { version = "0.3", default-features = false }
 web-sys = { version = "0.3.22", default-features = false, features = [
     "MessageEvent",
-    "RtcPeerConnection",
+    "RtcPeerConnection", "RtcPeerConnectionIceEvent",
     "RtcSdpType", "RtcSessionDescription", "RtcSessionDescriptionInit",
-    "RtcIceGatheringState",
+    "RtcIceCandidate", "RtcIceCandidateInit",
     "RtcConfiguration", "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType",
 ] }
 

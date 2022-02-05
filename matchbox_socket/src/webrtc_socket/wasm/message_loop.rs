@@ -1,18 +1,17 @@
-use futures::FutureExt;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{future::FusedFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
 use js_sys::Reflect;
 use log::{debug, error, warn};
 use serde::Serialize;
-use std::collections::HashMap;
-use std::time::Duration;
+use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
-    RtcIceGatheringState, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
+    RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
+    RtcSessionDescriptionInit,
 };
 
 use crate::webrtc_socket::KEEP_ALIVE_INTERVAL;
@@ -124,14 +123,106 @@ pub async fn message_loop(
     debug!("Message loop finished");
 }
 
+struct CandidateTrickle {
+    signal_peer: SignalPeer,
+    // TODO: is this mutex really needed? just use yet another channel?
+    pending: futures::lock::Mutex<Vec<String>>,
+}
+
+impl CandidateTrickle {
+    fn new(signal_peer: SignalPeer) -> Self {
+        Self {
+            signal_peer,
+            pending: Default::default(),
+        }
+    }
+
+    fn on_local_candidate(&self, peer_connection: RtcPeerConnection, candidate: RtcIceCandidate) {
+        // Can't directly serialize/deserialize the candidate, as
+        // webrtc-rs' to_json uses snake_case and so isn't compatible
+        // with browsers
+        // let candidate = js_sys::JSON::stringify(&candidate.to_json())
+        //     .unwrap()
+        //     .as_string()
+        //     .unwrap();
+        let candidate = candidate.candidate();
+
+        // Local candidates can only be sent after the remote description
+        if peer_connection.remote_description().is_some() {
+            // Can send local candidate already
+            debug!("sending IceCandidate signal {}", candidate);
+            self.signal_peer.send(PeerSignal::IceCandidate(candidate));
+        } else {
+            // Can't send yet, store in pending
+            debug!("storing pending IceCandidate signal {}", candidate);
+            // TODO: fix neatly
+            self.pending.try_lock().unwrap().push(candidate);
+        }
+    }
+
+    async fn send_pending_candidates(&self) {
+        let mut pending = self.pending.lock().await;
+        for candidate in std::mem::take(&mut *pending) {
+            self.signal_peer.send(PeerSignal::IceCandidate(candidate));
+        }
+    }
+
+    async fn listen_for_remote_candidates(
+        peer_connection: RtcPeerConnection,
+        mut signal_receiver: UnboundedReceiver<PeerSignal>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        while let Some(signal) = signal_receiver.next().await {
+            match signal {
+                PeerSignal::IceCandidate(candidate) => {
+                    debug!("got an IceCandidate signal! {}", candidate);
+                    // Can't directly serialize/deserialize the candidate, as
+                    // webrtc-rs' to_json uses snake_case and so isn't compatible
+                    // with browsers
+                    // let candidate = js_sys::JSON::parse(&candidate).unwrap();
+                    // let candidate = JsCast::unchecked_into::<RtcIceCandidateInit>(candidate);
+
+                    let mut candidate_init = RtcIceCandidateInit::new(&candidate);
+                    candidate_init.sdp_m_line_index(Some(0));
+
+                    JsFuture::from(
+                        peer_connection.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(
+                            &candidate_init,
+                        )),
+                    )
+                    .await
+                    .efix()?;
+                }
+                PeerSignal::Offer(_) => {
+                    warn!("Got an unexpected Offer, while waiting for IceCandidate. Ignoring.")
+                }
+                PeerSignal::Answer(_) => {
+                    warn!("Got an unexpected Answer, while waiting for IceCandidate. Ignoring.")
+                }
+            }
+        }
+
+        debug!("stopping ice candidate listening");
+
+        Ok(())
+    }
+}
+
 async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
     config: &WebRtcSocketConfig,
-) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
+) -> Result<
+    (
+        PeerId,
+        RtcDataChannel,
+        Pin<Box<dyn FusedFuture<Output = Result<(), Box<dyn std::error::Error>>>>>,
+    ),
+    Box<dyn std::error::Error>,
+> {
     debug!("making offer");
-    let conn = create_rtc_peer_connection(config.ice_server.urls.clone());
+    let (conn, trickle) =
+        create_rtc_peer_connection(signal_peer.clone(), config.ice_server.urls.clone());
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),
@@ -156,11 +247,9 @@ async fn handshake_offer(
         .await
         .efix()?;
 
-    wait_for_ice_complete(conn.clone()).await;
-
     debug!("created offer for new peer");
 
-    signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
+    signal_peer.send(PeerSignal::Offer(offer_sdp));
 
     let sdp: String;
 
@@ -196,10 +285,25 @@ async fn handshake_offer(
         .await
         .efix()?;
 
-    debug!("waiting for data channel to open");
-    channel_ready_rx.next().await;
+    trickle.send_pending_candidates().await;
 
-    Ok((signal_peer.id, data_channel))
+    let mut trickle_fut =
+        Box::pin(CandidateTrickle::listen_for_remote_candidates(conn, signal_receiver).fuse());
+
+    let mut channel_ready_fut = channel_ready_rx.next();
+    debug!("waiting for channel to open");
+    loop {
+        select! {
+            _ = channel_ready_fut => break,
+            trickle = trickle_fut => {
+                // TODO: this means that the signalling is down, should return an error
+                error!("{:?}", trickle);
+                continue;
+            }
+        }
+    }
+
+    Ok((signal_peer.id, data_channel, trickle_fut))
 }
 
 async fn handshake_accept(
@@ -207,10 +311,18 @@ async fn handshake_accept(
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
     config: &WebRtcSocketConfig,
-) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
+) -> Result<
+    (
+        PeerId,
+        RtcDataChannel,
+        Pin<Box<dyn FusedFuture<Output = Result<(), Box<dyn std::error::Error>>>>>,
+    ),
+    Box<dyn std::error::Error>,
+> {
     debug!("handshake_accept");
 
-    let conn = create_rtc_peer_connection(config.ice_server.urls.clone());
+    let (conn, trickle) =
+        create_rtc_peer_connection(signal_peer.clone(), config.ice_server.urls.clone());
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),
@@ -260,24 +372,42 @@ async fn handshake_accept(
         .as_string()
         .ok_or("")?;
 
+    signal_peer.send(PeerSignal::Answer(answer_sdp.clone()));
+
     let answer_description = session_desc_init.sdp(&answer_sdp);
 
     JsFuture::from(conn.set_local_description(answer_description))
         .await
         .efix()?;
 
-    wait_for_ice_complete(conn.clone()).await;
+    trickle.send_pending_candidates().await;
 
-    let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
-    signal_peer.send(answer);
+    let mut trickle_fut = Box::pin(
+        CandidateTrickle::listen_for_remote_candidates(conn.clone(), signal_receiver).fuse(),
+    );
+
+    let mut channel_ready_fut = channel_ready_rx.next();
 
     debug!("waiting for data channel to open");
-    channel_ready_rx.next().await;
 
-    Ok((signal_peer.id, data_channel))
+    loop {
+        select! {
+            _ = channel_ready_fut => break,
+            // TODO: this means that the signalling is down, should return an error
+            trickle = trickle_fut => {
+                error!("Trickle error {:?}", trickle);
+                continue;
+            }
+        }
+    }
+
+    Ok((signal_peer.id, data_channel, trickle_fut))
 }
 
-fn create_rtc_peer_connection(ice_server_urls: Vec<String>) -> RtcPeerConnection {
+fn create_rtc_peer_connection(
+    signal_peer: SignalPeer,
+    ice_server_urls: Vec<String>,
+) -> (RtcPeerConnection, Arc<CandidateTrickle>) {
     #[derive(Serialize)]
     pub struct IceServerConfig {
         pub urls: Vec<String>,
@@ -289,32 +419,25 @@ fn create_rtc_peer_connection(ice_server_urls: Vec<String>) -> RtcPeerConnection
     };
     let ice_server_config_list = [ice_server_config];
     peer_config.ice_servers(&JsValue::from_serde(&ice_server_config_list).unwrap());
-    RtcPeerConnection::new_with_configuration(&peer_config).unwrap()
-}
+    let connection = RtcPeerConnection::new_with_configuration(&peer_config).unwrap();
+    let trickle = Arc::new(CandidateTrickle::new(signal_peer));
 
-async fn wait_for_ice_complete(conn: RtcPeerConnection) {
-    if conn.ice_gathering_state() == RtcIceGatheringState::Complete {
-        debug!("Ice already completed");
-        return;
-    }
+    let connection2 = connection.clone();
+    let trickle2 = trickle.clone();
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
+        Box::new(move |event: RtcPeerConnectionIceEvent| {
+            // todo: can this really be None?
+            if let Some(candidate) = event.candidate() {
+                trickle2.on_local_candidate(connection2.clone(), candidate);
+                // todo: maybe just call the api directly?
+                // or do it in a promise callback?
+            }
+        });
+    let onicecandidate = Closure::wrap(onicecandidate);
 
-    let (mut tx, mut rx) = futures_channel::mpsc::channel(1);
-
-    let conn_clone = conn.clone();
-    let onstatechange: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
-        if conn_clone.ice_gathering_state() == RtcIceGatheringState::Complete {
-            tx.try_send(()).unwrap();
-        }
-    });
-
-    let onstatechange = Closure::wrap(onstatechange);
-
-    conn.set_onicegatheringstatechange(Some(onstatechange.as_ref().unchecked_ref()));
-
-    rx.next().await;
-
-    conn.set_onicegatheringstatechange(None);
-    debug!("Ice completed");
+    connection.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+    onicecandidate.forget();
+    (connection, trickle)
 }
 
 fn create_data_channel(
@@ -361,7 +484,16 @@ fn create_data_channel(
 }
 
 // Expect/unwrap is broken in select for some reason :/
-fn check(res: &Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>>) {
+fn check(
+    res: &Result<
+        (
+            PeerId,
+            RtcDataChannel,
+            Pin<Box<dyn FusedFuture<Output = Result<(), Box<dyn std::error::Error>>>>>,
+        ),
+        Box<dyn std::error::Error>,
+    >,
+) {
     // but doing it inside a typed function works fine
     res.as_ref().expect("handshake failed");
 }

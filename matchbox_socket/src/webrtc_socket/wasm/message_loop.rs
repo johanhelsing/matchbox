@@ -1,4 +1,4 @@
-use futures::{pin_mut, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{stream::FuturesUnordered, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use js_sys::Reflect;
@@ -38,11 +38,6 @@ pub async fn message_loop(
     let mut data_channels: HashMap<PeerId, RtcDataChannel> = HashMap::new();
 
     loop {
-        let next_signal_event = events_receiver.next().fuse();
-        let next_peer_message_out = peer_messages_out_rx.next().fuse();
-
-        pin_mut!(next_signal_event, next_peer_message_out);
-
         select! {
             res = offer_handshakes.select_next_some() => {
                 check(&res);
@@ -60,7 +55,7 @@ pub async fn message_loop(
                 new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
             },
 
-            message = next_signal_event => {
+            message = events_receiver.next() => {
                 if let Some(event) = message {
                     debug!("{:?}", event);
 
@@ -89,7 +84,7 @@ pub async fn message_loop(
                 }
             }
 
-            message = next_peer_message_out => {
+            message = peer_messages_out_rx.next() => {
                 let message = message.unwrap();
                 let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
                 data_channel.send_with_u8_array(&message.1).expect("failed to send");

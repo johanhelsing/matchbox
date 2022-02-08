@@ -37,8 +37,11 @@ pub async fn signalling_loop(
                     Some(WsMessage::Binary(_)) => {
                         error!("Received binary data from signal server (expected text). Ignoring.");
                     },
-                    None => {} // Disconnected from signalling server
-                };
+                    None => {
+                        error!("Disconnected from signalling server!");
+                        break;
+                    }
+                }
             }
 
             complete => break

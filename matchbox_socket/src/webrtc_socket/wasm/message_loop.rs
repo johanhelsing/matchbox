@@ -2,7 +2,7 @@ use futures::{pin_mut, stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use js_sys::Reflect;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use serde::Serialize;
 use std::collections::HashMap;
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
@@ -84,7 +84,8 @@ pub async fn message_loop(
                         }
                     }
                 } else {
-                    // Disconnected from signalling server
+                    error!("Disconnected from signalling server!");
+                    break;
                 }
             }
 

@@ -2023,6 +2023,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ee7c6485c30167ce4dfb83ac568a849fe53274c831081476ee13e0dce1aad72"
 
 [[package]]
+name = "futures-timer"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
+dependencies = [
+ "gloo-timers",
+ "send_wrapper 0.4.0",
+]
+
+[[package]]
 name = "futures-util"
 version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2685,6 +2695,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchbox_simple_demo"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "console_log",
+ "futures",
+ "futures-timer",
+ "log",
+ "matchbox_socket",
+ "pretty_env_logger",
+ "tokio",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "matchbox_socket"
 version = "0.3.0"
 dependencies = [
@@ -2698,10 +2723,8 @@ dependencies = [
  "ggrs",
  "js-sys",
  "log",
- "pretty_env_logger",
  "serde",
  "serde_json",
- "tokio",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -3722,6 +3745,12 @@ name = "semver"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
+
+[[package]]
+name = "send_wrapper"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
 
 [[package]]
 name = "send_wrapper"
@@ -5038,7 +5067,7 @@ dependencies = [
  "js-sys",
  "pharos",
  "rustc_version",
- "send_wrapper",
+ "send_wrapper 0.5.0",
  "thiserror",
  "wasm-bindgen",
  "wasm-bindgen-futures",

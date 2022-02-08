@@ -1,8 +1,8 @@
-use futures::{pin_mut, stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{stream::FuturesUnordered, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use js_sys::Reflect;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use serde::Serialize;
 use std::collections::HashMap;
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
@@ -38,11 +38,6 @@ pub async fn message_loop(
     let mut data_channels: HashMap<PeerId, RtcDataChannel> = HashMap::new();
 
     loop {
-        let next_signal_event = events_receiver.next().fuse();
-        let next_peer_message_out = peer_messages_out_rx.next().fuse();
-
-        pin_mut!(next_signal_event, next_peer_message_out);
-
         select! {
             res = offer_handshakes.select_next_some() => {
                 check(&res);
@@ -60,7 +55,7 @@ pub async fn message_loop(
                 new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
             },
 
-            message = next_signal_event => {
+            message = events_receiver.next() => {
                 if let Some(event) = message {
                     debug!("{:?}", event);
 
@@ -84,11 +79,12 @@ pub async fn message_loop(
                         }
                     }
                 } else {
-                    // Disconnected from signalling server
+                    error!("Disconnected from signalling server!");
+                    break;
                 }
             }
 
-            message = next_peer_message_out => {
+            message = peer_messages_out_rx.next() => {
                 let message = message.unwrap();
                 let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
                 data_channel.send_with_u8_array(&message.1).expect("failed to send");
@@ -310,29 +306,23 @@ fn create_data_channel(
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 
-    let peer_id = peer_id;
-    let incoming_tx = incoming_tx;
-    let channel_clone = channel.clone();
+    let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =
+        Box::new(move |event: MessageEvent| {
+            debug!("incoming {:?}", event);
+            if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
+                let uarray = js_sys::Uint8Array::new(&arraybuf);
+                let body = uarray.to_vec();
+                incoming_tx
+                    .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
+                    .unwrap();
+            }
+        });
+    let channel_onmsg_closure = Closure::wrap(channel_onmsg_func);
+    channel.set_onmessage(Some(channel_onmsg_closure.as_ref().unchecked_ref()));
+    channel_onmsg_closure.forget();
+
     let channel_onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
         debug!("Rtc data channel opened :D :D");
-        let peer_id = peer_id.clone();
-        let incoming_tx = incoming_tx.clone();
-        let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =
-            Box::new(move |event: MessageEvent| {
-                if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
-                    let uarray: js_sys::Uint8Array = js_sys::Uint8Array::new(&arraybuf);
-                    // TODO: There probably are ways to avoid copying/zeroing here...
-                    let mut body = vec![0_u8; uarray.length() as usize];
-                    uarray.copy_to(&mut body[..]);
-                    incoming_tx
-                        .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
-                        .unwrap();
-                }
-            });
-        let channel_onmsg_closure = Closure::wrap(channel_onmsg_func);
-        channel_clone.set_onmessage(Some(channel_onmsg_closure.as_ref().unchecked_ref()));
-        channel_onmsg_closure.forget();
-
         channel_ready
             .try_send(1)
             .expect("failed to notify about open connection");

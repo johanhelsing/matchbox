@@ -1,3 +1,8 @@
 [workspace]
-members = ["matchbox_server", "matchbox_socket", "matchbox_demo"]
+members = [
+    "matchbox_server",
+    "matchbox_socket",
+    "matchbox_demo",
+    "matchbox_simple_demo",
+]
 resolver = "2"

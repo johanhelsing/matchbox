@@ -1,5 +1,5 @@
 use crate::webrtc_socket::messages::*;
-use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 use futures_util::select;
 use log::{debug, error};
 use ws_stream_wasm::{WsMessage, WsMeta};
@@ -9,24 +9,21 @@ pub async fn signalling_loop(
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
 ) {
-    let (_ws, mut wsio) = WsMeta::connect(&room_url, None)
+    let (_ws, wsio) = WsMeta::connect(&room_url, None)
         .await
         .expect("failed to connect to signalling server");
 
+    let mut wsio = wsio.fuse();
+
     loop {
-        let next_request = requests_receiver.next().fuse();
-        let next_websocket_message = wsio.next().fuse();
-
-        pin_mut!(next_request, next_websocket_message);
-
         select! {
-            request = next_request => {
+            request = requests_receiver.next() => {
                 let request = serde_json::to_string(&request).expect("serializing request");
                 debug!("-> {}", request);
                 wsio.send(WsMessage::Text(request)).await.expect("request send error");
             }
 
-            message = next_websocket_message => {
+            message = wsio.next() => {
                 match message {
                     Some(WsMessage::Text(message)) => {
                         debug!("{}", message);

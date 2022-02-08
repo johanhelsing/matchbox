@@ -37,6 +37,7 @@ pub async fn message_loop(
 
     let mut offer_handshakes = FuturesUnordered::new();
     let mut accept_handshakes = FuturesUnordered::new();
+    let mut trickle_futs = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
     let mut data_channels: HashMap<PeerId, RtcDataChannel> = HashMap::new();
 
@@ -51,19 +52,31 @@ pub async fn message_loop(
 
             res = offer_handshakes.select_next_some() => {
                 check(&res);
-                let peer = res.unwrap();
-                data_channels.insert(peer.0.clone(), peer.1.clone());
+
+                let (peer_id, data_channel, trickle_fut) = res.unwrap();
+                data_channels.insert(peer_id.clone(), data_channel);
+                trickle_futs.push(trickle_fut);
+
                 debug!("Notifying about new peer");
-                new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
+                new_connected_peers_tx.unbounded_send(peer_id).expect("send failed");
             },
+
             res = accept_handshakes.select_next_some() => {
                 // TODO: this could be de-duplicated
                 check(&res);
-                let peer = res.unwrap();
-                data_channels.insert(peer.0.clone(), peer.1.clone());
+
+                let (peer_id, data_channel, trickle_fut) = res.unwrap();
+                data_channels.insert(peer_id.clone(), data_channel);
+                trickle_futs.push(trickle_fut);
+
                 debug!("Notifying about new peer");
-                new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
+                new_connected_peers_tx.unbounded_send(peer_id).expect("send failed");
             },
+
+            res = trickle_futs.select_next_some() => {
+                error!("ice candidate trickle loop stopped: {:?}", res);
+                break;
+            }
 
             message = events_receiver.next() => {
                 if let Some(event) = message {

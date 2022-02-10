@@ -274,12 +274,9 @@ mod tests {
 
     use futures::pin_mut;
     use tokio::{select, time};
-    use tokio_stream::StreamExt;
     use warp::{test::WsClient, ws::Message, Filter, Rejection, Reply};
 
-    use crate::signaling::{
-        parse_room_id, parse_room_next, PeerEvent, QueryParam, RequestedRoom, RoomId,
-    };
+    use crate::signaling::{parse_room_id, parse_room_next, PeerEvent, QueryParam, RoomId};
 
     fn api() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
         super::ws_filter(Default::default())
@@ -459,6 +456,58 @@ mod tests {
             _ = client_b.recv() => panic!("unexpected message"),
             _ = client_c.recv() => panic!("unexpected message"),
             _ = client_d.recv() => panic!("unexpected message"),
+            _ = &mut timeout => {}
+        }
+    }
+    #[tokio::test]
+    async fn match_pair_and_other_alone_room_without_next() {
+        let _ = pretty_env_logger::try_init();
+        let api = api();
+
+        let mut client_a = warp::test::ws()
+            .path("/room_name?next=2")
+            .handshake(api.clone())
+            // .handshake(ws_echo())
+            .await
+            .expect("handshake");
+
+        client_a
+            .send(Message::text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+
+        let mut client_b = warp::test::ws()
+            .path("/room_name")
+            .handshake(api.clone())
+            // .handshake(ws_echo())
+            .await
+            .expect("handshake");
+
+        client_b
+            .send(Message::text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+
+        let mut client_c = warp::test::ws()
+            .path("/room_name?next=2")
+            .handshake(api.clone())
+            // .handshake(ws_echo())
+            .await
+            .expect("handshake");
+
+        client_c
+            .send(Message::text(r#"{"Uuid": "uuid-c"}"#.to_string()))
+            .await;
+
+        // Clients should be matched in pairs as they arrive, i.e. a + b and c + d
+        let new_peer_c = recv_peer_event(&mut client_a).await;
+
+        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
+
+        let timeout = time::sleep(Duration::from_millis(100));
+        pin_mut!(timeout);
+        select! {
+            _ = client_a.recv() => panic!("unexpected message"),
+            _ = client_b.recv() => panic!("unexpected message"),
+            _ = client_c.recv() => panic!("unexpected message"),
             _ = &mut timeout => {}
         }
     }

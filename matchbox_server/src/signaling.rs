@@ -636,7 +636,10 @@ mod tests {
 
     #[test]
     fn requested_room() {
-        assert_eq!(parse_room_id("next_2".into()), RoomId("next_2".to_string()));
+        assert_eq!(
+            parse_room_id("room_name".into()),
+            RoomId("room_name".to_string())
+        );
     }
     #[test]
     fn requested_scope() {

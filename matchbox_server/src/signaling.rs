@@ -287,11 +287,9 @@ mod tests {
         let _ = pretty_env_logger::try_init();
         let api = api();
 
-        // let req = warp::test::ws().path("/echo");
         warp::test::ws()
             .path("/room_a")
             .handshake(api)
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
     }
@@ -301,11 +299,9 @@ mod tests {
         let _ = pretty_env_logger::try_init();
         let api = api();
 
-        // let req = warp::test::ws().path("/echo");
         let mut client_a = warp::test::ws()
             .path("/room_a")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -316,7 +312,6 @@ mod tests {
         let mut client_b = warp::test::ws()
             .path("/room_a")
             .handshake(api)
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -336,11 +331,9 @@ mod tests {
         let _ = pretty_env_logger::try_init();
         let api = api();
 
-        // let req = warp::test::ws().path("/echo");
         let mut client_a = warp::test::ws()
             .path("/room_a")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -351,7 +344,6 @@ mod tests {
         let mut client_b = warp::test::ws()
             .path("/room_a")
             .handshake(api)
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -401,7 +393,6 @@ mod tests {
         let mut client_a = warp::test::ws()
             .path("/room_name?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -412,7 +403,6 @@ mod tests {
         let mut client_b = warp::test::ws()
             .path("/room_name?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -423,7 +413,6 @@ mod tests {
         let mut client_c = warp::test::ws()
             .path("/room_name?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -434,7 +423,6 @@ mod tests {
         let mut client_d = warp::test::ws()
             .path("/room_name?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -467,7 +455,6 @@ mod tests {
         let mut client_a = warp::test::ws()
             .path("/room_name?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -478,7 +465,6 @@ mod tests {
         let mut client_b = warp::test::ws()
             .path("/room_name")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -489,7 +475,6 @@ mod tests {
         let mut client_c = warp::test::ws()
             .path("/room_name?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -520,28 +505,24 @@ mod tests {
         let mut client_a = warp::test::ws()
             .path("/scope_1?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
         let mut client_b = warp::test::ws()
             .path("/scope_2?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
         let mut client_c = warp::test::ws()
             .path("/scope_1?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
         let mut client_d = warp::test::ws()
             .path("/scope_2?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
@@ -584,35 +565,30 @@ mod tests {
         let mut client_a = warp::test::ws()
             .path("/scope_1?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
         let mut client_b = warp::test::ws()
             .path("/scope_1?next=3")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
         let mut client_c = warp::test::ws()
             .path("/scope_1?next=2")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
         let mut client_d = warp::test::ws()
             .path("/scope_1?next=3")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 
         let mut client_e = warp::test::ws()
             .path("/scope_1?next=3")
             .handshake(api.clone())
-            // .handshake(ws_echo())
             .await
             .expect("handshake");
 

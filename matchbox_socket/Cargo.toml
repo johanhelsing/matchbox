@@ -39,7 +39,8 @@ web-sys = { version = "0.3.22", default-features = false, features = [
     "RtcPeerConnection", "RtcPeerConnectionIceEvent",
     "RtcSdpType", "RtcSessionDescription", "RtcSessionDescriptionInit",
     "RtcIceCandidate", "RtcIceCandidateInit",
-    "RtcConfiguration", "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType",
+    "RtcConfiguration",
+    "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType", "RtcDataChannelEvent"
 ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

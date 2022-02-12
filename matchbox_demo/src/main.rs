@@ -68,7 +68,7 @@ fn main() {
 fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, task_pool: Res<IoTaskPool>) {
     let room_id = match &args.room {
         Some(id) => id.clone(),
-        None => format!("next_{}", &args.players),
+        None => format!("example_room?next={}", &args.players),
     };
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);

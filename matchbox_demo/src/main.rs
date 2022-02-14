@@ -54,7 +54,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         // Some of our systems need the query parameters
         .insert_resource(args)
-        .insert_resource(FrameCount::default())
+        .init_resource::<FrameCount>()
         .add_state(AppState::Lobby)
         .add_system_set(
             SystemSet::on_enter(AppState::Lobby)

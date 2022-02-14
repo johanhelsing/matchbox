@@ -1,6 +1,6 @@
 use bevy::{prelude::*, tasks::IoTaskPool};
-use bevy_ggrs::{CommandsExt, GGRSApp, GGRSPlugin};
-use ggrs::PlayerType;
+use bevy_ggrs::{GGRSPlugin, SessionType};
+use ggrs::SessionBuilder;
 use log::info;
 use matchbox_socket::WebRtcNonBlockingSocket;
 
@@ -10,8 +10,8 @@ mod box_game;
 use args::*;
 use box_game::*;
 
-const INPUT_SIZE: usize = std::mem::size_of::<u8>();
-const FPS: u32 = 60;
+const FPS: usize = 60;
+const ROLLBACK_DEFAULT: &str = "rollback_default";
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AppState {
@@ -27,32 +27,34 @@ fn main() {
     info!("{:?}", args);
 
     let mut app = App::new();
+
+    GGRSPlugin::<GGRSConfig>::new()
+        // define frequency of rollback game logic update
+        .with_update_frequency(FPS)
+        // define system that returns inputs given a player handle, so GGRS can send the inputs around
+        .with_input_system(input)
+        // register types of compontents AND resources you want to be rolled back
+        .register_rollback_type::<Transform>()
+        .register_rollback_type::<Velocity>()
+        .register_rollback_type::<FrameCount>()
+        // these systems will be executed as part of the advance frame update
+        .with_rollback_schedule(
+            Schedule::default().with_stage(
+                ROLLBACK_DEFAULT,
+                SystemStage::parallel()
+                    .with_system(move_cube_system)
+                    .with_system(increase_frame_system),
+            ),
+        )
+        // make it happen in the bevy app
+        .build(&mut app);
+
     app.insert_resource(Msaa { samples: 4 })
         .insert_resource(ClearColor(SKY_COLOR))
         .add_plugins(DefaultPlugins)
         // Some of our systems need the query parameters
         .insert_resource(args)
-        // Make sure something polls the message tasks regularly
-        .add_plugin(GGRSPlugin)
-        // define frequency of game logic update
-        .with_update_frequency(FPS)
-        // define system that represents your inputs as a byte vector, so GGRS can send the inputs around
-        .with_input_system(input)
-        // register components that will be loaded/saved
-        .register_rollback_type::<Transform>()
-        .register_rollback_type::<Velocity>()
-        // you can also register resources
-        .insert_resource(FrameCount { frame: 0 })
-        .register_rollback_type::<FrameCount>()
-        // these systems will be executed as part of the advance frame update
-        .with_rollback_schedule(
-            Schedule::default().with_stage(
-                "rollback_default",
-                SystemStage::single_threaded()
-                    .with_system(move_cube_system)
-                    .with_system(increase_frame_system),
-            ),
-        )
+        .insert_resource(FrameCount::default())
         .add_state(AppState::Lobby)
         .add_system_set(
             SystemSet::on_enter(AppState::Lobby)
@@ -162,28 +164,26 @@ fn lobby_system(
     let max_prediction = 12;
 
     // create a GGRS P2P session
-    let mut p2p_session =
-        ggrs::P2PSession::new_with_socket(args.players as u32, INPUT_SIZE, max_prediction, socket);
-
-    // turn on sparse saving
-    p2p_session.set_sparse_saving(true).unwrap();
+    let mut sess_build = SessionBuilder::<GGRSConfig>::new()
+        .with_num_players(args.players)
+        .with_max_prediction_window(max_prediction)
+        .with_input_delay(2)
+        .with_fps(FPS)
+        .expect("invalid fps");
 
     for (i, player) in players.into_iter().enumerate() {
-        p2p_session
+        sess_build = sess_build
             .add_player(player, i)
             .expect("failed to add player");
-
-        if player == PlayerType::Local {
-            // set input delay for the local player
-            p2p_session.set_frame_delay(2, i).unwrap();
-        }
     }
 
-    // set default expected update frequency (affects synchronization timings between players)
-    p2p_session.set_fps(FPS).unwrap();
-
     // start the GGRS session
-    commands.start_p2p_session(p2p_session);
+    let sess = sess_build
+        .start_p2p_session(socket)
+        .expect("failed to start session");
+
+    commands.insert_resource(sess);
+    commands.insert_resource(SessionType::P2PSession);
 
     // transition to in-game state
     app_state

@@ -22,7 +22,7 @@ cargo install wasm-server-runner
 ## Build and serve
 
 ```
-cargo run --release --target wasm32-unknown-unknown
+cargo run --target wasm32-unknown-unknown
 ```
 
 then point your browser to http://127.0.0.1:1334/

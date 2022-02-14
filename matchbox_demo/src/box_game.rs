@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_ggrs::{Rollback, RollbackIdProvider};
-use ggrs::{GameInput, P2PSession, P2PSpectatorSession, PlayerHandle, SyncTestSession};
+use bytemuck::{Pod, Zeroable};
+use ggrs::{Config, InputStatus, P2PSession, PlayerHandle, SpectatorSession, SyncTestSession};
 use std::hash::Hash;
 
 const BLUE: Color = Color::rgb(0.8, 0.6, 0.2);
@@ -15,14 +16,30 @@ const INPUT_LEFT: u8 = 1 << 2;
 const INPUT_RIGHT: u8 = 1 << 3;
 
 const MOVEMENT_SPEED: f32 = 0.005;
-const MAX_SPEED: f32 = 0.1;
+const MAX_SPEED: f32 = 0.05;
 const FRICTION: f32 = 0.9;
 const PLANE_SIZE: f32 = 5.0;
 const CUBE_SIZE: f32 = 0.2;
 
+/// You need to define a config struct to bundle all the generics of GGRS. You can safely ignore `State` and leave it as u8 for all GGRS functionality.
+/// TODO: Find a way to hide the state type.
+#[derive(Debug)]
+pub struct GGRSConfig;
+impl Config for GGRSConfig {
+    type Input = BoxInput;
+    type State = u8;
+    type Address = String;
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, PartialEq, Pod, Zeroable)]
+pub struct BoxInput {
+    pub inp: u8,
+}
+
 #[derive(Default, Component)]
 pub struct Player {
-    pub handle: u32,
+    pub handle: usize,
 }
 
 // Components that should be saved/loaded need to implement the `Reflect` trait
@@ -41,10 +58,7 @@ pub struct FrameCount {
     pub frame: u32,
 }
 
-// you need to provide a system that represents your inputs as a byte vector, so GGRS can send the inputs around
-// here, we just set bits manually, but you can find other ways to encode to bytes (for example by serializing)
-#[allow(dead_code)]
-pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> Vec<u8> {
+pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> BoxInput {
     let mut input: u8 = 0;
 
     if keyboard_input.pressed(KeyCode::W) {
@@ -60,19 +74,17 @@ pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> 
         input |= INPUT_RIGHT;
     }
 
-    vec![input]
+    BoxInput { inp: input }
 }
 
-/// set up a simple 3D scene
-#[allow(dead_code)]
 pub fn setup_scene_system(
     mut commands: Commands,
     mut rip: ResMut<RollbackIdProvider>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    p2p_session: Option<Res<P2PSession>>,
-    synctest_session: Option<Res<SyncTestSession>>,
-    spectator_session: Option<Res<P2PSpectatorSession>>,
+    p2p_session: Option<Res<P2PSession<GGRSConfig>>>,
+    synctest_session: Option<Res<SyncTestSession<GGRSConfig>>>,
+    spectator_session: Option<Res<SpectatorSession<GGRSConfig>>>,
 ) {
     let num_players = p2p_session
         .map(|s| s.num_players())
@@ -117,12 +129,12 @@ pub fn setup_scene_system(
 
     // light
     commands.spawn_bundle(PointLightBundle {
-        transform: Transform::from_xyz(-4.0, 8.0, 4.0),
+        transform: Transform::from_xyz(4.0, 8.0, 4.0),
         ..Default::default()
     });
     // camera
     commands.spawn_bundle(PerspectiveCameraBundle {
-        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(0.0, 7.5, 0.5).looking_at(Vec3::ZERO, Vec3::Y),
         ..Default::default()
     });
 }
@@ -141,10 +153,10 @@ pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
 #[allow(dead_code)]
 pub fn move_cube_system(
     mut query: Query<(&mut Transform, &mut Velocity, &Player), With<Rollback>>,
-    inputs: Res<Vec<GameInput>>,
+    inputs: Res<Vec<(BoxInput, InputStatus)>>,
 ) {
     for (mut t, mut v, p) in query.iter_mut() {
-        let input = inputs[p.handle as usize].buffer[0];
+        let input = inputs[p.handle as usize].0.inp;
         // set velocity through key presses
         if input & INPUT_UP != 0 && input & INPUT_DOWN == 0 {
             v.z -= MOVEMENT_SPEED;
@@ -168,13 +180,14 @@ pub fn move_cube_system(
         }
         v.y *= FRICTION;
 
-        // constrain velocity (this way allows for fast diagonal movement, but its just an example)
-        v.x = v.x.min(MAX_SPEED);
-        v.x = v.x.max(-MAX_SPEED);
-        v.y = v.y.min(MAX_SPEED);
-        v.y = v.y.max(-MAX_SPEED);
-        v.z = v.z.min(MAX_SPEED);
-        v.z = v.z.max(-MAX_SPEED);
+        // constrain velocity
+        let mag = (v.x * v.x + v.y * v.y + v.z * v.z).sqrt();
+        if mag > MAX_SPEED {
+            let factor = MAX_SPEED / mag;
+            v.x *= factor;
+            v.y *= factor;
+            v.z *= factor;
+        }
 
         // apply velocity
         t.translation.x += v.x;

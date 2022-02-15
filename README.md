@@ -64,10 +64,12 @@ All of this, however, is hidden from rust application code. All you will need to
 do on the client side, is:
 
 - Create a new socket, and give it a signalling server url and a room id
-- Regularly poll a message loop future that processes new messages. You should
-do this as often as possible, and at least once per frame. If you have an async
-runtime, you can simply `.await` it. If you are using Bevy, it can be spawned as
-a Bevy io task (see demo).
+- `.await` the message loop future that processes new messages. If you are
+  using Bevy, it can be spawned as a Bevy io task (see
+  [`matchbox_demo`](matchbox_demo)). See
+  [`matchbox_simple_demo`](matchbox_simple_demo) for usage with
+  `wasm-bindgen-futures`. Alternatively, the future can be polled manually (at
+  least once per frame).
 
 You will then get notified whenever a new peer data connection has been
 established, and you will get all packets from peers in a single channel.

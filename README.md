@@ -78,6 +78,24 @@ Packets include a boxed `u8` slice and the corresponding client's id.
 
 Similarly, you can send packets to clients using a simple non-blocking method.
 
+### Next rooms
+
+`matchbox_server` supports a rudimentary form of matchmaking. By appending
+`?next=3` to the room id, the next three players to join will be connected, and
+then the next three players will be connected separately to the first three.
+
+You can also use the room id for scoping what kind of players you want to
+match. i.e.:
+
+    wss://match.example.com/awesome_game_v1.1.0_pvp?next=2
+
+## Showcase
+
+Projects using Matchbox:
+
+- [Extreme Bevy](https://helsing.studio/extreme)
+- [Matchbox demo](https://helsing.studio/box_game/)
+
 ## Thanks!
 
 - A huge thanks to Ernest Wong for his [Dango Tribute

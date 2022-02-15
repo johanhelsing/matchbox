@@ -10,7 +10,8 @@ Painless peer-to-peer WebRTC networking for rust wasm applications.
 The goal of the Matchbox project is to enable udp-like, unordered, unreliable
 p2p connections in web browsers to facilitate low-latency multiplayer games.
 
-[Introductory blog post](https://johanhelsing.studio/posts/introducing-matchbox)
+- [Introductory blog post](https://johanhelsing.studio/posts/introducing-matchbox)
+- [Tutorial for usage with Bevy and GGRS](https://johanhelsing.studio/posts/extreme-bevy)
 
 **WARNING:** This project is in early stages, it will break as things are
 cleaned up and moved around.

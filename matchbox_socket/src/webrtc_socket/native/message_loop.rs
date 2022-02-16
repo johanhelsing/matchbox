@@ -4,8 +4,10 @@ use futures::{
     future::FusedFuture, pin_mut, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt,
 };
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, warn};
+use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 use webrtc::{
     api::APIBuilder,
@@ -24,7 +26,7 @@ use webrtc::{
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet,
+    Packet, KEEP_ALIVE_INTERVAL,
 };
 
 pub async fn message_loop(
@@ -69,6 +71,9 @@ async fn message_loop_impl(
     let mut handshake_signals = HashMap::new();
     let mut connected_peers = HashMap::new();
 
+    let timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL));
+    futures::pin_mut!(timeout);
+
     loop {
         let next_signal_event = events_receiver.next().fuse();
         let next_peer_message_out = peer_messages_out_rx.next().fuse();
@@ -76,6 +81,11 @@ async fn message_loop_impl(
         pin_mut!(next_signal_event, next_peer_message_out);
 
         select! {
+            _ = (&mut timeout).fuse() => {
+                requests_sender.unbounded_send(PeerRequest::KeepAlive).expect("send failed");
+                timeout.reset(Duration::from_millis(KEEP_ALIVE_INTERVAL));
+            }
+
             _ = peer_loops_a.select_next_some() => {
                 debug!("peer finished");
             },

@@ -2,7 +2,7 @@ use bevy::{prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, SessionType};
 use ggrs::SessionBuilder;
 use log::info;
-use matchbox_socket::WebRtcNonBlockingSocket;
+use matchbox_socket::WebRtcSocket;
 
 mod args;
 mod box_game;
@@ -75,7 +75,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, task_pool: Res
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcNonBlockingSocket::new(room_url);
+    let (socket, message_loop) = WebRtcSocket::new(room_url);
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.
@@ -138,7 +138,7 @@ fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
 fn lobby_system(
     mut app_state: ResMut<State<AppState>>,
     args: Res<Args>,
-    mut socket: ResMut<Option<WebRtcNonBlockingSocket>>,
+    mut socket: ResMut<Option<WebRtcSocket>>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {

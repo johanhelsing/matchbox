@@ -318,17 +318,16 @@ fn create_data_channel(
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 
-    let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =
-        Box::new(move |event: MessageEvent| {
-            debug!("incoming {:?}", event);
-            if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
-                let uarray = js_sys::Uint8Array::new(&arraybuf);
-                let body = uarray.to_vec();
-                incoming_tx
-                    .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
-                    .unwrap();
-            }
-        });
+    let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> = Box::new(move |event: MessageEvent| {
+        debug!("incoming {:?}", event);
+        if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
+            let uarray = js_sys::Uint8Array::new(&arraybuf);
+            let body = uarray.to_vec();
+            incoming_tx
+                .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
+                .unwrap();
+        }
+    });
     let channel_onmsg_closure = Closure::wrap(channel_onmsg_func);
     channel.set_onmessage(Some(channel_onmsg_closure.as_ref().unchecked_ref()));
     channel_onmsg_closure.forget();

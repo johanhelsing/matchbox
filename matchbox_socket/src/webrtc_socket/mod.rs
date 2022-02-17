@@ -40,7 +40,7 @@ type Packet = Box<[u8]>;
 pub struct WebRtcSocket {
     messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
-    peer_messages_out: futures_channel::mpsc::Sender<(PeerId, Packet)>,
+    peer_messages_out: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peers: Vec<PeerId>,
     id: PeerId,
 }
@@ -57,7 +57,7 @@ impl WebRtcSocket {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) =
-            futures_channel::mpsc::channel::<(PeerId, Packet)>(32);
+            futures_channel::mpsc::unbounded::<(PeerId, Packet)>();
 
         // Would perhaps be smarter to let signalling server decide this...
         let id = Uuid::new_v4().to_string();
@@ -120,7 +120,7 @@ impl WebRtcSocket {
 
     pub fn send<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
         self.peer_messages_out
-            .try_send((id.into(), packet))
+            .unbounded_send((id.into(), packet))
             .expect("send_to failed");
     }
 
@@ -132,7 +132,7 @@ impl WebRtcSocket {
 async fn run_socket(
     room_url: String,
     id: PeerId,
-    peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
+    peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
 ) {

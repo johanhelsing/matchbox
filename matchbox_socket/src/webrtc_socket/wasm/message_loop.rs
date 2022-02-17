@@ -26,7 +26,7 @@ pub async fn message_loop(
     id: PeerId,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    mut peer_messages_out_rx: futures_channel::mpsc::Receiver<(PeerId, Packet)>,
+    mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
 ) {

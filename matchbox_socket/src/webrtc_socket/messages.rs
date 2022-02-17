@@ -15,6 +15,7 @@ pub enum PeerEvent {
 pub enum PeerRequest {
     Uuid(PeerId),
     Signal { receiver: PeerId, data: PeerSignal },
+    KeepAlive,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

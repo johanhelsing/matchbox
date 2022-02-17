@@ -16,6 +16,7 @@ ggrs-socket = ["bincode", "ggrs"]
 [dependencies]
 futures-channel = { version = "0.3", features = ["sink"], default-features = false }
 futures = { version = "0.3", default-features = false }
+futures-timer = { version = "3.0", features = ["wasm-bindgen"] }
 futures-util = { version = "0.3", default-features = false, features = [
     "sink", "async-await-macro", "channel"
 ] }

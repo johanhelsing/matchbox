@@ -1,10 +1,13 @@
+use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_timer::Delay;
 use futures_util::select;
 use js_sys::Reflect;
 use log::{debug, error, warn};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::time::Duration;
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -12,6 +15,7 @@ use web_sys::{
     RtcIceGatheringState, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
 
+use crate::webrtc_socket::KEEP_ALIVE_INTERVAL;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
@@ -37,8 +41,16 @@ pub async fn message_loop(
     let mut handshake_signals = HashMap::new();
     let mut data_channels: HashMap<PeerId, RtcDataChannel> = HashMap::new();
 
+    let timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL));
+    futures::pin_mut!(timeout);
+
     loop {
         select! {
+            _ = (&mut timeout).fuse() => {
+                requests_sender.unbounded_send(PeerRequest::KeepAlive).expect("send failed");
+                timeout.reset(Duration::from_millis(KEEP_ALIVE_INTERVAL));
+            }
+
             res = offer_handshakes.select_next_some() => {
                 check(&res);
                 let peer = res.unwrap();
@@ -306,17 +318,16 @@ fn create_data_channel(
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 
-    let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> =
-        Box::new(move |event: MessageEvent| {
-            debug!("incoming {:?}", event);
-            if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
-                let uarray = js_sys::Uint8Array::new(&arraybuf);
-                let body = uarray.to_vec();
-                incoming_tx
-                    .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
-                    .unwrap();
-            }
-        });
+    let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> = Box::new(move |event: MessageEvent| {
+        debug!("incoming {:?}", event);
+        if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
+            let uarray = js_sys::Uint8Array::new(&arraybuf);
+            let body = uarray.to_vec();
+            incoming_tx
+                .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
+                .unwrap();
+        }
+    });
     let channel_onmsg_closure = Closure::wrap(channel_onmsg_func);
     channel.set_onmessage(Some(channel_onmsg_closure.as_ref().unchecked_ref()));
     channel_onmsg_closure.forget();

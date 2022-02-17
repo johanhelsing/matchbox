@@ -22,6 +22,7 @@ pub mod matchbox {
     pub enum PeerRequest<S> {
         Uuid(PeerId),
         Signal { receiver: PeerId, data: S },
+        KeepAlive,
     }
 
     /// Events go from signalling server to peer
@@ -257,6 +258,7 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
                     error!("error sending: {:?}", e);
                 }
             }
+            PeerRequest::KeepAlive => {}
         }
     }
 

@@ -1,6 +1,6 @@
 use bevy::{prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, SessionType};
-use ggrs::SessionBuilder;
+use ggrs::{P2PSession, SessionBuilder};
 use log::info;
 use matchbox_socket::WebRtcSocket;
 
@@ -64,6 +64,7 @@ fn main() {
         .add_system_set(SystemSet::on_update(AppState::Lobby).with_system(lobby_system))
         .add_system_set(SystemSet::on_exit(AppState::Lobby).with_system(lobby_cleanup))
         .add_system_set(SystemSet::on_enter(AppState::InGame).with_system(setup_scene_system))
+        .add_system(log_ggrs_events)
         .run();
 }
 
@@ -189,4 +190,10 @@ fn lobby_system(
     app_state
         .set(AppState::InGame)
         .expect("Tried to go in-game while already in-game");
+}
+
+fn log_ggrs_events(mut session: ResMut<P2PSession<GGRSConfig>>) {
+    for event in session.events() {
+        info!("GGRS Event: {:?}", event);
+    }
 }

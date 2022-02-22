@@ -97,14 +97,26 @@ pub async fn message_loop(
             }
 
             message = peer_messages_out_rx.next() => {
-                let message = message.unwrap();
-                let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
-                data_channel.send_with_u8_array(&message.1).expect("failed to send");
+                match message {
+                    Some(message) => {
+                        let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
+                        data_channel.send_with_u8_array(&message.1).expect("failed to send");
+                    },
+                    None => {
+                        // Receiver end of outgoing message channel closed,
+                        // which most likely means the socket was dropped.
+                        // There could probably be cleaner ways to handle this,
+                        // but for now, just exit cleanly.
+                        debug!("Outgoing message queue closed");
+                        break;
+                    }
+                }
             }
 
             complete => break
         }
     }
+    debug!("Message loop finished");
 }
 
 async fn handshake_offer(

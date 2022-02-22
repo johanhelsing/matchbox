@@ -64,7 +64,7 @@ fn main() {
         .add_system_set(SystemSet::on_update(AppState::Lobby).with_system(lobby_system))
         .add_system_set(SystemSet::on_exit(AppState::Lobby).with_system(lobby_cleanup))
         .add_system_set(SystemSet::on_enter(AppState::InGame).with_system(setup_scene_system))
-        .add_system(log_ggrs_events)
+        .add_system_set(SystemSet::on_update(AppState::InGame).with_system(log_ggrs_events))
         .run();
 }
 

@@ -100,7 +100,12 @@ pub async fn message_loop(
                 match message {
                     Some(message) => {
                         let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
-                        data_channel.send_with_u8_array(&message.1).expect("failed to send");
+                        if let Err(err) = data_channel.send_with_u8_array(&message.1) {
+                            // This likely means the other peer disconnected
+                            // todo: we should probably remove the data channel object in this case
+                            // and try reconnecting. For now we will just stop panicking.
+                            error!("Failed to send: {err:?}");
+                        }
                     },
                     None => {
                         // Receiver end of outgoing message channel closed,

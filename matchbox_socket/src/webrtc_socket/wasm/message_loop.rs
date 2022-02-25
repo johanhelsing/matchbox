@@ -41,14 +41,13 @@ pub async fn message_loop(
     let mut handshake_signals = HashMap::new();
     let mut data_channels: HashMap<PeerId, RtcDataChannel> = HashMap::new();
 
-    let timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL));
-    futures::pin_mut!(timeout);
+    let mut timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL)).fuse();
 
     loop {
         select! {
-            _ = (&mut timeout).fuse() => {
+            _ = &mut timeout => {
                 requests_sender.unbounded_send(PeerRequest::KeepAlive).expect("send failed");
-                timeout.reset(Duration::from_millis(KEEP_ALIVE_INTERVAL));
+                timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL)).fuse();
             }
 
             res = offer_handshakes.select_next_some() => {

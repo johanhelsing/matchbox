@@ -48,7 +48,7 @@ pub struct WebRtcSocketConfig {
 /// Configuration options for an ICE server connection.
 /// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example
 pub struct RtcIceServerConfig {
-    /// An ICE server instance can have several URLs. Use an empty Vec to disable ICE
+    /// An ICE server instance can have several URLs
     pub urls: Vec<String>
 }
 

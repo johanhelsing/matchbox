@@ -22,7 +22,7 @@ futures-util = { version = "0.3", default-features = false, features = [
 ] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-uuid = { version = "0.8", default-features = false, features = ["v4", "wasm-bindgen"] }
+uuid = { version = "1.0", default-features = false, features = ["v4"] }
 log = { version = "0.4", default-features = false }
 
 # ggrs-socket

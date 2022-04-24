@@ -753,7 +753,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -808,7 +808,7 @@ dependencies = [
  "ron",
  "serde",
  "thiserror",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -928,7 +928,7 @@ dependencies = [
  "getrandom 0.2.6",
  "instant",
  "tracing",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -2712,7 +2712,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "uuid",
+ "uuid 0.8.2",
  "warp",
 ]
 
@@ -2748,7 +2748,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "uuid",
+ "uuid 1.0.0",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -4484,6 +4484,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
+dependencies = [
+ "getrandom 0.2.6",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4862,7 +4871,7 @@ dependencies = [
  "tokio",
  "turn",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "waitgroup",
  "webrtc-mdns",
  "webrtc-util",

@@ -2,4 +2,4 @@
 mod ggrs_socket;
 mod webrtc_socket;
 
-pub use webrtc_socket::{WebRtcSocket, MatchboxConfig};
+pub use webrtc_socket::{WebRtcSocket, WebRtcSocketConfig, RtcIceServerConfig};

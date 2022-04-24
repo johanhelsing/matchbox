@@ -37,18 +37,32 @@ use uuid::Uuid;
 type Packet = Box<[u8]>;
 
 #[derive(Debug)]
-pub struct MatchboxConfig {
-    pub ice_server_urls: Vec<String>
+/// General configuration options for a WebRtc connection
+pub struct WebRtcSocketConfig {
+    pub room_url: String,
+    /// Configuration for the (single) ICE server
+    pub ice_server: RtcIceServerConfig
 }
 
-impl Default for MatchboxConfig {
+#[derive(Debug)]
+/// Configuration options for an ICE server connection.
+/// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example
+pub struct RtcIceServerConfig {
+    /// An ICE server instance can have several URLs. Use an empty Vec to disable ICE
+    pub urls: Vec<String>
+}
+
+impl Default for WebRtcSocketConfig {
     fn default() -> Self {
-        MatchboxConfig {
-            ice_server_urls: vec![
-                "stun:stun.l.google.com:19302".to_string(),
-                //"stun:stun.johanhelsing.studio:3478".to_string(),
-                //"turn:stun.johanhelsing.studio:3478".to_string(),
-            ]
+        WebRtcSocketConfig {
+            room_url: "ws://localhost:3536/example_room".to_string(),
+            ice_server: RtcIceServerConfig {
+                urls: vec![
+                    "stun:stun.l.google.com:19302".to_string(),
+                    //"stun:stun.johanhelsing.studio:3478".to_string(),
+                    //"turn:stun.johanhelsing.studio:3478".to_string(),
+                ]
+            }
         }
     }
 }
@@ -71,11 +85,14 @@ pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()>>>;
 impl WebRtcSocket {
     #[must_use]
     pub fn new<T: Into<String>>(room_url: T) -> (Self, MessageLoopFuture) {
-        WebRtcSocket::custom(room_url, Default::default())
+        WebRtcSocket::new_with_config(WebRtcSocketConfig {
+            room_url: room_url.into(),
+            ..Default::default()
+        })
     }
 
     #[must_use]
-    pub fn custom<T: Into<String>>(room_url: T, config: MatchboxConfig) -> (Self, MessageLoopFuture) {
+    pub fn new_with_config(config: WebRtcSocketConfig) -> (Self, MessageLoopFuture) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) =
@@ -93,7 +110,6 @@ impl WebRtcSocket {
                 peers: vec![],
             },
             Box::pin(run_socket(
-                room_url.into(),
                 config,
                 id,
                 peer_messages_out_rx,
@@ -153,8 +169,7 @@ impl WebRtcSocket {
 }
 
 async fn run_socket(
-    room_url: String,
-    config: MatchboxConfig,
+    config: WebRtcSocketConfig,
     id: PeerId,
     peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
@@ -164,6 +179,8 @@ async fn run_socket(
 
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
+
+    let signalling_loop_fut = signalling_loop(config.room_url.clone(), requests_receiver, events_sender);
 
     let message_loop_fut = message_loop(
         id,
@@ -175,7 +192,6 @@ async fn run_socket(
         messages_from_peers_tx,
     );
 
-    let signalling_loop_fut = signalling_loop(room_url, requests_receiver, events_sender);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());

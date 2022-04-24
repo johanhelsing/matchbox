@@ -19,12 +19,12 @@ use crate::webrtc_socket::KEEP_ALIVE_INTERVAL;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet, MatchboxConfig,
+    Packet, WebRtcSocketConfig,
 };
 
 pub async fn message_loop(
     id: PeerId,
-    config: MatchboxConfig,
+    config: WebRtcSocketConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
@@ -128,10 +128,10 @@ async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
-    config: &MatchboxConfig,
+    config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
     debug!("making offer");
-    let conn = create_rtc_peer_connection(config.ice_server_urls.clone());
+    let conn = create_rtc_peer_connection(config.ice_server.urls.clone());
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),
@@ -206,11 +206,11 @@ async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
-    config: &MatchboxConfig,
+    config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
     debug!("handshake_accept");
 
-    let conn = create_rtc_peer_connection(config.ice_server_urls.clone());
+    let conn = create_rtc_peer_connection(config.ice_server.urls.clone());
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),

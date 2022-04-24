@@ -23,11 +23,11 @@ use webrtc::{
     },
 };
 
-use crate::webrtc_socket::{messages::{PeerEvent, PeerId, PeerRequest, PeerSignal}, signal_peer::SignalPeer, Packet, KEEP_ALIVE_INTERVAL, MatchboxConfig};
+use crate::webrtc_socket::{messages::{PeerEvent, PeerId, PeerRequest, PeerSignal}, signal_peer::SignalPeer, Packet, KEEP_ALIVE_INTERVAL, WebRtcSocketConfig};
 
 pub async fn message_loop(
     id: PeerId,
-    config: MatchboxConfig,
+    config: WebRtcSocketConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
@@ -50,7 +50,7 @@ pub async fn message_loop(
 
 async fn message_loop_impl(
     id: PeerId,
-    config: &MatchboxConfig,
+    config: &WebRtcSocketConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
@@ -209,7 +209,7 @@ async fn handshake_offer(
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
-    config: &MatchboxConfig,
+    config: &WebRtcSocketConfig,
 ) -> Result<
     (
         PeerId,
@@ -289,7 +289,7 @@ async fn handshake_accept(
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
-    config: &MatchboxConfig,
+    config: &WebRtcSocketConfig,
 ) -> Result<
     (
         PeerId,
@@ -354,13 +354,13 @@ async fn handshake_accept(
 
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
-    config: &MatchboxConfig,
+    config: &WebRtcSocketConfig,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
 
     let config = RTCConfiguration {
         ice_servers: vec![RTCIceServer {
-            urls: config.ice_server_urls.clone(),
+            urls: config.ice_server.urls.clone(),
             ..Default::default()
         }],
         ..Default::default()

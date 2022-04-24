@@ -37,6 +37,23 @@ use uuid::Uuid;
 type Packet = Box<[u8]>;
 
 #[derive(Debug)]
+pub struct MatchboxConfig {
+    pub ice_server_urls: Vec<String>
+}
+
+impl Default for MatchboxConfig {
+    fn default() -> Self {
+        MatchboxConfig {
+            ice_server_urls: vec![
+                "stun:stun.l.google.com:19302".to_string(),
+                //"stun:stun.johanhelsing.studio:3478".to_string(),
+                //"turn:stun.johanhelsing.studio:3478".to_string(),
+            ]
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct WebRtcSocket {
     messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
@@ -54,6 +71,11 @@ pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()>>>;
 impl WebRtcSocket {
     #[must_use]
     pub fn new<T: Into<String>>(room_url: T) -> (Self, MessageLoopFuture) {
+        WebRtcSocket::custom(room_url, Default::default())
+    }
+
+    #[must_use]
+    pub fn custom<T: Into<String>>(room_url: T, config: MatchboxConfig) -> (Self, MessageLoopFuture) {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) =
@@ -72,6 +94,7 @@ impl WebRtcSocket {
             },
             Box::pin(run_socket(
                 room_url.into(),
+                config,
                 id,
                 peer_messages_out_rx,
                 new_connected_peers_tx,
@@ -131,6 +154,7 @@ impl WebRtcSocket {
 
 async fn run_socket(
     room_url: String,
+    config: MatchboxConfig,
     id: PeerId,
     peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
@@ -143,6 +167,7 @@ async fn run_socket(
 
     let message_loop_fut = message_loop(
         id,
+        config,
         requests_sender,
         events_receiver,
         peer_messages_out_rx,

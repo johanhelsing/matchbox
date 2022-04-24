@@ -23,14 +23,11 @@ use webrtc::{
     },
 };
 
-use crate::webrtc_socket::{
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-    signal_peer::SignalPeer,
-    Packet, KEEP_ALIVE_INTERVAL,
-};
+use crate::webrtc_socket::{messages::{PeerEvent, PeerId, PeerRequest, PeerSignal}, signal_peer::SignalPeer, Packet, KEEP_ALIVE_INTERVAL, MatchboxConfig};
 
 pub async fn message_loop(
     id: PeerId,
+    config: MatchboxConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
@@ -39,6 +36,7 @@ pub async fn message_loop(
 ) {
     message_loop_impl(
         id,
+        &config,
         requests_sender,
         events_receiver,
         peer_messages_out_rx,
@@ -52,6 +50,7 @@ pub async fn message_loop(
 
 async fn message_loop_impl(
     id: PeerId,
+    config: &MatchboxConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
@@ -101,7 +100,7 @@ async fn message_loop_impl(
                             let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid.clone(), signal_sender);
                             let signal_peer = SignalPeer::new(peer_uuid.clone(), requests_sender.clone());
-                            let handshake_fut = handshake_offer(signal_peer, signal_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone());
+                            let handshake_fut = handshake_offer(signal_peer, signal_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), config);
                             let (to_peer_data_tx, to_peer_data_rx) = futures_channel::mpsc::unbounded();
                             connected_peers.insert(peer_uuid, to_peer_data_tx);
                             peer_loops_a.push(peer_loop(handshake_fut, to_peer_data_rx));
@@ -112,7 +111,7 @@ async fn message_loop_impl(
                                 let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                 let (to_peer_data_tx, to_peer_data_rx) = futures_channel::mpsc::unbounded();
                                 // We didn't start signalling with this peer, assume we're the accepting part
-                                let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone());
+                                let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), config);
                                 connected_peers.insert(sender, to_peer_data_tx);
                                 let peer_loop_fut = peer_loop(handshake_fut, to_peer_data_rx);
                                 peer_loops_b.push(peer_loop_fut);
@@ -210,6 +209,7 @@ async fn handshake_offer(
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
+    config: &MatchboxConfig,
 ) -> Result<
     (
         PeerId,
@@ -219,7 +219,7 @@ async fn handshake_offer(
     Box<dyn std::error::Error>,
 > {
     debug!("making offer");
-    let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone()).await?;
+    let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
 
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
@@ -289,6 +289,7 @@ async fn handshake_accept(
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
+    config: &MatchboxConfig,
 ) -> Result<
     (
         PeerId,
@@ -298,7 +299,7 @@ async fn handshake_accept(
     Box<dyn std::error::Error>,
 > {
     debug!("handshake_accept");
-    let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone()).await?;
+    let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
 
     let offer;
     loop {
@@ -353,15 +354,13 @@ async fn handshake_accept(
 
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
+    config: &MatchboxConfig,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
 
     let config = RTCConfiguration {
         ice_servers: vec![RTCIceServer {
-            urls: vec![
-                // "stun:stun.l.google.com:19302".to_owned()
-                "stun:stun.johanhelsing.studio:3478".to_string(),
-            ],
+            urls: config.ice_server_urls.clone(),
             ..Default::default()
         }],
         ..Default::default()

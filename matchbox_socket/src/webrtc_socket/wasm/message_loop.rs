@@ -19,11 +19,12 @@ use crate::webrtc_socket::KEEP_ALIVE_INTERVAL;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet,
+    Packet, MatchboxConfig,
 };
 
 pub async fn message_loop(
     id: PeerId,
+    config: MatchboxConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
@@ -75,14 +76,14 @@ pub async fn message_loop(
                             let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid.clone(), signal_sender);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                            offer_handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone()));
+                            offer_handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone(), &config));
                         }
                         PeerEvent::Signal { sender, data } => {
                             let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
                                 let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender, requests_sender.clone());
                                 // We didn't start signalling with this peer, assume we're the accepting part
-                                accept_handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone()));
+                                accept_handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone(), &config));
                                 from_peer_sender
                             });
                             from_peer_sender.unbounded_send(data)
@@ -127,9 +128,10 @@ async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
+    config: &MatchboxConfig,
 ) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
     debug!("making offer");
-    let conn = create_rtc_peer_connection();
+    let conn = create_rtc_peer_connection(config.ice_server_urls.clone());
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),
@@ -204,10 +206,11 @@ async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
+    config: &MatchboxConfig,
 ) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
     debug!("handshake_accept");
 
-    let conn = create_rtc_peer_connection();
+    let conn = create_rtc_peer_connection(config.ice_server_urls.clone());
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),
@@ -274,19 +277,15 @@ async fn handshake_accept(
     Ok((signal_peer.id, data_channel))
 }
 
-fn create_rtc_peer_connection() -> RtcPeerConnection {
+fn create_rtc_peer_connection(ice_server_urls: Vec<String>) -> RtcPeerConnection {
     #[derive(Serialize)]
     pub struct IceServerConfig {
-        pub urls: [String; 1],
+        pub urls: Vec<String>,
     }
 
     let mut peer_config: RtcConfiguration = RtcConfiguration::new();
     let ice_server_config = IceServerConfig {
-        urls: [
-            // "stun:stun.l.google.com:19302".to_string(),
-            "stun:stun.johanhelsing.studio:3478".to_string(),
-            //"turn:stun.johanhelsing.studio:3478".to_string(),
-        ],
+        urls: ice_server_urls,
     };
     let ice_server_config_list = [ice_server_config];
     peer_config.ice_servers(&JsValue::from_serde(&ice_server_config_list).unwrap());

@@ -156,21 +156,21 @@ pub(crate) async fn ws_handler(
 #[derive(Debug, thiserror::Error)]
 enum RequestError {
     #[error("Warp error")]
-    WarpError(#[from] warp::Error),
+    Warp(#[from] warp::Error),
     #[error("Text error")]
-    TextError,
+    Text,
     #[error("Json error")]
-    JsonError(#[from] serde_json::Error),
+    Json(#[from] serde_json::Error),
 }
 
 fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, RequestError> {
     let request = request?;
 
     if !request.is_text() {
-        return Err(RequestError::TextError);
+        return Err(RequestError::Text);
     }
 
-    let request = request.to_str().map_err(|_| RequestError::TextError)?;
+    let request = request.to_str().map_err(|_| RequestError::Text)?;
 
     let request: PeerRequest = serde_json::from_str(request)?;
 
@@ -193,7 +193,7 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
     while let Some(request) = ws_receiver.next().await {
         let request = match parse_request(request) {
             Ok(request) => request,
-            Err(RequestError::WarpError(e)) => {
+            Err(RequestError::Warp(e)) => {
                 error!("Warp error while receiving request: {:?}", e);
                 // Most likely a ConnectionReset or similar.
                 // just give up on this peer.

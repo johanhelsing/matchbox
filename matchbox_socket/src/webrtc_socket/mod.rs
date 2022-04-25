@@ -41,7 +41,7 @@ type Packet = Box<[u8]>;
 pub struct WebRtcSocketConfig {
     pub room_url: String,
     /// Configuration for the (single) ICE server
-    pub ice_server: RtcIceServerConfig
+    pub ice_server: RtcIceServerConfig,
 }
 
 #[derive(Debug)]
@@ -49,7 +49,7 @@ pub struct WebRtcSocketConfig {
 /// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example
 pub struct RtcIceServerConfig {
     /// An ICE server instance can have several URLs
-    pub urls: Vec<String>
+    pub urls: Vec<String>,
 }
 
 impl Default for WebRtcSocketConfig {
@@ -61,8 +61,8 @@ impl Default for WebRtcSocketConfig {
                     "stun:stun.l.google.com:19302".to_string(),
                     //"stun:stun.johanhelsing.studio:3478".to_string(),
                     //"turn:stun.johanhelsing.studio:3478".to_string(),
-                ]
-            }
+                ],
+            },
         }
     }
 }
@@ -180,7 +180,8 @@ async fn run_socket(
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
-    let signalling_loop_fut = signalling_loop(config.room_url.clone(), requests_receiver, events_sender);
+    let signalling_loop_fut =
+        signalling_loop(config.room_url.clone(), requests_receiver, events_sender);
 
     let message_loop_fut = message_loop(
         id,
@@ -191,7 +192,6 @@ async fn run_socket(
         new_connected_peers_tx,
         messages_from_peers_tx,
     );
-
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());

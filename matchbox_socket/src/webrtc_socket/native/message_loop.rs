@@ -23,7 +23,11 @@ use webrtc::{
     },
 };
 
-use crate::webrtc_socket::{messages::{PeerEvent, PeerId, PeerRequest, PeerSignal}, signal_peer::SignalPeer, Packet, KEEP_ALIVE_INTERVAL, WebRtcSocketConfig};
+use crate::webrtc_socket::{
+    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+    signal_peer::SignalPeer,
+    Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+};
 
 pub async fn message_loop(
     id: PeerId,

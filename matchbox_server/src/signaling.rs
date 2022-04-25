@@ -1,5 +1,5 @@
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
-use log::{error, info};
+use log::{error, info, warn};
 use std::{
     collections::{HashMap, HashSet},
     convert::Infallible,
@@ -54,8 +54,7 @@ pub(crate) struct QueryParam {
 pub(crate) struct Peer {
     pub uuid: PeerId,
     pub room: RequestedRoom,
-    pub sender:
-        Option<tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>,
+    pub sender: tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>,
 }
 
 #[derive(Default)]
@@ -111,7 +110,7 @@ impl State {
                 return;
             }
         };
-        if let Err(e) = peer.sender.as_ref().unwrap().send(Ok(message)) {
+        if let Err(e) = peer.sender.send(Ok(message)) {
             error!("Error sending message {:?}", e);
         }
     }
@@ -218,7 +217,7 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
                 let mut state = state.lock().await;
                 let peers = state.add_peer(Peer {
                     uuid: id.clone(),
-                    sender: Some(sender.clone()),
+                    sender: sender.clone(),
                     room: requested_room.clone(),
                 });
 
@@ -246,16 +245,12 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
                         .expect("error serializing message"),
                 );
                 let state = state.lock().await;
-                if let Err(e) = state
-                    .clients
-                    .get(&receiver)
-                    .unwrap()
-                    .sender
-                    .as_ref()
-                    .unwrap()
-                    .send(Ok(event))
-                {
-                    error!("error sending: {:?}", e);
+                if let Some(peer) = state.clients.get(&receiver) {
+                    if let Err(e) = peer.sender.send(Ok(event)) {
+                        error!("error sending: {:?}", e);
+                    }
+                } else {
+                    warn!("peer not found ({receiver}), ignoring signal");
                 }
             }
             PeerRequest::KeepAlive => {}

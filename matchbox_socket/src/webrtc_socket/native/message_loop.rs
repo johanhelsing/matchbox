@@ -132,9 +132,21 @@ async fn message_loop_impl(
 
             // TODO: maybe use some forward trait instead?
             message = next_peer_message_out => {
-                let message = message.unwrap();
-                let sender = &connected_peers.get(&message.0).unwrap();
-                sender.unbounded_send(message.1).unwrap();
+                match message {
+                    Some(message) => {
+                        let peer = &message.0;
+                        let sender = &connected_peers.get(peer).unwrap_or_else(|| panic!("couldn't find data channel for peer {}", peer));
+                        sender.unbounded_send(message.1).unwrap();
+                    },
+                    None => {
+                        // Receiver end of outgoing message channel closed,
+                        // which most likely means the socket was dropped.
+                        // There could probably be cleaner ways to handle this,
+                        // but for now, just exit.
+                        debug!("Outgoing message queue closed");
+                        break;
+                    }
+                }
             }
 
             complete => break

@@ -156,8 +156,10 @@ pub(crate) async fn ws_handler(
 enum RequestError {
     #[error("Warp error")]
     Warp(#[from] warp::Error),
-    #[error("Text error")]
-    Text,
+    #[error("Not text error")]
+    NotText,
+    #[error("Message is close")]
+    Close,
     #[error("Json error")]
     Json(#[from] serde_json::Error),
 }
@@ -165,11 +167,15 @@ enum RequestError {
 fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, RequestError> {
     let request = request?;
 
-    if !request.is_text() {
-        return Err(RequestError::Text);
+    if request.is_close() {
+        return Err(RequestError::Close);
     }
 
-    let request = request.to_str().map_err(|_| RequestError::Text)?;
+    if !request.is_text() {
+        return Err(RequestError::NotText);
+    }
+
+    let request = request.to_str().map_err(|_| RequestError::NotText)?;
 
     let request: PeerRequest = serde_json::from_str(request)?;
 
@@ -196,6 +202,10 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
                 error!("Warp error while receiving request: {:?}", e);
                 // Most likely a ConnectionReset or similar.
                 // just give up on this peer.
+                break;
+            }
+            Err(RequestError::Close) => {
+                info!("Received websocket close from {peer_uuid:?}");
                 break;
             }
             Err(e) => {

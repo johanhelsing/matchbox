@@ -58,7 +58,10 @@ async fn main() {
         .with(cors)
         .with(log);
 
-    info!("Starting matchbox signaling server");
+    info!(
+        "Starting matchbox signaling server at port {}",
+        args.host.port()
+    );
     warp::serve(routes).run(args.host).await;
 }
 

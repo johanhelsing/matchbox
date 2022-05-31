@@ -16,7 +16,7 @@ ggrs-socket = ["bincode", "ggrs"]
 [dependencies]
 futures-channel = { version = "0.3", features = ["sink"], default-features = false }
 futures = { version = "0.3", default-features = false }
-futures-timer = { version = "3.0", features = ["wasm-bindgen"] }
+futures-timer = { version = "3.0", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = [
     "sink", "async-await-macro", "channel"
 ] }
@@ -33,6 +33,7 @@ bincode = { version = "1.3", default-features = false, optional = true }
 ws_stream_wasm = { version = "0.7", default-features = false }
 wasm-bindgen-futures = { version = "0.4", default-features = false }
 wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ], default-features = false }
+futures-timer = { version = "3.0", default-features = false, features = ["wasm-bindgen"] }
 js-sys = { version = "0.3", default-features = false }
 web-sys = { version = "0.3.22", default-features = false, features = [
     "MessageEvent",

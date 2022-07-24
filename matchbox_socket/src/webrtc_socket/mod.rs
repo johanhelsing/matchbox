@@ -50,19 +50,43 @@ pub struct WebRtcSocketConfig {
 pub struct RtcIceServerConfig {
     /// An ICE server instance can have several URLs
     pub urls: Vec<String>,
+    pub username: Option<String>,
+    pub credential: Option<String>,
+    pub credential_type: RtcIceCredentialType,
+}
+
+impl Default for RtcIceServerConfig {
+    fn default() -> Self {
+        Self {
+            urls: vec![
+                "stun:stun.l.google.com:19302".to_string(),
+                //"stun:stun.johanhelsing.studio:3478".to_string(),
+                //"turn:stun.johanhelsing.studio:3478".to_string(),
+            ],
+            username: Default::default(),
+            credential: Default::default(),
+            credential_type: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum RtcIceCredentialType {
+    Password,
+    Oauth,
+}
+
+impl Default for RtcIceCredentialType {
+    fn default() -> Self {
+        RtcIceCredentialType::Password
+    }
 }
 
 impl Default for WebRtcSocketConfig {
     fn default() -> Self {
         WebRtcSocketConfig {
             room_url: "ws://localhost:3536/example_room".to_string(),
-            ice_server: RtcIceServerConfig {
-                urls: vec![
-                    "stun:stun.l.google.com:19302".to_string(),
-                    //"stun:stun.johanhelsing.studio:3478".to_string(),
-                    //"turn:stun.johanhelsing.studio:3478".to_string(),
-                ],
-            },
+            ice_server: RtcIceServerConfig::default(),
         }
     }
 }

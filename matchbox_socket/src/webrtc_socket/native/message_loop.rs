@@ -9,6 +9,7 @@ use futures_util::{lock::Mutex, select};
 use log::{debug, warn};
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
+use webrtc::ice_transport::ice_credential_type::RTCIceCredentialType;
 use webrtc::{
     api::APIBuilder,
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
@@ -23,6 +24,7 @@ use webrtc::{
     },
 };
 
+use crate::webrtc_socket::RtcIceCredentialType;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
@@ -374,9 +376,17 @@ async fn create_rtc_peer_connection(
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
 
+    let ice_server = &config.ice_server;
     let config = RTCConfiguration {
         ice_servers: vec![RTCIceServer {
-            urls: config.ice_server.urls.clone(),
+            urls: ice_server.urls.clone(),
+            username: ice_server.username.clone().unwrap_or_default(),
+            credential: ice_server.credential.clone().unwrap_or_default(),
+            // todo: implement From trait instead
+            credential_type: match ice_server.credential_type {
+                RtcIceCredentialType::Password => RTCIceCredentialType::Password,
+                RtcIceCredentialType::Oauth => RTCIceCredentialType::Oauth,
+            },
             ..Default::default()
         }],
         ..Default::default()

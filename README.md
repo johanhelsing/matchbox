@@ -93,9 +93,10 @@ match. i.e.:
 
 Projects using Matchbox:
 
-- [Extreme Bevy](https://helsing.studio/extreme)
+- [NES Bundler](https://github.com/tedsteen/nes-bundler) - Transform your NES game into a single executable targeting your favourite OS! 
+- [Extreme Bevy](https://helsing.studio/extreme) - Simple 2-player arcade shooter
 - [Matchbox demo](https://helsing.studio/box_game/)
-- [A Janitors Nightmare](https://gorktheork.itch.io/bevy-jam-1-submission)
+- [A Janitors Nightmare](https://gorktheork.itch.io/bevy-jam-1-submission) - 2-player jam game
 
 ## Thanks!
 

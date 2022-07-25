@@ -2,4 +2,4 @@
 mod ggrs_socket;
 mod webrtc_socket;
 
-pub use webrtc_socket::{RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};
+pub use webrtc_socket::{RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig, RtcIceCredentials, RtcIcePasswordCredentials, RtcIceOathCredentials};

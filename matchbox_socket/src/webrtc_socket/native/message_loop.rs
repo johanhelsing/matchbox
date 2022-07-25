@@ -24,7 +24,7 @@ use webrtc::{
     },
 };
 
-use crate::webrtc_socket::RtcIceCredentialType;
+use crate::webrtc_socket::RtcIceCredentials;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
@@ -377,15 +377,21 @@ async fn create_rtc_peer_connection(
     let api = APIBuilder::new().build();
 
     let ice_server = &config.ice_server;
+    let (username, credential) = match &ice_server.credentials {
+        RtcIceCredentials::Password(credentials) => (credentials.username.clone(), credentials.password.clone()),
+        _ => Default::default(),
+    };
+
     let config = RTCConfiguration {
         ice_servers: vec![RTCIceServer {
             urls: ice_server.urls.clone(),
-            username: ice_server.username.clone().unwrap_or_default(),
-            credential: ice_server.credential.clone().unwrap_or_default(),
+            username,
+            credential,
             // todo: implement From trait instead
-            credential_type: match ice_server.credential_type {
-                RtcIceCredentialType::Password => RTCIceCredentialType::Password,
-                RtcIceCredentialType::Oauth => RTCIceCredentialType::Oauth,
+            credential_type: match ice_server.credentials {
+                RtcIceCredentials::Password(_) => RTCIceCredentialType::Password,
+                RtcIceCredentials::Oauth(_) => RTCIceCredentialType::Oauth,
+                RtcIceCredentials::None => RTCIceCredentialType::Unspecified
             },
             ..Default::default()
         }],

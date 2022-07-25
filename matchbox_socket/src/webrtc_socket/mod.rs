@@ -50,9 +50,7 @@ pub struct WebRtcSocketConfig {
 pub struct RtcIceServerConfig {
     /// An ICE server instance can have several URLs
     pub urls: Vec<String>,
-    pub username: Option<String>,
-    pub credential: Option<String>,
-    pub credential_type: RtcIceCredentialType,
+    pub credentials: RtcIceCredentials,
 }
 
 impl Default for RtcIceServerConfig {
@@ -63,22 +61,31 @@ impl Default for RtcIceServerConfig {
                 //"stun:stun.johanhelsing.studio:3478".to_string(),
                 //"turn:stun.johanhelsing.studio:3478".to_string(),
             ],
-            username: Default::default(),
-            credential: Default::default(),
-            credential_type: Default::default(),
+            credentials: Default::default(),
         }
     }
 }
-
 #[derive(Debug)]
-pub enum RtcIceCredentialType {
-    Password,
-    Oauth,
+pub struct RtcIcePasswordCredentials {
+    pub username: String,
+    pub password: String,
 }
 
-impl Default for RtcIceCredentialType {
+#[derive(Debug)]
+pub struct RtcIceOathCredentials {
+    //Todo
+}
+
+#[derive(Debug)]
+pub enum RtcIceCredentials {
+    None,
+    Password(RtcIcePasswordCredentials),
+    Oauth(RtcIceOathCredentials),
+}
+
+impl Default for RtcIceCredentials {
     fn default() -> Self {
-        RtcIceCredentialType::Password
+        RtcIceCredentials::None
     }
 }
 

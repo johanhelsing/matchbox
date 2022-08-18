@@ -82,6 +82,7 @@ pub fn setup_scene_system(
     mut rip: ResMut<RollbackIdProvider>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut camera_query: Query<&mut Transform, With<Camera>>,
     p2p_session: Option<Res<P2PSession<GGRSConfig>>>,
     synctest_session: Option<Res<SyncTestSession<GGRSConfig>>>,
     spectator_session: Option<Res<SpectatorSession<GGRSConfig>>>,
@@ -133,10 +134,9 @@ pub fn setup_scene_system(
         ..Default::default()
     });
     // camera
-    commands.spawn_bundle(PerspectiveCameraBundle {
-        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..Default::default()
-    });
+    for mut transform in camera_query.iter_mut() {
+        *transform = Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y);
+    }
 }
 
 // Example system, manipulating a resource, will be added to the rollback schedule.

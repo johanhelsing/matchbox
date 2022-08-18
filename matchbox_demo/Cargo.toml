@@ -29,7 +29,7 @@ ggrs = { version = "0.9.1", features = ["wasm-bindgen"] }
 [dependencies]
 matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
 bevy = { version = "0.8", default-features = false }
-ggrs = "0.9.1"
+ggrs = "0.9"
 bevy_ggrs = "0.10"
 bytemuck = { version = "1.7", features=["derive"]}
 clap = { version = "3.0", features = ["derive"] }

@@ -32,7 +32,7 @@ impl Config for GGRSConfig {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Pod, Zeroable)]
+#[derive(Copy, Clone, PartialEq, Eq, Pod, Zeroable)]
 pub struct BoxInput {
     pub inp: u8,
 }
@@ -77,6 +77,7 @@ pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> 
     BoxInput { inp: input }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn setup_scene_system(
     mut commands: Commands,
     mut rip: ResMut<RollbackIdProvider>,

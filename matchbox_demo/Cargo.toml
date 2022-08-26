@@ -22,19 +22,19 @@ web-sys = { version = "0.3.22", features = [
 ] }
 console_error_panic_hook = "0.1"
 console_log = "0.2"
-serde_qs = "0.9"
+serde_qs = "0.10"
 wasm-bindgen = "0.2"
-ggrs = { version = "0.9.1", features = ["wasm-bindgen"] }
+ggrs = { version = "0.9", features = ["wasm-bindgen"] }
 
 [dependencies]
 matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
-bevy = { version = "0.6", default-features = false }
-ggrs = "0.9.1"
-bevy_ggrs = "0.9"
+bevy = { version = "0.8", default-features = false }
+ggrs = "0.9"
+bevy_ggrs = "0.10"
 bytemuck = { version = "1.7", features=["derive"]}
 clap = { version = "3.0", features = ["derive"] }
 serde = "1.0"
-winit = "0.26.0"
+winit = "0.26"
 log = "0.4"
 
 # [profile.dev]

@@ -68,7 +68,7 @@ fn main() {
         .run();
 }
 
-fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, task_pool: Res<IoTaskPool>) {
+fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     let room_id = match &args.room {
         Some(id) => id.clone(),
         None => format!("example_room?next={}", &args.players),
@@ -80,6 +80,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>, task_pool: Res
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.
+    let task_pool = IoTaskPool::get();
     task_pool.spawn(message_loop).detach();
 
     commands.insert_resource(Some(socket));
@@ -92,8 +93,9 @@ struct LobbyText;
 struct LobbyUI;
 
 fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn_bundle(Camera3dBundle::default());
+
     // All this is just for spawning centered text.
-    commands.spawn_bundle(UiCameraBundle::default());
     commands
         .spawn_bundle(NodeBundle {
             style: Style {
@@ -114,14 +116,13 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                         justify_content: JustifyContent::Center,
                         ..Default::default()
                     },
-                    text: Text::with_section(
+                    text: Text::from_section(
                         "Entering lobby...",
                         TextStyle {
                             font: asset_server.load("fonts/quicksand-light.ttf"),
                             font_size: 96.,
                             color: Color::BLACK,
                         },
-                        Default::default(),
                     ),
                     ..Default::default()
                 })

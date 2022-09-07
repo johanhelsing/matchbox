@@ -326,8 +326,7 @@ fn create_data_channel(
     let mut data_channel_config: RtcDataChannelInit = RtcDataChannelInit::new();
     data_channel_config.ordered(false);
     data_channel_config.max_retransmits(0);
-    data_channel_config.negotiated(true);
-    data_channel_config.id(0);
+    data_channel_config.negotiated(false);
 
     let channel: RtcDataChannel =
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);

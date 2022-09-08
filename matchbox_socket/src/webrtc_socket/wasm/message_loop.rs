@@ -331,7 +331,8 @@ async fn handshake_accept(
 > {
     debug!("handshake_accept");
 
-    let (conn, trickle) = create_rtc_peer_connection(signal_peer.clone(), config.ice_server.urls.clone());
+    let (conn, trickle) =
+        create_rtc_peer_connection(signal_peer.clone(), config.ice_server.urls.clone());
 
     let offer: Option<String>;
     loop {

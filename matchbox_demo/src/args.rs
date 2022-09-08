@@ -18,6 +18,8 @@ pub struct Args {
 
     #[clap(default_value = "2")]
     pub players: usize,
+
+    pub debug: bool,
 }
 
 impl Default for Args {

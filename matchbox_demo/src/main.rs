@@ -49,11 +49,12 @@ fn main() {
         // make it happen in the bevy app
         .build(&mut app);
 
-    // (optional) Enable debug log level for matchbox
-    app.insert_resource(LogSettings {
-        filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
-        level: bevy::log::Level::DEBUG,
-    });
+    if args.debug {
+        app.insert_resource(LogSettings {
+            filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
+            level: bevy::log::Level::DEBUG,
+        });
+    }
 
     app.insert_resource(ClearColor(SKY_COLOR))
         .add_plugins(DefaultPlugins)
@@ -148,13 +149,16 @@ fn lobby_system(
     mut socket: ResMut<Option<WebRtcSocket>>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
+    mut frames: Local<usize>,
 ) {
+    *frames += 1;
+    query.single_mut().sections[0].value = format!("{}", *frames);
+
     let socket = socket.as_mut();
 
     socket.as_mut().unwrap().accept_new_connections();
     let connected_peers = socket.as_ref().unwrap().connected_peers().len();
     let remaining = args.players - (connected_peers + 1);
-    query.single_mut().sections[0].value = format!("Waiting for {} more player(s)", remaining);
 
     if remaining > 0 {
         return;

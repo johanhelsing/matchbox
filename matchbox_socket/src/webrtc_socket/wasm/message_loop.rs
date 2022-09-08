@@ -5,7 +5,6 @@ use futures_util::select;
 use js_sys::Reflect;
 use log::{debug, error, warn};
 use serde::Serialize;
-use std::cell::RefCell;
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
@@ -135,8 +134,8 @@ pub async fn message_loop(
 
 struct CandidateTrickle {
     signal_peer: SignalPeer,
-    // TODO: if wasm gets multi-threading, use mutex instead
-    pending: RefCell<Vec<String>>,
+    // TODO: is this mutex really needed? just use yet another channel?
+    pending: futures::lock::Mutex<Vec<String>>,
 }
 
 impl CandidateTrickle {
@@ -166,12 +165,12 @@ impl CandidateTrickle {
             // Can't send yet, store in pending
             debug!("storing pending IceCandidate signal {}", candidate);
             // TODO: fix neatly
-            self.pending.borrow_mut().push(candidate);
+            self.pending.try_lock().unwrap().push(candidate);
         }
     }
 
     async fn send_pending_candidates(&self) {
-        let mut pending = self.pending.borrow_mut();
+        let mut pending = self.pending.lock().await;
         for candidate in std::mem::take(&mut *pending) {
             self.signal_peer.send(PeerSignal::IceCandidate(candidate));
         }

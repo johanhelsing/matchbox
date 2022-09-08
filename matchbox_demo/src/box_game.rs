@@ -98,7 +98,7 @@ pub fn setup_scene_system(
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size: PLANE_SIZE })),
         material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
-        ..Default::default()
+        ..default()
     });
 
     // player cube - just spawn whatever entity you want, then add a `Rollback` component with a unique id (for example through the `RollbackIdProvider` resource).
@@ -121,7 +121,7 @@ pub fn setup_scene_system(
                 mesh: meshes.add(Mesh::from(shape::Cube { size: CUBE_SIZE })),
                 material: materials.add(PLAYER_COLORS[handle as usize].into()),
                 transform,
-                ..Default::default()
+                ..default()
             })
             .insert(Player { handle })
             .insert(Velocity::default())
@@ -132,7 +132,7 @@ pub fn setup_scene_system(
     // light
     commands.spawn_bundle(PointLightBundle {
         transform: Transform::from_xyz(-4.0, 8.0, 4.0),
-        ..Default::default()
+        ..default()
     });
     // camera
     for mut transform in camera_query.iter_mut() {

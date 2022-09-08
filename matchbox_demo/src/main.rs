@@ -102,10 +102,10 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 position_type: PositionType::Absolute,
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::FlexEnd,
-                ..Default::default()
+                ..default()
             },
             color: Color::rgb(0.43, 0.41, 0.38).into(),
-            ..Default::default()
+            ..default()
         })
         .with_children(|parent| {
             parent
@@ -113,7 +113,7 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                     style: Style {
                         align_self: AlignSelf::Center,
                         justify_content: JustifyContent::Center,
-                        ..Default::default()
+                        ..default()
                     },
                     text: Text::from_section(
                         "Entering lobby...",
@@ -123,7 +123,7 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                             color: Color::BLACK,
                         },
                     ),
-                    ..Default::default()
+                    ..default()
                 })
                 .insert(LobbyText);
         })

@@ -149,13 +149,16 @@ fn lobby_system(
     mut socket: ResMut<Option<WebRtcSocket>>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
+    mut frames: Local<usize>,
 ) {
+    *frames += 1;
+    query.single_mut().sections[0].value = format!("{}", *frames);
+
     let socket = socket.as_mut();
 
     socket.as_mut().unwrap().accept_new_connections();
     let connected_peers = socket.as_ref().unwrap().connected_peers().len();
     let remaining = args.players - (connected_peers + 1);
-    query.single_mut().sections[0].value = format!("Waiting for {} more player(s)", remaining);
 
     if remaining > 0 {
         return;

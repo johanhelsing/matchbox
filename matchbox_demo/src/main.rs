@@ -1,4 +1,4 @@
-use bevy::{prelude::*, tasks::IoTaskPool};
+use bevy::{log::LogSettings, prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, SessionType};
 use ggrs::{P2PSession, SessionBuilder};
 use log::info;
@@ -48,6 +48,12 @@ fn main() {
         )
         // make it happen in the bevy app
         .build(&mut app);
+
+    // (optional) Enable debug log level for matchbox
+    app.insert_resource(LogSettings {
+        filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
+        level: bevy::log::Level::DEBUG,
+    });
 
     app.insert_resource(ClearColor(SKY_COLOR))
         .add_plugins(DefaultPlugins)

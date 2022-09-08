@@ -18,9 +18,6 @@ pub struct Args {
 
     #[clap(default_value = "2")]
     pub players: usize,
-
-    #[clap(default_value = "info")]
-    pub log_filter: String,
 }
 
 impl Default for Args {

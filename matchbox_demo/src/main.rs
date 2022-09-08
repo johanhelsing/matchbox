@@ -49,8 +49,7 @@ fn main() {
         // make it happen in the bevy app
         .build(&mut app);
 
-    app.insert_resource(Msaa { samples: 4 })
-        .insert_resource(ClearColor(SKY_COLOR))
+    app.insert_resource(ClearColor(SKY_COLOR))
         .add_plugins(DefaultPlugins)
         // Some of our systems need the query parameters
         .insert_resource(args)

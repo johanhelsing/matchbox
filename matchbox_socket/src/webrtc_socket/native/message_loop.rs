@@ -178,7 +178,7 @@ impl CandidateTrickle {
         // let candidate = serde_json::to_string(&candidate).unwrap();
 
         let candidate = candidate.to_json().await.unwrap();
-        assert_eq!(candidate.sdp_mline_index, 0); // we're assuming this on the other side
+        assert_eq!(candidate.sdp_mline_index, Some(0)); // we're assuming this on the other side
         let candidate = candidate.candidate;
 
         // Local candidates can only be sent after the remote description
@@ -220,7 +220,7 @@ impl CandidateTrickle {
                     peer_connection
                         .add_ice_candidate(RTCIceCandidateInit {
                             candidate,
-                            sdp_mline_index: 0,
+                            sdp_mline_index: Some(0),
                             ..Default::default()
                         })
                         .await?;

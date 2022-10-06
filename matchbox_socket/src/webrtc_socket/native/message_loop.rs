@@ -425,7 +425,6 @@ async fn create_data_channel(
     let config = RTCDataChannelInit {
         ordered: Some(false),
         max_retransmits: Some(0),
-        id: Some(0),
         ..Default::default()
     };
 

@@ -52,7 +52,6 @@ pub struct RtcIceServerConfig {
     pub urls: Vec<String>,
     pub username: Option<String>,
     pub credential: Option<String>,
-    pub credential_type: RtcIceCredentialType,
 }
 
 impl Default for RtcIceServerConfig {
@@ -65,20 +64,7 @@ impl Default for RtcIceServerConfig {
             ],
             username: Default::default(),
             credential: Default::default(),
-            credential_type: Default::default(),
         }
-    }
-}
-
-#[derive(Debug)]
-pub enum RtcIceCredentialType {
-    Password,
-    Oauth,
-}
-
-impl Default for RtcIceCredentialType {
-    fn default() -> Self {
-        RtcIceCredentialType::Password
     }
 }
 

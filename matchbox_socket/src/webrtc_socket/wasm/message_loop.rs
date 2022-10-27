@@ -131,7 +131,7 @@ async fn handshake_offer(
     config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
     debug!("making offer");
-    let conn = create_rtc_peer_connection(config.ice_server.urls.clone());
+    let conn = create_rtc_peer_connection(config);
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),

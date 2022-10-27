@@ -13,23 +13,24 @@ p2p connections in web browsers to facilitate low-latency multiplayer games.
 - [Introductory blog post](https://johanhelsing.studio/posts/introducing-matchbox)
 - [Tutorial for usage with Bevy and GGRS](https://johanhelsing.studio/posts/extreme-bevy)
 
-**WARNING:** This project is in early stages, it will break as things are
-cleaned up and moved around.
+**WARNING:** This project is in early stages, it has issues on Firefox, and web
+*to native cross-play is not (yet) supported. Make sure to check the [list of
+*open issues](https://github.com/johanhelsing/matchbox/issues)
 
 It is currently an all-in-one solution, it comes with:
 
-- A tiny signalling server, [matchbox_server](./matchbox_server). Written in
+- A tiny signalling server, [matchbox_server](https://github.com/johanhelsing/matchbox/tree/main/matchbox_server). Written in
 rust, uses only a couple of megabytes of memory. Also available as a docker image.
-- An example browser game, using `bevy`, `bevy_ggrs`,
-[matchbox_demo](matchbox_demo)
-- A socket abstraction for rust wasm, [matchbox_socket](matchbox_socket)
+- An example browser game, using `bevy` and `bevy_ggrs`:
+[matchbox_demo](https://github.com/johanhelsing/matchbox/tree/main/matchbox_demo)
+- A socket abstraction for rust wasm, [matchbox_socket](https://github.com/johanhelsing/matchbox/tree/main/matchbox_socket)
   - With a feature, `ggrs-socket` for providing a
   [ggrs](https://github.com/gschup/ggrs) compatible socket.
 
 ## Live demo
 
-- 2-player demo: https://helsing.studio/box_game/
-- 4-player demo: https://helsing.studio/box_game/?players=4
+- 2-player demo: <https://helsing.studio/box_game/>
+- 4-player demo: <https://helsing.studio/box_game/?players=4>
 
 Open each link in a separate browser window (or machine).
 
@@ -67,8 +68,10 @@ do on the client side, is:
 - Create a new socket, and give it a signalling server url and a room id
 - `.await` the message loop future that processes new messages. If you are
   using Bevy, it can be spawned as a Bevy io task (see
-  [`matchbox_demo`](matchbox_demo)). See
-  [`matchbox_simple_demo`](matchbox_simple_demo) for usage with
+  [`matchbox_demo`](https://github.com/johanhelsing/matchbox/tree/main/matchbox_demo)).
+  See
+  [`matchbox_simple_demo`](https://github.com/johanhelsing/matchbox/tree/main/matchbox_simple_demo)
+  for usage with
   `wasm-bindgen-futures`. Alternatively, the future can be polled manually (at
   least once per frame).
 
@@ -85,15 +88,13 @@ Similarly, you can send packets to clients using a simple non-blocking method.
 then the next three players will be connected separately to the first three.
 
 You can also use the room id for scoping what kind of players you want to
-match. i.e.:
-
-    wss://match.example.com/awesome_game_v1.1.0_pvp?next=2
+match. i.e.: `wss://match.example.com/awesome_game_v1.1.0_pvp?next=2`
 
 ## Showcase
 
 Projects using Matchbox:
 
-- [NES Bundler](https://github.com/tedsteen/nes-bundler) - Transform your NES game into a single executable targeting your favourite OS! 
+- [NES Bundler](https://github.com/tedsteen/nes-bundler) - Transform your NES game into a single executable targeting your favorite OS!
 - [Extreme Bevy](https://helsing.studio/extreme) - Simple 2-player arcade shooter
 - [Matchbox demo](https://helsing.studio/box_game/)
 - [A Janitors Nightmare](https://gorktheork.itch.io/bevy-jam-1-submission) - 2-player jam game
@@ -109,8 +110,8 @@ exist without it.
 
 All code in this repository dual-licensed under either:
 
-- MIT License (LICENSE-MIT or http://opensource.org/licenses/MIT)
-- Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT License (LICENSE-MIT or <http://opensource.org/licenses/MIT>)
+- Apache License, Version 2.0 (LICENSE-APACHE or <http://www.apache.org/licenses/LICENSE-2.0>)
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be

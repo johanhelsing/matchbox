@@ -3,6 +3,7 @@ use ggrs::{Message, PlayerType};
 use crate::WebRtcSocket;
 
 impl WebRtcSocket {
+    /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     #[must_use]
     pub fn players(&self) -> Vec<PlayerType<String>> {
         // needs to be consistent order across all peers

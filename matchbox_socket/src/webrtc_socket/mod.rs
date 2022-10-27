@@ -50,7 +50,13 @@ pub struct WebRtcSocketConfig {
 pub struct RtcIceServerConfig {
     /// An ICE server instance can have several URLs
     pub urls: Vec<String>,
+    /// A username for authentication with the ICE server
+    ///
+    /// See: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer/username
     pub username: Option<String>,
+    /// A password or token when authenticating with a turn server
+    ///
+    /// See: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer/credential
     pub credential: Option<String>,
 }
 

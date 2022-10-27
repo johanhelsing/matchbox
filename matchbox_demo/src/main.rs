@@ -76,7 +76,7 @@ fn main() {
 fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     let room_id = match &args.room {
         Some(id) => id.clone(),
-        None => format!("example_room?next={}", &args.players),
+        None => format!("matchbox_demo?next={}", &args.players),
     };
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);

@@ -14,8 +14,8 @@ p2p connections in web browsers to facilitate low-latency multiplayer games.
 - [Tutorial for usage with Bevy and GGRS](https://johanhelsing.studio/posts/extreme-bevy)
 
 **WARNING:** This project is in early stages, it has issues on Firefox, and web
-*to native cross-play is not (yet) supported. Make sure to check the [list of
-*open issues](https://github.com/johanhelsing/matchbox/issues)
+to native cross-play is not (yet) supported. Make sure to check the [list of
+open issues](https://github.com/johanhelsing/matchbox/issues)
 
 It is currently an all-in-one solution, it comes with:
 

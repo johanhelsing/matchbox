@@ -50,19 +50,35 @@ pub struct WebRtcSocketConfig {
 pub struct RtcIceServerConfig {
     /// An ICE server instance can have several URLs
     pub urls: Vec<String>,
+    /// A username for authentication with the ICE server
+    ///
+    /// See: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer/username
+    pub username: Option<String>,
+    /// A password or token when authenticating with a turn server
+    ///
+    /// See: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer/credential
+    pub credential: Option<String>,
+}
+
+impl Default for RtcIceServerConfig {
+    fn default() -> Self {
+        Self {
+            urls: vec![
+                "stun:stun.l.google.com:19302".to_string(),
+                //"stun:stun.johanhelsing.studio:3478".to_string(),
+                //"turn:stun.johanhelsing.studio:3478".to_string(),
+            ],
+            username: Default::default(),
+            credential: Default::default(),
+        }
+    }
 }
 
 impl Default for WebRtcSocketConfig {
     fn default() -> Self {
         WebRtcSocketConfig {
             room_url: "ws://localhost:3536/example_room".to_string(),
-            ice_server: RtcIceServerConfig {
-                urls: vec![
-                    "stun:stun.l.google.com:19302".to_string(),
-                    //"stun:stun.johanhelsing.studio:3478".to_string(),
-                    //"turn:stun.johanhelsing.studio:3478".to_string(),
-                ],
-            },
+            ice_server: RtcIceServerConfig::default(),
         }
     }
 }

@@ -374,9 +374,12 @@ async fn create_rtc_peer_connection(
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
 
+    let ice_server = &config.ice_server;
     let config = RTCConfiguration {
         ice_servers: vec![RTCIceServer {
-            urls: config.ice_server.urls.clone(),
+            urls: ice_server.urls.clone(),
+            username: ice_server.username.clone().unwrap_or_default(),
+            credential: ice_server.credential.clone().unwrap_or_default(),
             ..Default::default()
         }],
         ..Default::default()

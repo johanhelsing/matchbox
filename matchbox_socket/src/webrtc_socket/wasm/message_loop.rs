@@ -288,7 +288,7 @@ fn create_rtc_peer_connection(ice_server_urls: Vec<String>) -> RtcPeerConnection
         urls: ice_server_urls,
     };
     let ice_server_config_list = [ice_server_config];
-    peer_config.ice_servers(&JsValue::from_serde(&ice_server_config_list).unwrap());
+    peer_config.ice_servers(&serde_wasm_bindgen::to_value(&ice_server_config_list).unwrap());
     RtcPeerConnection::new_with_configuration(&peer_config).unwrap()
 }
 

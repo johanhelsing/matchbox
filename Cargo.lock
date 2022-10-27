@@ -2802,7 +2802,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_demo"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "bevy_ggrs",
@@ -2822,7 +2822,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_server"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "clap",
  "futures",
@@ -2854,7 +2854,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_socket"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-compat",
  "async-tungstenite",

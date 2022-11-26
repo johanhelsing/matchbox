@@ -171,7 +171,7 @@ impl CandidateTrickle {
         peer_connection: &RTCPeerConnection,
         candidate: RTCIceCandidate,
     ) {
-        let candidate = candidate.to_json().await.unwrap().candidate;
+        let candidate = candidate.to_json().unwrap().candidate;
 
         // Local candidates can only be sent after the remote description
         if peer_connection.remote_description().await.is_some() {
@@ -405,15 +405,13 @@ async fn create_rtc_peer_connection(
                     }
                 }
             })
-        }))
-        .await;
+        }));
 
     connection
         .on_peer_connection_state_change(Box::new(move |s| {
             debug!("Peer Connection State has changed: {}", s);
             Box::pin(async {})
-        }))
-        .await;
+        }));
 
     Ok((connection, trickle))
 }
@@ -444,8 +442,7 @@ async fn create_data_channel(
                 new_peer_tx.send(peer_id2.clone()).await.unwrap();
                 channel_ready.try_send(1).unwrap();
             })
-        }))
-        .await;
+        }));
 
     setup_data_channel(&channel, peer_id, from_peer_message_tx).await;
 
@@ -479,13 +476,11 @@ async fn wait_for_data_channel(
                             new_peer_tx.send(peer_id2).await.unwrap();
                             channel_tx.try_send(channel2).unwrap();
                         })
-                    }))
-                    .await;
+                    }));
 
                 setup_data_channel(&channel, peer_id, from_peer_message_tx).await;
             })
-        }))
-        .await;
+        }));
 
     channel_rx.next().await.unwrap()
 }
@@ -500,16 +495,14 @@ async fn setup_data_channel(
             // TODO: handle this somehow
             debug!("Data channel closed");
             Box::pin(async move {})
-        }))
-        .await;
+        }));
 
     data_channel
         .on_error(Box::new(move |e| {
             // TODO: handle this somehow
             warn!("Data channel error {:?}", e);
             Box::pin(async move {})
-        }))
-        .await;
+        }));
 
     data_channel
         .on_message(Box::new(move |message| {
@@ -519,8 +512,7 @@ async fn setup_data_channel(
                 .unbounded_send((peer_id.clone(), packet))
                 .unwrap();
             Box::pin(async move {})
-        }))
-        .await;
+        }));
 }
 
 async fn peer_loop(

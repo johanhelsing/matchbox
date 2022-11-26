@@ -32,7 +32,7 @@ bevy = { version = "0.8", default-features = false }
 ggrs = "0.9"
 bevy_ggrs = "0.10"
 bytemuck = { version = "1.7", features=["derive"]}
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.0.26", features = ["derive"] } # 4.0.27 breaks WASM
 serde = "1.0"
 winit = "0.26"
 log = "0.4"

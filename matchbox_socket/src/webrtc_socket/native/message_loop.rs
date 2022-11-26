@@ -392,26 +392,24 @@ async fn create_rtc_peer_connection(
 
     let connection2 = Arc::downgrade(&connection);
     let trickle2 = trickle.clone();
-    connection
-        .on_ice_candidate(Box::new(move |c| {
-            let connection2 = connection2.clone();
-            let trickle2 = trickle2.clone();
-            Box::pin(async move {
-                if let Some(c) = c {
-                    if let Some(connection2) = connection2.upgrade() {
-                        trickle2.on_local_candidate(&connection2, c).await;
-                    } else {
-                        warn!("missing peer_connection?");
-                    }
+    connection.on_ice_candidate(Box::new(move |c| {
+        let connection2 = connection2.clone();
+        let trickle2 = trickle2.clone();
+        Box::pin(async move {
+            if let Some(c) = c {
+                if let Some(connection2) = connection2.upgrade() {
+                    trickle2.on_local_candidate(&connection2, c).await;
+                } else {
+                    warn!("missing peer_connection?");
                 }
-            })
-        }));
+            }
+        })
+    }));
 
-    connection
-        .on_peer_connection_state_change(Box::new(move |s| {
-            debug!("Peer Connection State has changed: {}", s);
-            Box::pin(async {})
-        }));
+    connection.on_peer_connection_state_change(Box::new(move |s| {
+        debug!("Peer Connection State has changed: {}", s);
+        Box::pin(async {})
+    }));
 
     Ok((connection, trickle))
 }
@@ -435,14 +433,13 @@ async fn create_data_channel(
         .unwrap();
 
     let peer_id2 = peer_id.clone();
-    channel
-        .on_open(Box::new(move || {
-            debug!("Data channel ready");
-            Box::pin(async move {
-                new_peer_tx.send(peer_id2.clone()).await.unwrap();
-                channel_ready.try_send(1).unwrap();
-            })
-        }));
+    channel.on_open(Box::new(move || {
+        debug!("Data channel ready");
+        Box::pin(async move {
+            new_peer_tx.send(peer_id2.clone()).await.unwrap();
+            channel_ready.try_send(1).unwrap();
+        })
+    }));
 
     setup_data_channel(&channel, peer_id, from_peer_message_tx).await;
 
@@ -457,30 +454,28 @@ async fn wait_for_data_channel(
 ) -> Arc<RTCDataChannel> {
     let (channel_tx, mut channel_rx) = futures_channel::mpsc::channel(1);
 
-    connection
-        .on_data_channel(Box::new(move |channel| {
-            debug!("new data channel");
-            let peer_id = peer_id.clone();
-            let mut new_peer_tx = new_peer_tx.clone();
-            let from_peer_message_tx = from_peer_message_tx.clone();
-            let mut channel_tx = channel_tx.clone();
-            Box::pin(async move {
-                let peer_id2 = peer_id.clone();
-                let channel2 = Arc::clone(&channel);
+    connection.on_data_channel(Box::new(move |channel| {
+        debug!("new data channel");
+        let peer_id = peer_id.clone();
+        let mut new_peer_tx = new_peer_tx.clone();
+        let from_peer_message_tx = from_peer_message_tx.clone();
+        let mut channel_tx = channel_tx.clone();
+        Box::pin(async move {
+            let peer_id2 = peer_id.clone();
+            let channel2 = Arc::clone(&channel);
 
-                // TODO: register close & error callbacks
-                channel
-                    .on_open(Box::new(move || {
-                        debug!("Data channel ready");
-                        Box::pin(async move {
-                            new_peer_tx.send(peer_id2).await.unwrap();
-                            channel_tx.try_send(channel2).unwrap();
-                        })
-                    }));
+            // TODO: register close & error callbacks
+            channel.on_open(Box::new(move || {
+                debug!("Data channel ready");
+                Box::pin(async move {
+                    new_peer_tx.send(peer_id2).await.unwrap();
+                    channel_tx.try_send(channel2).unwrap();
+                })
+            }));
 
-                setup_data_channel(&channel, peer_id, from_peer_message_tx).await;
-            })
-        }));
+            setup_data_channel(&channel, peer_id, from_peer_message_tx).await;
+        })
+    }));
 
     channel_rx.next().await.unwrap()
 }
@@ -490,29 +485,26 @@ async fn setup_data_channel(
     peer_id: PeerId,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
 ) {
-    data_channel
-        .on_close(Box::new(move || {
-            // TODO: handle this somehow
-            debug!("Data channel closed");
-            Box::pin(async move {})
-        }));
+    data_channel.on_close(Box::new(move || {
+        // TODO: handle this somehow
+        debug!("Data channel closed");
+        Box::pin(async move {})
+    }));
 
-    data_channel
-        .on_error(Box::new(move |e| {
-            // TODO: handle this somehow
-            warn!("Data channel error {:?}", e);
-            Box::pin(async move {})
-        }));
+    data_channel.on_error(Box::new(move |e| {
+        // TODO: handle this somehow
+        warn!("Data channel error {:?}", e);
+        Box::pin(async move {})
+    }));
 
-    data_channel
-        .on_message(Box::new(move |message| {
-            let packet = (*message.data).into();
-            debug!("rx {:?}", packet);
-            from_peer_message_tx
-                .unbounded_send((peer_id.clone(), packet))
-                .unwrap();
-            Box::pin(async move {})
-        }));
+    data_channel.on_message(Box::new(move |message| {
+        let packet = (*message.data).into();
+        debug!("rx {:?}", packet);
+        from_peer_message_tx
+            .unbounded_send((peer_id.clone(), packet))
+            .unwrap();
+        Box::pin(async move {})
+    }));
 }
 
 async fn peer_loop(

@@ -7,8 +7,8 @@ on:
 name: ci
 
 jobs:
-  check:
-    name: Check
+  check-native:
+    name: Check native
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -25,6 +25,27 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
+
+  check-wasm:
+    name: Check wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --target wasm32-unknown-unknown -p matchbox_socket -p matchbox_demo
 
   test:
     name: Test Suite
@@ -45,8 +66,8 @@ jobs:
         with:
           command: test
 
-  lints:
-    name: Lints
+  lints-native:
+    name: Lints native
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -71,3 +92,25 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
+
+  clippy-wasm:
+    name: Clippy wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+          components: clippy
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --target wasm32-unknown-unknown -p matchbox_socket -p matchbox_demo -- -D warnings

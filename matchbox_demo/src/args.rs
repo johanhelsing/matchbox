@@ -36,7 +36,7 @@ impl Args {
                 .location()
                 .search()
                 .unwrap()
-                .trim_start_matches("?")
+                .trim_start_matches('?')
                 .to_owned();
 
             Args::from_query(&qs)

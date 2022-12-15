@@ -156,7 +156,7 @@ async fn handshake_offer(
     debug!("created offer for new peer");
     signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
 
-    let mut candidates = vec![];
+    let mut received_candidates = vec![];
 
     // Wait for answer
     let sdp: String;
@@ -173,10 +173,10 @@ async fn handshake_offer(
             }
             PeerSignal::IceCandidate(candidate) => {
                 debug!("got an IceCandidate signal! {}", candidate);
-                candidates.push(candidate);
+                received_candidates.push(candidate);
             }
             _ => {
-                warn!("ignoring other signal!!!");
+                warn!("ignoring unexpected signal: {signal:?}");
             }
         };
     }
@@ -205,7 +205,7 @@ async fn handshake_offer(
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 
     // handle pending ICE candidates
-    for canditate in candidates {
+    for canditate in received_candidates {
         let mut ice_candidate: RtcIceCandidateInit = RtcIceCandidateInit::new(&canditate);
         ice_candidate.sdp_m_line_index(Some(0));
         JsFuture::from(
@@ -221,7 +221,6 @@ async fn handshake_offer(
         select! {
             _ = channel_ready_rx.next() => {
                 debug!("channel ready");
-                // wait_for_ice_complete(conn.clone()).await;
                 break;
             }
             msg = signal_receiver.next() => {
@@ -239,6 +238,10 @@ async fn handshake_offer(
         };
     }
 
+    // stop listening for ICE candidates
+    // TODO: we should support getting new ICE candidates even after connecting,
+    //       since it's possible to return to the ice gathering state
+    // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
     conn.set_onicecandidate(None);
 
     debug!("Ice completed: {:?}", conn.ice_gathering_state());
@@ -263,21 +266,26 @@ async fn handshake_accept(
         channel_ready_tx,
     );
 
-    let mut candidates = vec![];
+    let mut received_candidates = vec![];
 
     let offer: Option<String>;
     loop {
-        match signal_receiver.next().await.ok_or("error")? {
+        let signal = signal_receiver
+            .next()
+            .await
+            .ok_or("Signal server connection lost in the middle of a handshake")?;
+
+        match signal {
             PeerSignal::Offer(o) => {
                 offer = Some(o);
                 break;
             }
             PeerSignal::IceCandidate(candidate) => {
                 debug!("got an IceCandidate signal! {}", candidate);
-                candidates.push(candidate);
+                received_candidates.push(candidate);
             }
             _ => {
-                warn!("ignoring other signal!!!");
+                warn!("ignoring unexpected signal: {signal:?}");
             }
         }
     }
@@ -334,7 +342,7 @@ async fn handshake_accept(
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 
     // handle pending ICE candidates
-    for canditate in candidates {
+    for canditate in received_candidates {
         let mut ice_candidate: RtcIceCandidateInit = RtcIceCandidateInit::new(&canditate);
         ice_candidate.sdp_m_line_index(Some(0));
         JsFuture::from(
@@ -350,7 +358,6 @@ async fn handshake_accept(
         select! {
             _ = channel_ready_rx.next() => {
                 debug!("channel ready");
-                // wait_for_ice_complete(conn.clone()).await;
                 break;
             }
             msg = signal_receiver.next() => {
@@ -368,6 +375,10 @@ async fn handshake_accept(
         };
     }
 
+    // stop listening for ICE candidates
+    // TODO: we should support getting new ICE candidates even after connecting,
+    //       since it's possible to return to the ice gathering state
+    // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
     conn.set_onicecandidate(None);
 
     debug!("Ice completed: {:?}", conn.ice_gathering_state());

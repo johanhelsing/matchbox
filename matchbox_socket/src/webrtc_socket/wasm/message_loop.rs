@@ -12,8 +12,7 @@ use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
-    RtcIceCandidate, RtcIceCandidateInit, RtcIceTransportPolicy, RtcPeerConnection, RtcSdpType,
-    RtcSessionDescriptionInit,
+    RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
 
 use crate::webrtc_socket::KEEP_ALIVE_INTERVAL;

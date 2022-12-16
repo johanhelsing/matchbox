@@ -26,7 +26,7 @@ use webrtc::{
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+    Packet, WebRtcSocketConfig, DATA_CHANNEL_ID, KEEP_ALIVE_INTERVAL,
 };
 
 pub async fn message_loop(
@@ -426,7 +426,7 @@ async fn create_data_channel(
     let config = RTCDataChannelInit {
         ordered: Some(false),
         max_retransmits: Some(0),
-        negotiated: Some(124),
+        negotiated: Some(DATA_CHANNEL_ID),
         ..Default::default()
     };
 

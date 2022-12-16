@@ -15,11 +15,10 @@ use web_sys::{
     RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
 
-use crate::webrtc_socket::KEEP_ALIVE_INTERVAL;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig,
+    Packet, WebRtcSocketConfig, DATA_CHANNEL_ID, KEEP_ALIVE_INTERVAL,
 };
 
 pub async fn message_loop(
@@ -416,7 +415,7 @@ fn create_data_channel(
     data_channel_config.ordered(false);
     data_channel_config.max_retransmits(0);
     data_channel_config.negotiated(true);
-    data_channel_config.id(124);
+    data_channel_config.id(DATA_CHANNEL_ID);
 
     let channel: RtcDataChannel =
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);

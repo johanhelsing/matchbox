@@ -8,6 +8,7 @@ mod messages;
 mod signal_peer;
 
 const KEEP_ALIVE_INTERVAL: u64 = 10_000;
+const DATA_CHANNEL_ID: u16 = 124;
 
 // TODO: maybe use cfg-if to make this slightly tidier
 #[cfg(not(target_arch = "wasm32"))]

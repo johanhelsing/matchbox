@@ -192,7 +192,7 @@ impl WebRtcSocket {
 
     /// Call this where you want to handle new received messages
     ///
-    /// messages are removed from the socked when called
+    /// messages are removed from the socket when called
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
         std::iter::repeat_with(|| self.messages_from_peers.try_next())
             // .map_while(|poll| match p { // map_while is nightly-only :(

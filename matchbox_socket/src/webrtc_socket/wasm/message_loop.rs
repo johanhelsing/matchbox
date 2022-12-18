@@ -341,8 +341,8 @@ async fn handshake_accept(
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 
     // handle pending ICE candidates
-    for canditate in received_candidates {
-        let mut ice_candidate: RtcIceCandidateInit = RtcIceCandidateInit::new(&canditate);
+    for candidate in received_candidates {
+        let mut ice_candidate: RtcIceCandidateInit = RtcIceCandidateInit::new(&candidate);
         ice_candidate.sdp_m_line_index(Some(0));
         JsFuture::from(
             conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),

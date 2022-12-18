@@ -80,13 +80,24 @@ pub async fn message_loop(
                         PeerEvent::Signal { sender, data } => {
                             let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
                                 let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
-                                let signal_peer = SignalPeer::new(sender, requests_sender.clone());
+                                let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                 // We didn't start signalling with this peer, assume we're the accepting part
                                 accept_handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone(), &config));
                                 from_peer_sender
                             });
-                            from_peer_sender.unbounded_send(data)
-                                .expect("failed to forward signal to handshaker");
+                            if let Err(e) = from_peer_sender.unbounded_send(data) {
+                                if e.is_disconnected() && data_channels.contains_key(&sender) {
+                                    // when the handshake finishes, it currently drops the receiver.
+                                    // ideally, we should keep this channel open and process additional ice candidates,
+                                    // but currently we don't.
+
+                                    // If this happens, however, it means that the handshake is already is done,
+                                    // so it should probably be nothing to worry about
+                                    warn!("ignoring signal from peer after handshake completed: {e:?}");
+                                } else {
+                                    error!("failed to forward signal to handshaker: {e:?}");
+                                }
+                            }
                         }
                     }
                 } else {

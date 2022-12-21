@@ -327,10 +327,11 @@ fn create_data_channel(
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
+    config: &DataChannelConfig,
 ) -> RtcDataChannel {
     let mut data_channel_config: RtcDataChannelInit = RtcDataChannelInit::new();
-    data_channel_config.ordered(false);
-    data_channel_config.max_retransmits(0);
+    data_channel_config.ordered(config.ordered);
+    data_channel_config.max_retransmits(config.max_retransmits);
     data_channel_config.negotiated(true);
     data_channel_config.id(0);
 

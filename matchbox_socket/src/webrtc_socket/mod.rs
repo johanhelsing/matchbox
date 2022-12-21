@@ -55,6 +55,16 @@ pub struct WebRtcSocketConfig {
     pub room_url: String,
     /// Configuration for the (single) ICE server
     pub ice_server: RtcIceServerConfig,
+    /// Configuration for the (single) data channel
+    pub data_channel: RtcDataChannelConfig,
+}
+
+/// Configuration options for an RTC data channel.
+/// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel>
+#[derive(Debug)]
+pub struct RtcDataChannelConfig {
+    ordered: bool,
+    max_retransmits: u16,
 }
 
 /// Configuration options for an ICE server connection.
@@ -71,6 +81,15 @@ pub struct RtcIceServerConfig {
     ///
     /// See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer/credential>
     pub credential: Option<String>,
+}
+
+impl Default for RtcDataChannelConfig {
+    fn default() -> Self {
+        Self { 
+            ordered: false, 
+            max_retransmits: 0 
+        }
+    }
 }
 
 impl Default for RtcIceServerConfig {
@@ -92,6 +111,7 @@ impl Default for WebRtcSocketConfig {
         WebRtcSocketConfig {
             room_url: "ws://localhost:3536/example_room".to_string(),
             ice_server: RtcIceServerConfig::default(),
+            data_channel: RtcDataChannelConfig::default(),
         }
     }
 }

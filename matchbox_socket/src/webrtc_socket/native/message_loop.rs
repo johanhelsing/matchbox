@@ -23,6 +23,7 @@ use webrtc::{
     },
 };
 
+use crate::webrtc_socket::RtcDataChannelConfig;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
@@ -244,6 +245,7 @@ async fn handshake_offer(
         signal_peer.id.clone(),
         new_peer_tx,
         from_peer_message_tx,
+        &config.data_channel,
     )
     .await;
 
@@ -420,10 +422,11 @@ async fn create_data_channel(
     peer_id: PeerId,
     mut new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
+    config: &RtcDataChannelConfig,
 ) -> Arc<RTCDataChannel> {
     let config = RTCDataChannelInit {
-        ordered: Some(false),
-        max_retransmits: Some(0),
+        ordered: Some(config.ordered),
+        max_retransmits: Some(config.max_retransmits),
         ..Default::default()
     };
 

@@ -18,7 +18,7 @@ use web_sys::{
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig, DATA_CHANNEL_ID, KEEP_ALIVE_INTERVAL,
+    Packet, WebRtcSocketConfig, RtcDataChannelConfig, DATA_CHANNEL_ID, KEEP_ALIVE_INTERVAL,
 };
 
 pub async fn message_loop(
@@ -149,6 +149,7 @@ async fn handshake_offer(
         messages_from_peers_tx,
         signal_peer.id.clone(),
         channel_ready_tx,
+        &config.data_channel,
     );
 
     // Create offer
@@ -268,6 +269,7 @@ async fn handshake_accept(
         messages_from_peers_tx,
         signal_peer.id.clone(),
         channel_ready_tx,
+        &config.data_channel,
     );
 
     let mut received_candidates = vec![];
@@ -410,10 +412,11 @@ fn create_data_channel(
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
+    config: &RtcDataChannelConfig,
 ) -> RtcDataChannel {
     let mut data_channel_config = RtcDataChannelInit::new();
-    data_channel_config.ordered(false);
-    data_channel_config.max_retransmits(0);
+    data_channel_config.ordered(config.ordered);
+    data_channel_config.max_retransmits(config.max_retransmits);
     data_channel_config.negotiated(true);
     data_channel_config.id(DATA_CHANNEL_ID);
 

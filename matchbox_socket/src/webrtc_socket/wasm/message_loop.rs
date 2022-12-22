@@ -425,7 +425,20 @@ fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection 
     };
     let ice_server_config_list = [ice_server_config];
     peer_config.ice_servers(&serde_wasm_bindgen::to_value(&ice_server_config_list).unwrap());
-    RtcPeerConnection::new_with_configuration(&peer_config).unwrap()
+    let connection = RtcPeerConnection::new_with_configuration(&peer_config).unwrap();
+
+    let connection_1 = connection.clone();
+    let oniceconnectionstatechange: Box<dyn FnMut(_)> = Box::new(move |_event: JsValue| {
+        debug!(
+            "ice connection state changed: {:?}",
+            connection_1.ice_connection_state()
+        );
+    });
+    let oniceconnectionstatechange = Closure::wrap(oniceconnectionstatechange);
+    connection
+        .set_oniceconnectionstatechange(Some(oniceconnectionstatechange.as_ref().unchecked_ref()));
+
+    connection
 }
 
 fn create_data_channel(

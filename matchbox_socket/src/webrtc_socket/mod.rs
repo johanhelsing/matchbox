@@ -63,7 +63,9 @@ pub struct WebRtcSocketConfig {
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel>
 #[derive(Debug)]
 pub struct RtcDataChannelConfig {
+    /// whether in-order delivery is guaranteed
     pub ordered: bool,
+    /// The maximum number of times the browser will try to retransmit a message before giving up
     pub max_retransmits: u16,
 }
 

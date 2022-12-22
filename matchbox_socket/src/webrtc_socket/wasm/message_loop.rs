@@ -12,7 +12,8 @@ use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
-    RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
+    RtcIceCandidateInit, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
+    RtcSessionDescriptionInit,
 };
 
 use crate::webrtc_socket::{
@@ -196,15 +197,17 @@ async fn handshake_offer(
 
     // send ICE candidates to remote peer
     let signal_peer_ice = signal_peer.clone();
-    let onicecandidate: Box<dyn FnMut(JsValue)> = Box::new(move |event| {
-        let event = Reflect::get(&event, &JsValue::from_str("candidate")).efix();
-        if let Ok(event) = event {
-            if let Ok(candidate) = event.dyn_into::<RtcIceCandidate>() {
-                debug!("sending IceCandidate signal {}", candidate.candidate());
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
+        move |event: RtcPeerConnectionIceEvent| match event.candidate() {
+            Some(candidate) => {
+                debug!("sending IceCandidate signal: {candidate:?}");
                 signal_peer_ice.send(PeerSignal::IceCandidate(candidate.candidate()));
             }
-        }
-    });
+            None => {
+                debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+            }
+        },
+    );
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 
@@ -328,15 +331,18 @@ async fn handshake_accept(
 
     // send ICE candidates to remote peer
     let signal_peer_ice = signal_peer.clone();
-    let onicecandidate: Box<dyn FnMut(JsValue)> = Box::new(move |event| {
-        let event = Reflect::get(&event, &JsValue::from_str("candidate")).efix();
-        if let Ok(event) = event {
-            if let Ok(candidate) = event.dyn_into::<RtcIceCandidate>() {
-                debug!("sending IceCandidate signal {}", candidate.candidate());
+    // todo: exactly the same as offer, dedup?
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
+        move |event: RtcPeerConnectionIceEvent| match event.candidate() {
+            Some(candidate) => {
+                debug!("sending IceCandidate signal: {candidate:?}");
                 signal_peer_ice.send(PeerSignal::IceCandidate(candidate.candidate()));
             }
-        }
-    });
+            None => {
+                debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+            }
+        },
+    );
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 

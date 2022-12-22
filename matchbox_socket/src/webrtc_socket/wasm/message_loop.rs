@@ -213,8 +213,7 @@ async fn handshake_offer(
 
     // handle pending ICE candidates
     for candidate in received_candidates {
-        let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
-        ice_candidate.sdp_m_line_index(Some(0));
+        let ice_candidate = RtcIceCandidateInit::new(&candidate);
         JsFuture::from(
             conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
         )
@@ -233,8 +232,7 @@ async fn handshake_offer(
             msg = signal_receiver.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
                     debug!("got an IceCandidate signal! {}", candidate);
-                    let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
-                    ice_candidate.sdp_m_line_index(Some(0));
+                    let ice_candidate = RtcIceCandidateInit::new(&candidate);
                     JsFuture::from(
                         conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
                     )
@@ -348,8 +346,7 @@ async fn handshake_accept(
 
     // handle pending ICE candidates
     for candidate in received_candidates {
-        let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
-        ice_candidate.sdp_m_line_index(Some(0));
+        let ice_candidate = RtcIceCandidateInit::new(&candidate);
         JsFuture::from(
             conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
         )
@@ -368,8 +365,7 @@ async fn handshake_accept(
             msg = signal_receiver.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
                     debug!("got an IceCandidate signal! {}", candidate);
-                    let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
-                    ice_candidate.sdp_m_line_index(Some(0));
+                    let ice_candidate = RtcIceCandidateInit::new(&candidate);
                     JsFuture::from(
                         conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
                     )

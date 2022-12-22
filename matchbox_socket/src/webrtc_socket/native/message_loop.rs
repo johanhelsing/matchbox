@@ -17,8 +17,7 @@ use webrtc::{
         ice_server::RTCIceServer,
     },
     peer_connection::{
-        configuration::RTCConfiguration,
-        sdp::{sdp_type::RTCSdpType, session_description::RTCSessionDescription},
+        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
         RTCPeerConnection,
     },
 };
@@ -265,7 +264,7 @@ async fn handshake_offer(
     connection.set_local_description(offer).await?;
     signal_peer.send(PeerSignal::Offer(sdp));
 
-    let sdp = loop {
+    let answer = loop {
         let signal = signal_receiver
             .next()
             .await
@@ -284,9 +283,7 @@ async fn handshake_offer(
         };
     };
 
-    let mut remote_description = RTCSessionDescription::default();
-    remote_description.sdp = sdp;
-    remote_description.sdp_type = RTCSdpType::Answer; // TODO: Or leave unspecified?
+    let remote_description = RTCSessionDescription::answer(answer)?;
     connection
         .set_remote_description(remote_description)
         .await?;
@@ -347,9 +344,7 @@ async fn handshake_accept(
         }
     };
     debug!("received offer");
-    let mut remote_description = RTCSessionDescription::default();
-    remote_description.sdp = offer;
-    remote_description.sdp_type = RTCSdpType::Offer; // TODO: Or leave unspecified?
+    let remote_description = RTCSessionDescription::offer(offer)?;
     connection
         .set_remote_description(remote_description)
         .await?;

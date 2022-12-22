@@ -245,7 +245,12 @@ async fn handshake_offer(
     // TODO: we should support getting new ICE candidates even after connecting,
     //       since it's possible to return to the ice gathering state
     // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
-    conn.set_onicecandidate(None);
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
+        Box::new(move |_event: RtcPeerConnectionIceEvent| {
+            warn!("received ice candidate event after handshake completed");
+        });
+    let onicecandidate = Closure::wrap(onicecandidate);
+    conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 
     debug!("Ice completed: {:?}", conn.ice_gathering_state());
 
@@ -391,7 +396,12 @@ async fn handshake_accept(
     // TODO: we should support getting new ICE candidates even after connecting,
     //       since it's possible to return to the ice gathering state
     // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
-    conn.set_onicecandidate(None);
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
+        Box::new(move |_event: RtcPeerConnectionIceEvent| {
+            warn!("received ice candidate event after handshake completed");
+        });
+    let onicecandidate = Closure::wrap(onicecandidate);
+    conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 
     debug!("Ice completed: {:?}", conn.ice_gathering_state());
 

@@ -169,18 +169,14 @@ async fn handshake_offer(
     let mut received_candidates = vec![];
 
     // Wait for answer
-    let sdp: String;
-    loop {
+    let sdp = loop {
         let signal = signal_receiver
             .next()
             .await
             .ok_or("Signal server connection lost in the middle of a handshake")?;
 
         match signal {
-            PeerSignal::Answer(answer) => {
-                sdp = answer;
-                break;
-            }
+            PeerSignal::Answer(answer) => break answer,
             PeerSignal::IceCandidate(candidate) => {
                 debug!("got an IceCandidate signal! {}", candidate);
                 received_candidates.push(candidate);
@@ -189,7 +185,7 @@ async fn handshake_offer(
                 warn!("ignoring unexpected signal: {signal:?}");
             }
         };
-    }
+    };
 
     // Set remote description
     let mut remote_description: RtcSessionDescriptionInit =
@@ -278,8 +274,7 @@ async fn handshake_accept(
 
     let mut received_candidates = vec![];
 
-    let offer: Option<String>;
-    loop {
+    let offer = loop {
         let signal = signal_receiver
             .next()
             .await
@@ -287,8 +282,7 @@ async fn handshake_accept(
 
         match signal {
             PeerSignal::Offer(o) => {
-                offer = Some(o);
-                break;
+                break o;
             }
             PeerSignal::IceCandidate(candidate) => {
                 debug!("got an IceCandidate signal! {}", candidate);
@@ -298,8 +292,7 @@ async fn handshake_accept(
                 warn!("ignoring unexpected signal: {signal:?}");
             }
         }
-    }
-    let offer = offer.unwrap();
+    };
     debug!("received offer");
 
     // Set remote description

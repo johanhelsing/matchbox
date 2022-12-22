@@ -157,8 +157,7 @@ async fn handshake_offer(
         .efix()?
         .as_string()
         .ok_or("")?;
-    let mut rtc_session_desc_init_dict: RtcSessionDescriptionInit =
-        RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+    let mut rtc_session_desc_init_dict = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
     let offer_description = rtc_session_desc_init_dict.sdp(&offer_sdp);
     JsFuture::from(conn.set_local_description(offer_description))
         .await
@@ -188,8 +187,7 @@ async fn handshake_offer(
     };
 
     // Set remote description
-    let mut remote_description: RtcSessionDescriptionInit =
-        RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+    let mut remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
     remote_description.sdp(&sdp);
     debug!("setting remote description");
     JsFuture::from(conn.set_remote_description(&remote_description))
@@ -212,7 +210,7 @@ async fn handshake_offer(
 
     // handle pending ICE candidates
     for canditate in received_candidates {
-        let mut ice_candidate: RtcIceCandidateInit = RtcIceCandidateInit::new(&canditate);
+        let mut ice_candidate = RtcIceCandidateInit::new(&canditate);
         ice_candidate.sdp_m_line_index(Some(0));
         JsFuture::from(
             conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
@@ -232,7 +230,7 @@ async fn handshake_offer(
             msg = signal_receiver.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
                     debug!("got an IceCandidate signal! {}", candidate);
-                    let mut ice_candidate: RtcIceCandidateInit = RtcIceCandidateInit::new(&candidate);
+                    let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
                     ice_candidate.sdp_m_line_index(Some(0));
                     JsFuture::from(
                         conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
@@ -297,8 +295,7 @@ async fn handshake_accept(
 
     // Set remote description
     {
-        let mut remote_description: RtcSessionDescriptionInit =
-            RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+        let mut remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
         let sdp = offer;
         remote_description.sdp(&sdp);
         JsFuture::from(conn.set_remote_description(&remote_description))
@@ -313,8 +310,7 @@ async fn handshake_accept(
 
     debug!("created answer");
 
-    let mut session_desc_init: RtcSessionDescriptionInit =
-        RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+    let mut session_desc_init = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
 
     let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
         .efix()?
@@ -346,7 +342,7 @@ async fn handshake_accept(
 
     // handle pending ICE candidates
     for candidate in received_candidates {
-        let mut ice_candidate: RtcIceCandidateInit = RtcIceCandidateInit::new(&candidate);
+        let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
         ice_candidate.sdp_m_line_index(Some(0));
         JsFuture::from(
             conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
@@ -366,7 +362,7 @@ async fn handshake_accept(
             msg = signal_receiver.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
                     debug!("got an IceCandidate signal! {}", candidate);
-                    let mut ice_candidate: RtcIceCandidateInit = RtcIceCandidateInit::new(&candidate);
+                    let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
                     ice_candidate.sdp_m_line_index(Some(0));
                     JsFuture::from(
                         conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
@@ -397,7 +393,7 @@ fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection 
         credential: String,
     }
 
-    let mut peer_config: RtcConfiguration = RtcConfiguration::new();
+    let mut peer_config = RtcConfiguration::new();
     let ice_server = &config.ice_server;
     let ice_server_config = IceServerConfig {
         urls: ice_server.urls.clone(),
@@ -415,13 +411,13 @@ fn create_data_channel(
     peer_id: PeerId,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
 ) -> RtcDataChannel {
-    let mut data_channel_config: RtcDataChannelInit = RtcDataChannelInit::new();
+    let mut data_channel_config = RtcDataChannelInit::new();
     data_channel_config.ordered(false);
     data_channel_config.max_retransmits(0);
     data_channel_config.negotiated(true);
     data_channel_config.id(DATA_CHANNEL_ID);
 
-    let channel: RtcDataChannel =
+    let channel =
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 

@@ -265,9 +265,7 @@ async fn handshake_offer(
     connection.set_local_description(offer).await?;
     signal_peer.send(PeerSignal::Offer(sdp));
 
-    let sdp: String;
-
-    loop {
+    let sdp = loop {
         let signal = signal_receiver
             .next()
             .await
@@ -275,8 +273,7 @@ async fn handshake_offer(
 
         match signal {
             PeerSignal::Answer(answer) => {
-                sdp = answer;
-                break;
+                break answer;
             }
             PeerSignal::Offer(_) => {
                 warn!("Got an unexpected Offer, while waiting for Answer. Ignoring.")
@@ -285,7 +282,7 @@ async fn handshake_offer(
                 warn!("Got an unexpected IceCandidate, while waiting for Answer. Ignoring.")
             }
         };
-    }
+    };
 
     let mut remote_description = RTCSessionDescription::default();
     remote_description.sdp = sdp;
@@ -339,18 +336,16 @@ async fn handshake_accept(
     )
     .await;
 
-    let offer;
-    loop {
+    let offer = loop {
         match signal_receiver.next().await.ok_or("error")? {
-            PeerSignal::Offer(o) => {
-                offer = o;
-                break;
+            PeerSignal::Offer(offer) => {
+                break offer;
             }
             _ => {
                 warn!("ignoring other signal!!!");
             }
         }
-    }
+    };
     debug!("received offer");
     let mut remote_description = RTCSessionDescription::default();
     remote_description.sdp = offer;

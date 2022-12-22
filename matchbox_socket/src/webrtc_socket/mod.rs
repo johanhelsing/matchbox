@@ -63,8 +63,8 @@ pub struct WebRtcSocketConfig {
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel>
 #[derive(Debug)]
 pub struct RtcDataChannelConfig {
-    ordered: bool,
-    max_retransmits: u16,
+    pub ordered: bool,
+    pub max_retransmits: u16,
 }
 
 /// Configuration options for an ICE server connection.

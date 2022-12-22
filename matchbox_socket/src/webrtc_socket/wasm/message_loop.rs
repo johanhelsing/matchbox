@@ -19,7 +19,7 @@ use crate::webrtc_socket::KEEP_ALIVE_INTERVAL;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig,
+    Packet, WebRtcSocketConfig, RtcDataChannelConfig
 };
 
 pub async fn message_loop(
@@ -138,6 +138,7 @@ async fn handshake_offer(
         messages_from_peers_tx,
         signal_peer.id.clone(),
         channel_ready_tx,
+        &config.data_channel,
     );
 
     let offer = JsFuture::from(conn.create_offer()).await.efix()?;
@@ -217,6 +218,7 @@ async fn handshake_accept(
         messages_from_peers_tx,
         signal_peer.id.clone(),
         channel_ready_tx,
+        &config.data_channel,
     );
 
     let offer: Option<String>;
@@ -327,7 +329,7 @@ fn create_data_channel(
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
-    config: &DataChannelConfig,
+    config: &RtcDataChannelConfig,
 ) -> RtcDataChannel {
     let mut data_channel_config: RtcDataChannelInit = RtcDataChannelInit::new();
     data_channel_config.ordered(config.ordered);

@@ -143,12 +143,12 @@ async fn handshake_offer(
     debug!("making offer");
 
     let conn = create_rtc_peer_connection(config);
-    let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
+    let (channel_open_tx, mut channel_open_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
-        channel_ready_tx,
+        channel_open_tx,
     );
 
     // Create offer
@@ -223,7 +223,7 @@ async fn handshake_offer(
     debug!("waiting for data channel to open");
     loop {
         select! {
-            _ = channel_ready_rx.next() => {
+            _ = channel_open_rx.next() => {
                 debug!("channel ready");
                 break;
             }
@@ -409,7 +409,7 @@ fn create_data_channel(
     connection: RtcPeerConnection,
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
-    mut channel_ready: futures_channel::mpsc::Sender<u8>,
+    mut channel_open: futures_channel::mpsc::Sender<u8>,
 ) -> RtcDataChannel {
     let mut data_channel_config = RtcDataChannelInit::new();
     data_channel_config.ordered(false);
@@ -439,10 +439,10 @@ fn create_data_channel(
 
     // onopen callback
     let channel_onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
-        debug!("Rtc data channel opened :D :D");
-        channel_ready
+        debug!("Rtc data channel opened :D");
+        channel_open
             .try_send(1)
-            .expect("failed to notify about open connection");
+            .expect("failed to notify about opened data channel");
     });
     let channel_onopen_closure = Closure::wrap(channel_onopen_func);
     channel.set_onopen(Some(channel_onopen_closure.as_ref().unchecked_ref()));

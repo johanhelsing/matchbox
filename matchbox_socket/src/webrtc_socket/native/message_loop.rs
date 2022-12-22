@@ -6,7 +6,7 @@ use futures::{
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
-use log::{debug, warn};
+use log::{debug, error, warn};
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 use webrtc::{
@@ -171,17 +171,27 @@ impl CandidateTrickle {
         peer_connection: &RTCPeerConnection,
         candidate: RTCIceCandidate,
     ) {
-        let candidate = candidate.to_json().unwrap().candidate;
+        let candidate_init = match candidate.to_json() {
+            Ok(candidate_init) => candidate_init,
+            Err(err) => {
+                error!("failed to convert ice candidate to candidate init, ignoring: {err}");
+                return;
+            }
+        };
+
+        let candidate_json =
+            serde_json::to_string(&candidate_init).expect("failed to serialize candidate to json");
 
         // Local candidates can only be sent after the remote description
         if peer_connection.remote_description().await.is_some() {
             // Can send local candidate already
             debug!("sending IceCandidate signal {}", candidate);
-            self.signal_peer.send(PeerSignal::IceCandidate(candidate));
+            self.signal_peer
+                .send(PeerSignal::IceCandidate(candidate_json));
         } else {
             // Can't send yet, store in pending
-            debug!("storing pending IceCandidate signal {}", candidate);
-            self.pending.lock().await.push(candidate);
+            debug!("storing pending IceCandidate signal {}", candidate_json);
+            self.pending.lock().await.push(candidate_json);
         }
     }
 
@@ -198,14 +208,16 @@ impl CandidateTrickle {
     ) -> Result<(), Box<dyn std::error::Error>> {
         while let Some(signal) = signal_receiver.next().await {
             match signal {
-                PeerSignal::IceCandidate(candidate) => {
-                    debug!("got an IceCandidate signal! {}", candidate);
-                    peer_connection
-                        .add_ice_candidate(RTCIceCandidateInit {
-                            candidate,
-                            ..Default::default()
-                        })
-                        .await?;
+                PeerSignal::IceCandidate(candidate_json) => {
+                    debug!("received ice candidate: {candidate_json:?}");
+                    match serde_json::from_str::<RTCIceCandidateInit>(&candidate_json) {
+                        Ok(candidate_init) => {
+                            peer_connection.add_ice_candidate(candidate_init).await?;
+                        }
+                        Err(err) => {
+                            error!("failed to parse ice candidate json, ignoring: {err:?}");
+                        }
+                    }
                 }
                 PeerSignal::Offer(_) => {
                     warn!("Got an unexpected Offer, while waiting for IceCandidate. Ignoring.")

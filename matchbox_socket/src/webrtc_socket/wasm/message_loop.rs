@@ -419,8 +419,10 @@ fn create_data_channel(
 
     let channel =
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
+
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 
+    // onmsg callback
     let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> = Box::new(move |event: MessageEvent| {
         debug!("incoming {:?}", event);
         if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
@@ -435,6 +437,7 @@ fn create_data_channel(
     channel.set_onmessage(Some(channel_onmsg_closure.as_ref().unchecked_ref()));
     channel_onmsg_closure.forget();
 
+    // onopen callback
     let channel_onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
         debug!("Rtc data channel opened :D :D");
         channel_ready
@@ -444,6 +447,14 @@ fn create_data_channel(
     let channel_onopen_closure = Closure::wrap(channel_onopen_func);
     channel.set_onopen(Some(channel_onopen_closure.as_ref().unchecked_ref()));
     channel_onopen_closure.forget();
+
+    // onclose callback
+    let on_close_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
+        error!("data channel closed, todo: try reconnect if appropriate/possible");
+    });
+    let on_close_closure = Closure::wrap(on_close_func);
+    channel.set_onclose(Some(on_close_closure.as_ref().unchecked_ref()));
+    on_close_closure.forget();
 
     channel
 }

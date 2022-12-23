@@ -86,6 +86,8 @@ pub struct RtcIceServerConfig {
     pub credential: Option<String>,
 }
 
+// it's just by coincidence that currently the default settings coincide with the defaults the derive would give
+#[allow(clippy::derivable_impls)]
 impl Default for RtcDataChannelConfig {
     fn default() -> Self {
         Self {

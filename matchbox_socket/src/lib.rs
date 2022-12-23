@@ -5,4 +5,6 @@
 mod ggrs_socket;
 mod webrtc_socket;
 
-pub use webrtc_socket::{RtcDataChannelConfig, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};
+pub use webrtc_socket::{
+    RtcDataChannelConfig, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig,
+};

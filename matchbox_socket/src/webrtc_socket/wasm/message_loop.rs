@@ -18,7 +18,7 @@ use web_sys::{
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig, RtcDataChannelConfig, DATA_CHANNEL_ID, KEEP_ALIVE_INTERVAL,
+    Packet, RtcDataChannelConfig, WebRtcSocketConfig, DATA_CHANNEL_ID, KEEP_ALIVE_INTERVAL,
 };
 
 pub async fn message_loop(

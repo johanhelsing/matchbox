@@ -88,9 +88,9 @@ pub struct RtcIceServerConfig {
 
 impl Default for RtcDataChannelConfig {
     fn default() -> Self {
-        Self { 
-            ordered: false, 
-            max_retransmits: 0 
+        Self {
+            ordered: false,
+            max_retransmits: 0,
         }
     }
 }

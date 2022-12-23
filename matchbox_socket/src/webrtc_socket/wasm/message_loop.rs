@@ -19,7 +19,7 @@ use web_sys::{
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig, DATA_CHANNEL_ID, KEEP_ALIVE_INTERVAL,
+    Channel, Packet, WebRtcSocketConfig, DATA_CHANNEL_ID, KEEP_ALIVE_INTERVAL,
 };
 
 pub async fn message_loop(
@@ -27,9 +27,9 @@ pub async fn message_loop(
     config: WebRtcSocketConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>,
+    mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Channel, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
+    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Channel, Packet)>,
 ) {
     debug!("Entering WebRtcSocket message loop");
 
@@ -40,7 +40,7 @@ pub async fn message_loop(
     let mut offer_handshakes = FuturesUnordered::new();
     let mut accept_handshakes = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
-    let mut data_channels: HashMap<PeerId, RtcDataChannel> = HashMap::new();
+    let mut data_channels: HashMap<PeerId, (RtcDataChannel, RtcDataChannel)> = HashMap::new();
 
     let mut timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL)).fuse();
 
@@ -54,7 +54,7 @@ pub async fn message_loop(
             res = offer_handshakes.select_next_some() => {
                 check(&res);
                 let peer = res.unwrap();
-                data_channels.insert(peer.0.clone(), peer.1.clone());
+                data_channels.insert(peer.0.clone(), (peer.1.clone(), peer.2.clone()));
                 debug!("Notifying about new peer");
                 new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
             },
@@ -62,7 +62,7 @@ pub async fn message_loop(
                 // TODO: this could be de-duplicated
                 check(&res);
                 let peer = res.unwrap();
-                data_channels.insert(peer.0.clone(), peer.1.clone());
+                data_channels.insert(peer.0.clone(), (peer.1.clone(), peer.2.clone()));
                 debug!("Notifying about new peer");
                 new_connected_peers_tx.unbounded_send(peer.0).expect("send failed");
             },
@@ -110,8 +110,9 @@ pub async fn message_loop(
             message = peer_messages_out_rx.next() => {
                 match message {
                     Some(message) => {
-                        let data_channel = data_channels.get(&message.0).expect("couldn't find data channel for peer");
-                        if let Err(err) = data_channel.send_with_u8_array(&message.1) {
+                        let (unreliable_data_channel, reliable_data_channel) = data_channels.get(&message.0).expect("couldn't find data channel for peer");
+                        let data_channel = if message.1 == Channel::Reliable {reliable_data_channel} else {unreliable_data_channel};
+                        if let Err(err) = data_channel.send_with_u8_array(&message.2) {
                             // This likely means the other peer disconnected
                             // todo: we should probably remove the data channel object in this case
                             // and try reconnecting. For now we will just stop panicking.
@@ -138,14 +139,14 @@ pub async fn message_loop(
 async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
+    messages_from_peers_tx: UnboundedSender<(PeerId, Channel, Packet)>,
     config: &WebRtcSocketConfig,
-) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
+) -> Result<(PeerId, RtcDataChannel, RtcDataChannel), Box<dyn std::error::Error>> {
     debug!("making offer");
 
     let conn = create_rtc_peer_connection(config);
     let (channel_open_tx, mut channel_open_rx) = futures_channel::mpsc::channel(1);
-    let data_channel = create_data_channel(
+    let (unreliable_data_channel, reliable_data_channel) = create_data_channel_pair(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
@@ -268,7 +269,11 @@ async fn handshake_offer(
         conn.ice_gathering_state()
     );
 
-    Ok((signal_peer.id, data_channel))
+    Ok((
+        signal_peer.id,
+        unreliable_data_channel,
+        reliable_data_channel,
+    ))
 }
 
 async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_string: &str) {
@@ -297,14 +302,14 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
 async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    messages_from_peers_tx: UnboundedSender<(PeerId, Packet)>,
+    messages_from_peers_tx: UnboundedSender<(PeerId, Channel, Packet)>,
     config: &WebRtcSocketConfig,
-) -> Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>> {
+) -> Result<(PeerId, RtcDataChannel, RtcDataChannel), Box<dyn std::error::Error>> {
     debug!("handshake_accept");
 
     let conn = create_rtc_peer_connection(config);
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
-    let data_channel = create_data_channel(
+    let (unreliable_data_channel, reliable_data_channel) = create_data_channel_pair(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
@@ -438,7 +443,11 @@ async fn handshake_accept(
         conn.ice_gathering_state()
     );
 
-    Ok((signal_peer.id, data_channel))
+    Ok((
+        signal_peer.id,
+        unreliable_data_channel,
+        reliable_data_channel,
+    ))
 }
 
 fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection {
@@ -500,11 +509,36 @@ async fn wait_for_ice_gathering_complete(conn: RtcPeerConnection) {
     debug!("Ice gathering completed");
 }
 
+fn create_data_channel_pair(
+    connection: RtcPeerConnection,
+    incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Channel, Packet)>,
+    peer_id: PeerId,
+    channel_ready: futures_channel::mpsc::Sender<u8>,
+) -> (RtcDataChannel, RtcDataChannel) {
+    (
+        create_data_channel(
+            connection.clone(),
+            incoming_tx.clone(),
+            peer_id.clone(),
+            channel_ready.clone(),
+            Channel::Unreliable,
+        ),
+        create_data_channel(
+            connection,
+            incoming_tx,
+            peer_id,
+            channel_ready,
+            Channel::Reliable,
+        ),
+    )
+}
+
 fn create_data_channel(
     connection: RtcPeerConnection,
-    incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
+    incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Channel, Packet)>,
     peer_id: PeerId,
     mut channel_open: futures_channel::mpsc::Sender<u8>,
+    channel_type: Channel,
 ) -> RtcDataChannel {
     let mut data_channel_config = RtcDataChannelInit::new();
     data_channel_config.ordered(false);
@@ -524,7 +558,7 @@ fn create_data_channel(
             let uarray = js_sys::Uint8Array::new(&arraybuf);
             let body = uarray.to_vec();
             incoming_tx
-                .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
+                .unbounded_send((peer_id.clone(), channel_type, body.into_boxed_slice()))
                 .unwrap();
         }
     });
@@ -555,7 +589,7 @@ fn create_data_channel(
 }
 
 // Expect/unwrap is broken in select for some reason :/
-fn check(res: &Result<(PeerId, RtcDataChannel), Box<dyn std::error::Error>>) {
+fn check(res: &Result<(PeerId, RtcDataChannel, RtcDataChannel), Box<dyn std::error::Error>>) {
     // but doing it inside a typed function works fine
     res.as_ref().expect("handshake failed");
 }

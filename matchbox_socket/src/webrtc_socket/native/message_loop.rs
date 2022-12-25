@@ -143,7 +143,7 @@ async fn message_loop_impl(
                     Some((peer, channel_index, packet)) => {
                         let senders = connected_peers.get_mut(&peer)
                             .unwrap_or_else(|| panic!("couldn't find data channel for peer {}", peer));
-                        let sender = senders.get_mut(channel_index as usize)
+                        let sender = senders.get_mut(channel_index)
                             .unwrap_or_else(|| panic!("Unexpected data channel index during send: {}", channel_index));
                         sender.unbounded_send(packet).unwrap();
                     },

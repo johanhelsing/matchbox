@@ -120,7 +120,7 @@ pub async fn message_loop(
                         let data_channel = data_channels.get(&peer)
                             .expect("couldn't find data channel for peer")
                             .get(channel_index)
-                            .expect(format!("couldn't find data channel with index {}", channel_index).as_str());
+                            .unwrap_or_else(|| panic!("couldn't find data channel with index {}", channel_index));
 
                         if let Err(err) = data_channel.send_with_u8_array(&packet) {
                             // This likely means the other peer disconnected
@@ -543,7 +543,7 @@ fn create_data_channel_pair(
             connection,
             incoming_tx,
             peer_id,
-            channel_ready.clone(),
+            channel_ready,
             Channel::Reliable,
         ),
     ]

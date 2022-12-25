@@ -8,7 +8,8 @@ mod messages;
 mod signal_peer;
 
 const KEEP_ALIVE_INTERVAL: u64 = 10_000;
-const DATA_CHANNEL_ID: u16 = 124;
+const RELIABLE_DATA_CHANNEL_ID: u16 = 125;
+const UNRELIABLE_DATA_CHANNEL_ID: u16 = 124;
 
 // TODO: maybe use cfg-if to make this slightly tidier
 #[cfg(not(target_arch = "wasm32"))]
@@ -36,6 +37,7 @@ use messages::*;
 use uuid::Uuid;
 
 type Packet = Box<[u8]>;
+type ChannelIndex = usize;
 
 /// General configuration options for a WebRtc connection
 ///
@@ -98,9 +100,38 @@ impl Default for WebRtcSocketConfig {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Channel {
+pub(crate) enum Channel {
     Reliable,
     Unreliable,
+}
+
+impl Channel {
+    pub fn get_channel_index(&self) -> ChannelIndex {
+        match self {
+            Channel::Reliable => 1,
+            Channel::Unreliable => 0,
+        }
+    }
+}
+
+/// Allows to get or set details about how a packet was or should be sent
+pub struct EnhancedPacket {
+    /// The actual data to be sent
+    pub packet: Packet,
+    /// The peer to send the data to
+    pub peer_id: PeerId,
+    /// Packets sent via a reliable channel are guaranteed to arrive and to arrive in order
+    pub via_reliable_channel: bool,
+}
+
+impl EnhancedPacket {
+    fn channel_index(&self) -> ChannelIndex {
+        if self.via_reliable_channel {
+            Channel::Reliable.get_channel_index()
+        } else {
+            Channel::Unreliable.get_channel_index()
+        }
+    }
 }
 
 /// Contains the interface end of a full-mesh web rtc connection
@@ -108,9 +139,9 @@ pub enum Channel {
 /// Used to send and receive messages from other peers
 #[derive(Debug)]
 pub struct WebRtcSocket {
-    messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(PeerId, Channel, Packet)>,
+    messages_from_peers: futures_channel::mpsc::UnboundedReceiver<(PeerId, ChannelIndex, Packet)>,
     new_connected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
-    peer_messages_out: futures_channel::mpsc::UnboundedSender<(PeerId, Channel, Packet)>,
+    peer_messages_out: futures_channel::mpsc::UnboundedSender<(PeerId, ChannelIndex, Packet)>,
     peers: Vec<PeerId>,
     id: PeerId,
 }
@@ -143,7 +174,7 @@ impl WebRtcSocket {
         let (messages_from_peers_tx, messages_from_peers) = futures_channel::mpsc::unbounded();
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) =
-            futures_channel::mpsc::unbounded::<(PeerId, Channel, Packet)>();
+            futures_channel::mpsc::unbounded::<(PeerId, ChannelIndex, Packet)>();
 
         // Would perhaps be smarter to let signalling server decide this...
         let id = Uuid::new_v4().to_string();
@@ -185,7 +216,10 @@ impl WebRtcSocket {
     pub fn accept_new_connections(&mut self) -> Vec<PeerId> {
         let mut ids = Vec::new();
         while let Ok(Some(id)) = self.new_connected_peers.try_next() {
-            self.peers.push(id.clone());
+            if !self.peers.contains(&id) {
+                // Maybe we should make peers a HashSet instead?
+                self.peers.push(id.clone());
+            }
             ids.push(id);
         }
         ids
@@ -200,27 +234,45 @@ impl WebRtcSocket {
     ///
     /// messages are removed from the socket when called
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
+        self.receive_enhanced()
+            .into_iter()
+            .map(|p| (p.peer_id.clone(), p.packet))
+            .collect()
+    }
+
+    /// Call this where you want to handle new received messages together with more details about them
+    ///
+    /// messages are removed from the socket when called
+    pub fn receive_enhanced(&mut self) -> Vec<EnhancedPacket> {
         std::iter::repeat_with(|| self.messages_from_peers.try_next())
             // .map_while(|poll| match p { // map_while is nightly-only :(
             .take_while(|p| !p.is_err())
             .map(|p| match p.unwrap() {
-                Some((id, _, packet)) => (id, packet),
+                Some((peer_id, channel_index, packet)) => EnhancedPacket {
+                    packet,
+                    peer_id,
+                    via_reliable_channel: channel_index == Channel::Reliable.get_channel_index(),
+                },
                 None => todo!("Handle connection closed??"),
             })
             .collect()
     }
 
-    /// Send a packet to the given peer
+    /// Send a packet to the given peer without any guarantees to arrive in order or at all
     pub fn send<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
         self.peer_messages_out
-            .unbounded_send((id.into(), Channel::Unreliable, packet))
+            .unbounded_send((id.into(), Channel::Reliable.get_channel_index(), packet))
             .expect("send_to failed");
     }
 
-    /// Send a packet to the given peer
-    pub fn send_reliably<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
+    /// Send a packet with given options
+    pub fn send_enhanced(&mut self, packet: EnhancedPacket) {
         self.peer_messages_out
-            .unbounded_send((id.into(), Channel::Reliable, packet))
+            .unbounded_send((
+                packet.peer_id.clone(),
+                packet.channel_index(),
+                packet.packet,
+            ))
             .expect("send_to failed");
     }
 
@@ -233,9 +285,9 @@ impl WebRtcSocket {
 async fn run_socket(
     config: WebRtcSocketConfig,
     id: PeerId,
-    peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, Channel, Packet)>,
+    peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, ChannelIndex, Packet)>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Channel, Packet)>,
+    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, ChannelIndex, Packet)>,
 ) {
     debug!("Starting WebRtcSocket message loop");
 

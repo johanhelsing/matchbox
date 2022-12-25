@@ -259,13 +259,14 @@ impl WebRtcSocket {
     }
 
     /// Send a packet to the given peer without any guarantees to arrive in order or at all
+    /// For more control over how the packet is sent use [`WebRtcSocket::send_enhanced`]
     pub fn send<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
         self.peer_messages_out
             .unbounded_send((id.into(), Channel::Reliable.get_channel_index(), packet))
             .expect("send_to failed");
     }
 
-    /// Send a packet with given options
+    /// Send a packet with given options via [`EnhancedPacket`]
     pub fn send_enhanced(&mut self, packet: EnhancedPacket) {
         self.peer_messages_out
             .unbounded_send((

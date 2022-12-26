@@ -12,8 +12,8 @@ use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
-    RtcIceCandidateInit, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
-    RtcSessionDescriptionInit,
+    RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcPeerConnectionIceEvent,
+    RtcSdpType, RtcSessionDescriptionInit,
 };
 
 use crate::webrtc_socket::{
@@ -164,6 +164,13 @@ async fn handshake_offer(
         .await
         .efix()?;
     debug!("created offer for new peer");
+
+    // todo: the point of implementing ice trickle is to avoid this wait...
+    // however, for some reason removing this wait causes problems with NAT
+    // punching in practice.
+    // We should figure out why this is happening.
+    wait_for_ice_gathering_complete(conn.clone()).await;
+
     signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
 
     let mut received_candidates = vec![];
@@ -256,7 +263,10 @@ async fn handshake_offer(
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
     onicecandidate.forget();
 
-    debug!("Ice completed: {:?}", conn.ice_gathering_state());
+    debug!(
+        "handshake_offer completed, ice gathering state: {:?}",
+        conn.ice_gathering_state()
+    );
 
     Ok((signal_peer.id, data_channel))
 }
@@ -354,6 +364,12 @@ async fn handshake_accept(
         .await
         .efix()?;
 
+    // todo: the point of implementing ice trickle is to avoid this wait...
+    // however, for some reason removing this wait causes problems with NAT
+    // punching in practice.
+    // We should figure out why this is happening.
+    wait_for_ice_gathering_complete(conn.clone()).await;
+
     let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
     signal_peer.send(answer);
 
@@ -417,7 +433,10 @@ async fn handshake_accept(
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
     onicecandidate.forget();
 
-    debug!("Ice completed: {:?}", conn.ice_gathering_state());
+    debug!(
+        "handshake_accept completed, ice gathering state: {:?}",
+        conn.ice_gathering_state()
+    );
 
     Ok((signal_peer.id, data_channel))
 }
@@ -454,6 +473,31 @@ fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection 
     oniceconnectionstatechange.forget();
 
     connection
+}
+
+async fn wait_for_ice_gathering_complete(conn: RtcPeerConnection) {
+    if conn.ice_gathering_state() == RtcIceGatheringState::Complete {
+        debug!("Ice gathering already completed");
+        return;
+    }
+
+    let (mut tx, mut rx) = futures_channel::mpsc::channel(1);
+
+    let conn_clone = conn.clone();
+    let onstatechange: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
+        if conn_clone.ice_gathering_state() == RtcIceGatheringState::Complete {
+            tx.try_send(()).unwrap();
+        }
+    });
+
+    let onstatechange = Closure::wrap(onstatechange);
+
+    conn.set_onicegatheringstatechange(Some(onstatechange.as_ref().unchecked_ref()));
+
+    rx.next().await;
+
+    conn.set_onicegatheringstatechange(None);
+    debug!("Ice gathering completed");
 }
 
 fn create_data_channel(

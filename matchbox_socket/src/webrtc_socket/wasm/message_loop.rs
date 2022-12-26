@@ -218,6 +218,8 @@ async fn handshake_offer(
     );
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+    // note: we can let rust keep ownership of this closure, since we replace
+    // the event handler later in this method when ice is finished
 
     // handle pending ICE candidates
     for candidate in received_candidates {
@@ -252,6 +254,7 @@ async fn handshake_offer(
         });
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+    onicecandidate.forget();
 
     debug!("Ice completed: {:?}", conn.ice_gathering_state());
 
@@ -376,6 +379,8 @@ async fn handshake_accept(
     );
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+    // note: we can let rust keep ownership of this closure, since we replace
+    // the event handler later in this method when ice is finished
 
     // handle pending ICE candidates
     for candidate in received_candidates {
@@ -410,6 +415,7 @@ async fn handshake_accept(
         });
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+    onicecandidate.forget();
 
     debug!("Ice completed: {:?}", conn.ice_gathering_state());
 
@@ -445,6 +451,7 @@ fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection 
     let oniceconnectionstatechange = Closure::wrap(oniceconnectionstatechange);
     connection
         .set_oniceconnectionstatechange(Some(oniceconnectionstatechange.as_ref().unchecked_ref()));
+    oniceconnectionstatechange.forget();
 
     connection
 }

@@ -12,7 +12,8 @@ use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
-    RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
+    RtcIceCandidateInit, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
+    RtcSessionDescriptionInit,
 };
 
 use crate::webrtc_socket::{
@@ -143,12 +144,12 @@ async fn handshake_offer(
     debug!("making offer");
 
     let conn = create_rtc_peer_connection(config);
-    let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
+    let (channel_open_tx, mut channel_open_rx) = futures_channel::mpsc::channel(1);
     let data_channel = create_data_channel(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
-        channel_ready_tx,
+        channel_open_tx,
     );
 
     // Create offer
@@ -177,7 +178,9 @@ async fn handshake_offer(
         match signal {
             PeerSignal::Answer(answer) => break answer,
             PeerSignal::IceCandidate(candidate) => {
-                debug!("got an IceCandidate signal! {}", candidate);
+                debug!(
+                    "offerer: received an ice candidate while waiting for answer: {candidate:?}"
+                );
                 received_candidates.push(candidate);
             }
             _ => {
@@ -196,47 +199,43 @@ async fn handshake_offer(
 
     // send ICE candidates to remote peer
     let signal_peer_ice = signal_peer.clone();
-    let onicecandidate: Box<dyn FnMut(JsValue)> = Box::new(move |event| {
-        let event = Reflect::get(&event, &JsValue::from_str("candidate")).efix();
-        if let Ok(event) = event {
-            if let Ok(candidate) = event.dyn_into::<RtcIceCandidate>() {
-                debug!("sending IceCandidate signal {}", candidate.candidate());
-                signal_peer_ice.send(PeerSignal::IceCandidate(candidate.candidate()));
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
+        move |event: RtcPeerConnectionIceEvent| match event.candidate() {
+            Some(candidate) => {
+                let candidate = js_sys::JSON::stringify(&candidate.to_json())
+                    .expect("failed to serialize candidate")
+                    .as_string()
+                    .unwrap();
+
+                debug!("sending IceCandidate signal: {candidate:?}");
+                signal_peer_ice.send(PeerSignal::IceCandidate(candidate));
             }
-        }
-    });
+            None => {
+                debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+            }
+        },
+    );
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 
     // handle pending ICE candidates
     for candidate in received_candidates {
-        let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
-        ice_candidate.sdp_m_line_index(Some(0));
-        JsFuture::from(
-            conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
-        )
-        .await
-        .efix()?;
+        debug!("offerer: adding ice candidate {candidate:?}");
+        try_add_rtc_ice_candidate(&conn, &candidate).await;
     }
 
     // select for channel ready or ice candidates
     debug!("waiting for data channel to open");
     loop {
         select! {
-            _ = channel_ready_rx.next() => {
+            _ = channel_open_rx.next() => {
                 debug!("channel ready");
                 break;
             }
             msg = signal_receiver.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
-                    debug!("got an IceCandidate signal! {}", candidate);
-                    let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
-                    ice_candidate.sdp_m_line_index(Some(0));
-                    JsFuture::from(
-                        conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
-                    )
-                    .await
-                    .efix()?;
+                    debug!("offerer: received ice candidate {candidate:?}");
+                    try_add_rtc_ice_candidate(&conn, &candidate).await;
                 }
             }
         };
@@ -251,6 +250,23 @@ async fn handshake_offer(
     debug!("Ice completed: {:?}", conn.ice_gathering_state());
 
     Ok((signal_peer.id, data_channel))
+}
+
+async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_string: &str) {
+    let candidate_init = match js_sys::JSON::parse(candidate_string).map(RtcIceCandidateInit::from)
+    {
+        Ok(js_value) => js_value,
+        Err(err) => {
+            error!("failed to parse candidate json: {err:?}");
+            return;
+        }
+    };
+
+    JsFuture::from(
+        connection.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&candidate_init)),
+    )
+    .await
+    .expect("failed to add ice candidate");
 }
 
 async fn handshake_accept(
@@ -328,27 +344,30 @@ async fn handshake_accept(
 
     // send ICE candidates to remote peer
     let signal_peer_ice = signal_peer.clone();
-    let onicecandidate: Box<dyn FnMut(JsValue)> = Box::new(move |event| {
-        let event = Reflect::get(&event, &JsValue::from_str("candidate")).efix();
-        if let Ok(event) = event {
-            if let Ok(candidate) = event.dyn_into::<RtcIceCandidate>() {
-                debug!("sending IceCandidate signal {}", candidate.candidate());
-                signal_peer_ice.send(PeerSignal::IceCandidate(candidate.candidate()));
+    // todo: exactly the same as offer, dedup?
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
+        move |event: RtcPeerConnectionIceEvent| match event.candidate() {
+            Some(candidate) => {
+                let candidate = js_sys::JSON::stringify(&candidate.to_json())
+                    .expect("failed to serialize candidate")
+                    .as_string()
+                    .unwrap();
+
+                debug!("sending IceCandidate signal: {candidate:?}");
+                signal_peer_ice.send(PeerSignal::IceCandidate(candidate));
             }
-        }
-    });
+            None => {
+                debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+            }
+        },
+    );
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
 
     // handle pending ICE candidates
     for candidate in received_candidates {
-        let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
-        ice_candidate.sdp_m_line_index(Some(0));
-        JsFuture::from(
-            conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
-        )
-        .await
-        .efix()?;
+        debug!("accepter: adding ice candidate {candidate:?}");
+        try_add_rtc_ice_candidate(&conn, &candidate).await;
     }
 
     // select for channel ready or ice candidates
@@ -361,14 +380,8 @@ async fn handshake_accept(
             }
             msg = signal_receiver.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
-                    debug!("got an IceCandidate signal! {}", candidate);
-                    let mut ice_candidate = RtcIceCandidateInit::new(&candidate);
-                    ice_candidate.sdp_m_line_index(Some(0));
-                    JsFuture::from(
-                        conn.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&ice_candidate)),
-                    )
-                    .await
-                    .efix()?;
+                    debug!("accepter: received ice candidate: {candidate:?}");
+                    try_add_rtc_ice_candidate(&conn, &candidate).await;
                 }
             }
         };
@@ -409,7 +422,7 @@ fn create_data_channel(
     connection: RtcPeerConnection,
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
-    mut channel_ready: futures_channel::mpsc::Sender<u8>,
+    mut channel_open: futures_channel::mpsc::Sender<u8>,
 ) -> RtcDataChannel {
     let mut data_channel_config = RtcDataChannelInit::new();
     data_channel_config.ordered(false);
@@ -419,8 +432,10 @@ fn create_data_channel(
 
     let channel =
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
+
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 
+    // onmsg callback
     let channel_onmsg_func: Box<dyn FnMut(MessageEvent)> = Box::new(move |event: MessageEvent| {
         debug!("incoming {:?}", event);
         if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
@@ -435,15 +450,24 @@ fn create_data_channel(
     channel.set_onmessage(Some(channel_onmsg_closure.as_ref().unchecked_ref()));
     channel_onmsg_closure.forget();
 
+    // onopen callback
     let channel_onopen_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
-        debug!("Rtc data channel opened :D :D");
-        channel_ready
+        debug!("Rtc data channel opened :D");
+        channel_open
             .try_send(1)
-            .expect("failed to notify about open connection");
+            .expect("failed to notify about opened data channel");
     });
     let channel_onopen_closure = Closure::wrap(channel_onopen_func);
     channel.set_onopen(Some(channel_onopen_closure.as_ref().unchecked_ref()));
     channel_onopen_closure.forget();
+
+    // onclose callback
+    let on_close_func: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
+        error!("data channel closed, todo: try reconnect if appropriate/possible");
+    });
+    let on_close_closure = Closure::wrap(on_close_func);
+    channel.set_onclose(Some(on_close_closure.as_ref().unchecked_ref()));
+    on_close_closure.forget();
 
     channel
 }

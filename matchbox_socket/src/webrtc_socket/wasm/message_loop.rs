@@ -200,19 +200,20 @@ async fn handshake_offer(
     // send ICE candidates to remote peer
     let signal_peer_ice = signal_peer.clone();
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
-        move |event: RtcPeerConnectionIceEvent| match event.candidate() {
-            Some(candidate) => {
-                let candidate = js_sys::JSON::stringify(&candidate.to_json())
+        move |event: RtcPeerConnectionIceEvent| {
+            let candidate_json = match event.candidate() {
+                Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
                     .expect("failed to serialize candidate")
                     .as_string()
-                    .unwrap();
+                    .unwrap(),
+                None => {
+                    debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+                    "null".to_string()
+                }
+            };
 
-                debug!("sending IceCandidate signal: {candidate:?}");
-                signal_peer_ice.send(PeerSignal::IceCandidate(candidate));
-            }
-            None => {
-                debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
-            }
+            debug!("sending IceCandidate signal: {candidate_json:?}");
+            signal_peer_ice.send(PeerSignal::IceCandidate(candidate_json));
         },
     );
     let onicecandidate = Closure::wrap(onicecandidate);
@@ -258,17 +259,23 @@ async fn handshake_offer(
 }
 
 async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_string: &str) {
-    let candidate_init = match js_sys::JSON::parse(candidate_string).map(RtcIceCandidateInit::from)
-    {
-        Ok(js_value) => js_value,
+    let parsed_candidate = match js_sys::JSON::parse(candidate_string) {
+        Ok(c) => c,
         Err(err) => {
             error!("failed to parse candidate json: {err:?}");
             return;
         }
     };
 
+    let candidate_init = if parsed_candidate.is_null() {
+        debug!("Received null ice candidate, this means there are no further ice candidates");
+        None
+    } else {
+        Some(RtcIceCandidateInit::from(parsed_candidate))
+    };
+
     JsFuture::from(
-        connection.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&candidate_init)),
+        connection.add_ice_candidate_with_opt_rtc_ice_candidate_init(candidate_init.as_ref()),
     )
     .await
     .expect("failed to add ice candidate");
@@ -351,19 +358,20 @@ async fn handshake_accept(
     let signal_peer_ice = signal_peer.clone();
     // todo: exactly the same as offer, dedup?
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
-        move |event: RtcPeerConnectionIceEvent| match event.candidate() {
-            Some(candidate) => {
-                let candidate = js_sys::JSON::stringify(&candidate.to_json())
+        move |event: RtcPeerConnectionIceEvent| {
+            let candidate_json = match event.candidate() {
+                Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
                     .expect("failed to serialize candidate")
                     .as_string()
-                    .unwrap();
+                    .unwrap(),
+                None => {
+                    debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+                    "null".to_string()
+                }
+            };
 
-                debug!("sending IceCandidate signal: {candidate:?}");
-                signal_peer_ice.send(PeerSignal::IceCandidate(candidate));
-            }
-            None => {
-                debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
-            }
+            debug!("sending IceCandidate signal: {candidate_json:?}");
+            signal_peer_ice.send(PeerSignal::IceCandidate(candidate_json));
         },
     );
     let onicecandidate = Closure::wrap(onicecandidate);

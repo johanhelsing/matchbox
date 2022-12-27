@@ -40,6 +40,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
     "RtcPeerConnection",
     "RtcSdpType", "RtcSessionDescription", "RtcSessionDescriptionInit",
     "RtcIceGatheringState", "RtcIceCandidate", "RtcIceCandidateInit", "RtcPeerConnectionIceEvent",
+    "RtcIceConnectionState",
     "RtcConfiguration", "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType",
 ] }
 serde-wasm-bindgen = { version = "0.4" }

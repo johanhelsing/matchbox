@@ -556,11 +556,7 @@ fn create_data_channel(
     mut channel_open: futures_channel::mpsc::Sender<u8>,
     channel_type: Channel,
 ) -> RtcDataChannel {
-    let mut data_channel_config = RtcDataChannelInit::new();
-    data_channel_config.ordered(false);
-    data_channel_config.max_retransmits(0);
-    data_channel_config.negotiated(true);
-    data_channel_config.id(DATA_CHANNEL_ID);
+    let mut data_channel_config = data_channel_config(channel_type);
 
     let channel =
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
@@ -571,7 +567,7 @@ fn create_data_channel(
         |f| channel.set_onopen(f),
         move |_: JsValue| {
             debug!("Rtc data channel opened :D :D");
-            channel_ready
+            channel_open
                 .try_send(1)
                 .expect("failed to notify about open connection");
         },

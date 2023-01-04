@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use bevy_ggrs::{Rollback, RollbackIdProvider};
+use bevy_ggrs::{PlayerInputs, Rollback, RollbackIdProvider, Session};
 use bytemuck::{Pod, Zeroable};
-use ggrs::{Config, InputStatus, P2PSession, PlayerHandle, SpectatorSession, SyncTestSession};
+use ggrs::{Config, PlayerHandle};
 use std::hash::Hash;
 
 const BLUE: Color = Color::rgb(0.8, 0.6, 0.2);
@@ -50,9 +50,8 @@ pub struct Velocity {
     pub z: f32,
 }
 
-// You can also register resources. If your Component / Resource implements Hash, you can make use of `#[reflect(Hash)]`
-// in order to allow a GGRS `SyncTestSession` to construct a checksum for a world snapshot
-#[derive(Default, Reflect, Hash, Component)]
+// You can also register resources.
+#[derive(Resource, Default, Reflect, Hash)]
 #[reflect(Hash)]
 pub struct FrameCount {
     pub frame: u32,
@@ -77,25 +76,21 @@ pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> 
     BoxInput { inp: input }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn setup_scene_system(
     mut commands: Commands,
     mut rip: ResMut<RollbackIdProvider>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut camera_query: Query<&mut Transform, With<Camera>>,
-    p2p_session: Option<Res<P2PSession<GGRSConfig>>>,
-    synctest_session: Option<Res<SyncTestSession<GGRSConfig>>>,
-    spectator_session: Option<Res<SpectatorSession<GGRSConfig>>>,
+    session: Res<Session<GGRSConfig>>,
 ) {
-    let num_players = p2p_session
-        .map(|s| s.num_players())
-        .or_else(|| synctest_session.map(|s| s.num_players()))
-        .or_else(|| spectator_session.map(|s| s.num_players()))
-        .expect("No GGRS session found");
+    let num_players = match &*session {
+        Session::SyncTestSession(s) => s.num_players(),
+        Session::P2PSession(s) => s.num_players(),
+        Session::SpectatorSession(s) => s.num_players(),
+    };
 
     // plane
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size: PLANE_SIZE })),
         material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
         ..default()
@@ -115,30 +110,31 @@ pub fn setup_scene_system(
         transform.translation.x = x;
         transform.translation.y = CUBE_SIZE / 2.;
         transform.translation.z = z;
-        let color = PLAYER_COLORS[handle % PLAYER_COLORS.len()];
 
-        commands
-            .spawn_bundle(PbrBundle {
+        commands.spawn((
+            PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Cube { size: CUBE_SIZE })),
-                material: materials.add(color.into()),
+                material: materials.add(PLAYER_COLORS[handle as usize].into()),
                 transform,
                 ..default()
-            })
-            .insert(Player { handle })
-            .insert(Velocity::default())
+            },
+            Player { handle },
+            Velocity::default(),
             // this component indicates bevy_GGRS that parts of this entity should be saved and loaded
-            .insert(Rollback::new(rip.next_id()));
+            Rollback::new(rip.next_id()),
+        ));
     }
 
     // light
-    commands.spawn_bundle(PointLightBundle {
-        transform: Transform::from_xyz(-4.0, 8.0, 4.0),
+    commands.spawn(PointLightBundle {
+        transform: Transform::from_xyz(4.0, 8.0, 4.0),
         ..default()
     });
     // camera
-    for mut transform in camera_query.iter_mut() {
-        *transform = Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y);
-    }
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(0.0, 7.5, 0.5).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
 }
 
 // Example system, manipulating a resource, will be added to the rollback schedule.
@@ -155,10 +151,10 @@ pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
 #[allow(dead_code)]
 pub fn move_cube_system(
     mut query: Query<(&mut Transform, &mut Velocity, &Player), With<Rollback>>,
-    inputs: Res<Vec<(BoxInput, InputStatus)>>,
+    inputs: Res<PlayerInputs<GGRSConfig>>,
 ) {
     for (mut t, mut v, p) in query.iter_mut() {
-        let input = inputs[p.handle].0.inp;
+        let input = inputs[p.handle as usize].0.inp;
         // set velocity through key presses
         if input & INPUT_UP != 0 && input & INPUT_DOWN == 0 {
             v.z -= MOVEMENT_SPEED;

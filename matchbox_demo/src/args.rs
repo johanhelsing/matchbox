@@ -1,8 +1,9 @@
+use bevy::prelude::*;
 use clap::Parser;
 use serde::Deserialize;
 use std::ffi::OsString;
 
-#[derive(Parser, Debug, Clone, Deserialize)]
+#[derive(Parser, Debug, Clone, Deserialize, Resource)]
 #[serde(default)]
 #[clap(
     name = "box_game_web",

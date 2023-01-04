@@ -1,6 +1,6 @@
-use bevy::{log::LogSettings, prelude::*, tasks::IoTaskPool};
-use bevy_ggrs::{GGRSPlugin, SessionType};
-use ggrs::{P2PSession, SessionBuilder};
+use bevy::{prelude::*, tasks::IoTaskPool};
+use bevy_ggrs::{GGRSPlugin, Session};
+use ggrs::SessionBuilder;
 use log::info;
 use matchbox_socket::WebRtcSocket;
 
@@ -21,6 +21,9 @@ enum AppState {
 
 const SKY_COLOR: Color = Color::rgb(0.69, 0.69, 0.69);
 
+#[derive(Default, Resource)]
+struct SocketResource(Option<WebRtcSocket>);
+
 fn main() {
     // read query string or command line arguments
     let args = Args::get();
@@ -34,9 +37,9 @@ fn main() {
         // define system that returns inputs given a player handle, so GGRS can send the inputs around
         .with_input_system(input)
         // register types of components AND resources you want to be rolled back
-        .register_rollback_type::<Transform>()
-        .register_rollback_type::<Velocity>()
-        .register_rollback_type::<FrameCount>()
+        .register_rollback_component::<Transform>()
+        .register_rollback_component::<Velocity>()
+        .register_rollback_resource::<FrameCount>()
         // these systems will be executed as part of the advance frame update
         .with_rollback_schedule(
             Schedule::default().with_stage(
@@ -48,12 +51,6 @@ fn main() {
         )
         // make it happen in the bevy app
         .build(&mut app);
-
-    // (optional) Enable debug log level for matchbox
-    app.insert_resource(LogSettings {
-        filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
-        level: bevy::log::Level::DEBUG,
-    });
 
     app.insert_resource(ClearColor(SKY_COLOR))
         .add_plugins(DefaultPlugins)
@@ -88,7 +85,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     let task_pool = IoTaskPool::get();
     task_pool.spawn(message_loop).detach();
 
-    commands.insert_resource(Some(socket));
+    commands.insert_resource(SocketResource(Some(socket)));
 }
 
 // Marker components for UI
@@ -98,11 +95,11 @@ struct LobbyText;
 struct LobbyUI;
 
 fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn_bundle(Camera3dBundle::default());
+    commands.spawn(Camera3dBundle::default());
 
     // All this is just for spawning centered text.
     commands
-        .spawn_bundle(NodeBundle {
+        .spawn(NodeBundle {
             style: Style {
                 size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
                 position_type: PositionType::Absolute,
@@ -110,12 +107,12 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 align_items: AlignItems::FlexEnd,
                 ..default()
             },
-            color: Color::rgb(0.43, 0.41, 0.38).into(),
+            background_color: Color::rgb(0.43, 0.41, 0.38).into(),
             ..default()
         })
         .with_children(|parent| {
             parent
-                .spawn_bundle(TextBundle {
+                .spawn(TextBundle {
                     style: Style {
                         align_self: AlignSelf::Center,
                         justify_content: JustifyContent::Center,
@@ -145,17 +142,18 @@ fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
 fn lobby_system(
     mut app_state: ResMut<State<AppState>>,
     args: Res<Args>,
-    mut socket: ResMut<Option<WebRtcSocket>>,
+    mut socket: ResMut<SocketResource>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {
-    let socket = socket.as_mut();
+    if socket.0.is_none() {
+        return;
+    }
 
-    socket.as_mut().unwrap().accept_new_connections();
-    let connected_peers = socket.as_ref().unwrap().connected_peers().len();
+    socket.0.as_mut().unwrap().accept_new_connections();
+    let connected_peers = socket.0.as_ref().unwrap().connected_peers().len();
     let remaining = args.players - (connected_peers + 1);
     query.single_mut().sections[0].value = format!("Waiting for {} more player(s)", remaining);
-
     if remaining > 0 {
         return;
     }
@@ -163,7 +161,7 @@ fn lobby_system(
     info!("All peers have joined, going in-game");
 
     // consume the socket (currently required because ggrs takes ownership of its socket)
-    let socket = socket.take().unwrap();
+    let socket = socket.0.take().unwrap();
 
     // extract final player list
     let players = socket.players();
@@ -189,8 +187,7 @@ fn lobby_system(
         .start_p2p_session(socket)
         .expect("failed to start session");
 
-    commands.insert_resource(sess);
-    commands.insert_resource(SessionType::P2PSession);
+    commands.insert_resource(Session::P2PSession(sess));
 
     // transition to in-game state
     app_state
@@ -198,8 +195,13 @@ fn lobby_system(
         .expect("Tried to go in-game while already in-game");
 }
 
-fn log_ggrs_events(mut session: ResMut<P2PSession<GGRSConfig>>) {
-    for event in session.events() {
-        info!("GGRS Event: {:?}", event);
+fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {
+    match session.as_mut() {
+        Session::P2PSession(s) => {
+            for event in s.events() {
+                println!("GGRS Event: {:?}", event);
+            }
+        }
+        _ => panic!("This example focuses on p2p."),
     }
 }

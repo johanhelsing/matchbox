@@ -167,6 +167,10 @@ impl WebRtcSocket {
     /// The returned future should be awaited in order for messages to be sent and received.
     #[must_use]
     pub fn new_with_config(config: WebRtcSocketConfig) -> (Self, MessageLoopFuture) {
+        if config.channels.is_empty() {
+            panic!("You need to configure at least one channel in WebRtcSocketConfig");
+        }
+
         let (messages_from_peers_tx, messages_from_peers) = new_senders_and_receivers(&config);
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);

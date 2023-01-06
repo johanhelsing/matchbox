@@ -37,7 +37,7 @@ use uuid::Uuid;
 
 type Packet = Box<[u8]>;
 
-/// General configuration options for a WebRtc connection
+/// General configuration options for a WebRtc connection.
 ///
 /// See [`WebRtcSocket::new_with_config`]
 #[derive(Debug)]
@@ -149,7 +149,7 @@ pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()>>>;
 
 impl WebRtcSocket {
-    /// Create a new connection to the given room
+    /// Create a new connection to the given room with a single unreliable data channel
     ///
     /// See [`WebRtcSocketConfig::room_url`] for details on the room url.
     ///
@@ -215,7 +215,6 @@ impl WebRtcSocket {
         let mut ids = Vec::new();
         while let Ok(Some(id)) = self.new_connected_peers.try_next() {
             if !self.peers.contains(&id) {
-                // Maybe we should make peers a HashSet instead?
                 self.peers.push(id.clone());
                 ids.push(id);
             }

@@ -429,7 +429,6 @@ async fn handshake_accept(
         try_add_rtc_ice_candidate(&conn, &candidate).await;
     }
 
-    // Do we need this or is it enough to wait until first channel opened?
     let mut channels_pending = data_channels.len();
 
     // select for channel ready or ice candidates
@@ -565,8 +564,10 @@ fn create_data_channel(
     let mut data_channel_config = data_channel_config(channel_type);
     data_channel_config.id(channel_id as u16);
 
-    let channel =
-        connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
+    let channel = connection.create_data_channel_with_data_channel_dict(
+        &format!("matchbox_socket_{channel_id}"),
+        &data_channel_config,
+    );
 
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 

@@ -17,12 +17,11 @@ use web_sys::{
     RtcSdpType, RtcSessionDescriptionInit,
 };
 
-use crate::webrtc_socket::ChannelIndex;
+use crate::webrtc_socket::ChannelConfig;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Channel, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL, RELIABLE_DATA_CHANNEL_ID,
-    UNRELIABLE_DATA_CHANNEL_ID,
+    Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
 
 pub async fn message_loop(
@@ -30,13 +29,9 @@ pub async fn message_loop(
     config: WebRtcSocketConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(
-        PeerId,
-        ChannelIndex,
-        Packet,
-    )>,
+    mut peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) {
     debug!("Entering WebRtcSocket message loop");
 
@@ -52,6 +47,15 @@ pub async fn message_loop(
     let mut timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL)).fuse();
 
     loop {
+        let mut next_peer_messages_out = FuturesUnordered::new();
+        peer_messages_out_rx
+            .iter_mut()
+            .enumerate()
+            .map(|(index, r)| async move { (index, r.next().fuse().await) })
+            .for_each(|f| next_peer_messages_out.push(f));
+
+        let mut next_peer_message_out = next_peer_messages_out.next().fuse();
+
         select! {
             _ = &mut timeout => {
                 requests_sender.unbounded_send(PeerRequest::KeepAlive).expect("send failed");
@@ -114,9 +118,9 @@ pub async fn message_loop(
                 }
             }
 
-            message = peer_messages_out_rx.next() => {
+            message = next_peer_message_out => {
                 match message {
-                    Some((peer, channel_index, packet)) => {
+                    Some((channel_index, Some((peer, packet)))) => {
                         let data_channel = data_channels.get(&peer)
                             .expect("couldn't find data channel for peer")
                             .get(channel_index)
@@ -129,7 +133,7 @@ pub async fn message_loop(
                             error!("Failed to send: {err:?}");
                         }
                     },
-                    None => {
+                    Some((_, None)) | None => {
                         // Receiver end of outgoing message channel closed,
                         // which most likely means the socket was dropped.
                         // There could probably be cleaner ways to handle this,
@@ -149,7 +153,7 @@ pub async fn message_loop(
 async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    messages_from_peers_tx: UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>> {
     debug!("making offer");
@@ -162,6 +166,7 @@ async fn handshake_offer(
         messages_from_peers_tx,
         signal_peer.id.clone(),
         channel_open_tx,
+        &config.channels,
     );
 
     // Create offer
@@ -316,7 +321,7 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
 async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    messages_from_peers_tx: UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>> {
     debug!("handshake_accept");
@@ -328,6 +333,7 @@ async fn handshake_accept(
         messages_from_peers_tx,
         signal_peer.id.clone(),
         channel_ready_tx,
+        &config.channels,
     );
 
     let mut received_candidates = vec![];
@@ -527,43 +533,44 @@ async fn wait_for_ice_gathering_complete(conn: RtcPeerConnection) {
 
 fn create_data_channel_pair(
     connection: RtcPeerConnection,
-    incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    mut incoming_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peer_id: PeerId,
     channel_ready: futures_channel::mpsc::Sender<u8>,
+    channel_config: &[ChannelConfig],
 ) -> Vec<RtcDataChannel> {
-    vec![
-        create_data_channel(
-            connection.clone(),
-            incoming_tx.clone(),
-            peer_id.clone(),
-            channel_ready.clone(),
-            Channel::Unreliable,
-        ),
-        create_data_channel(
-            connection,
-            incoming_tx,
-            peer_id,
-            channel_ready,
-            Channel::Reliable,
-        ),
-    ]
+    channel_config
+        .iter()
+        .enumerate()
+        .map(|(i, channel)| {
+            create_data_channel(
+                connection.clone(),
+                incoming_tx.get_mut(i).unwrap().clone(),
+                peer_id.clone(),
+                channel_ready.clone(),
+                channel,
+                i,
+            )
+        })
+        .collect()
 }
 
 fn create_data_channel(
     connection: RtcPeerConnection,
-    incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
     mut channel_open: futures_channel::mpsc::Sender<u8>,
-    channel_type: Channel,
+    channel_type: &ChannelConfig,
+    channel_id: usize,
 ) -> RtcDataChannel {
     let mut data_channel_config = data_channel_config(channel_type);
+    data_channel_config.id(channel_id as u16);
 
     let channel =
         connection.create_data_channel_with_data_channel_dict("webudp", &data_channel_config);
 
     channel.set_binary_type(RtcDataChannelType::Arraybuffer);
 
-    channel_event_handler(
+    leaking_channel_event_handler(
         |f| channel.set_onopen(f),
         move |_: JsValue| {
             debug!("Rtc data channel opened :D :D");
@@ -573,7 +580,7 @@ fn create_data_channel(
         },
     );
 
-    channel_event_handler(
+    leaking_channel_event_handler(
         |f| channel.set_onmessage(f),
         move |event: MessageEvent| {
             debug!("incoming {:?}", event);
@@ -582,24 +589,20 @@ fn create_data_channel(
                 let body = uarray.to_vec();
 
                 incoming_tx
-                    .unbounded_send((
-                        peer_id.clone(),
-                        channel_type.get_channel_index(),
-                        body.into_boxed_slice(),
-                    ))
+                    .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
                     .unwrap();
             }
         },
     );
 
-    channel_event_handler(
+    leaking_channel_event_handler(
         |f| channel.set_onerror(f),
         move |event: Event| {
             error!("Error in data channel: {:?}", event);
         },
     );
 
-    channel_event_handler(
+    leaking_channel_event_handler(
         |f| channel.set_onclose(f),
         move |event: Event| {
             warn!("Channel closed: {:?}", event);
@@ -609,7 +612,10 @@ fn create_data_channel(
     channel
 }
 
-fn channel_event_handler<T: FromWasmAbi + 'static>(
+/// Note that this fuction leaks some memory because the rust closure is dropped but still needs to be accessed by javascript of the browser
+///
+/// See also: https://rustwasm.github.io/wasm-bindgen/api/wasm_bindgen/closure/struct.Closure.html#method.into_js_value
+fn leaking_channel_event_handler<T: FromWasmAbi + 'static>(
     mut setter: impl FnMut(Option<&Function>),
     handler: impl FnMut(T) + 'static,
 ) {
@@ -620,21 +626,14 @@ fn channel_event_handler<T: FromWasmAbi + 'static>(
     closure.forget();
 }
 
-fn data_channel_config(channel_type: Channel) -> RtcDataChannelInit {
+fn data_channel_config(channel_type: &ChannelConfig) -> RtcDataChannelInit {
     let mut data_channel_config = RtcDataChannelInit::new();
 
-    match channel_type {
-        Channel::Reliable => {
-            data_channel_config.ordered(true);
-            data_channel_config.id(RELIABLE_DATA_CHANNEL_ID);
-            data_channel_config.negotiated(true);
-        }
-        Channel::Unreliable => {
-            data_channel_config.ordered(false);
-            data_channel_config.max_retransmits(0);
-            data_channel_config.negotiated(true);
-            data_channel_config.id(UNRELIABLE_DATA_CHANNEL_ID);
-        }
+    data_channel_config.ordered(channel_type.ordered);
+    data_channel_config.negotiated(true);
+
+    if let Some(n) = channel_type.max_retransmits {
+        data_channel_config.max_retransmits(n);
     }
 
     data_channel_config

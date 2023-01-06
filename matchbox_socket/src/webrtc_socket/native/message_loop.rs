@@ -22,22 +22,21 @@ use webrtc::{
     },
 };
 
-use crate::webrtc_socket::ChannelIndex;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    Channel, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL, RELIABLE_DATA_CHANNEL_ID,
-    UNRELIABLE_DATA_CHANNEL_ID,
+    Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
+use crate::webrtc_socket::{new_senders_and_receivers, ChannelConfig};
 
 pub async fn message_loop(
     id: PeerId,
     config: WebRtcSocketConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, ChannelIndex, Packet)>,
+    peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) {
     message_loop_impl(
         id,
@@ -58,13 +57,9 @@ async fn message_loop_impl(
     config: &WebRtcSocketConfig,
     requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    mut peer_messages_out_rx: futures_channel::mpsc::UnboundedReceiver<(
-        PeerId,
-        ChannelIndex,
-        Packet,
-    )>,
+    mut peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: futures_channel::mpsc::UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) {
     debug!("Entering native WebRtcSocket message loop");
 
@@ -77,14 +72,22 @@ async fn message_loop_impl(
     let mut peer_loops_a = FuturesUnordered::new();
     let mut peer_loops_b = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
-    let mut connected_peers = HashMap::new();
+    let mut connected_peers: HashMap<String, Vec<UnboundedSender<Box<[u8]>>>> = HashMap::new();
 
     let timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL));
     futures::pin_mut!(timeout);
 
     loop {
         let next_signal_event = events_receiver.next().fuse();
-        let next_peer_message_out = peer_messages_out_rx.next().fuse();
+
+        let mut next_peer_messages_out = FuturesUnordered::new();
+        peer_messages_out_rx
+            .iter_mut()
+            .enumerate()
+            .map(|(index, r)| async move { (index, r.next().fuse().await) })
+            .for_each(|f| next_peer_messages_out.push(f));
+
+        let next_peer_message_out = next_peer_messages_out.next().fuse();
 
         pin_mut!(next_signal_event, next_peer_message_out);
 
@@ -110,21 +113,20 @@ async fn message_loop_impl(
                             handshake_signals.insert(peer_uuid.clone(), signal_sender);
                             let signal_peer = SignalPeer::new(peer_uuid.clone(), requests_sender.clone());
                             let handshake_fut = handshake_offer(signal_peer, signal_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), config);
-                            let (to_peer_data_unreliable_tx, to_peer_data_unreliable_rx) = futures_channel::mpsc::unbounded();
-                            let (to_peer_data_reliable_tx, to_peer_data_reliable_rx) = futures_channel::mpsc::unbounded();
-                            connected_peers.insert(peer_uuid, vec![to_peer_data_unreliable_tx, to_peer_data_reliable_tx]);
-                            peer_loops_a.push(peer_loop(handshake_fut, vec![to_peer_data_unreliable_rx, to_peer_data_reliable_rx]));
+                            let (to_peer_data_tx, to_peer_data_rx) = new_senders_and_receivers(config);
+
+                            connected_peers.insert(peer_uuid, to_peer_data_tx);
+                            peer_loops_a.push(peer_loop(handshake_fut, to_peer_data_rx));
                         }
                         PeerEvent::Signal { sender, data } => {
                             let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
                                 let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
-                                let (to_peer_data_unreliable_tx, to_peer_data_unreliable_rx) = futures_channel::mpsc::unbounded();
-                                let (to_peer_data_reliable_tx, to_peer_data_reliable_rx) = futures_channel::mpsc::unbounded();
+                                let (to_peer_data_tx, to_peer_data_rx) = new_senders_and_receivers(config);
                                 // We didn't start signalling with this peer, assume we're the accepting part
                                 let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), config);
-                                connected_peers.insert(sender, vec![to_peer_data_unreliable_tx, to_peer_data_reliable_tx]);
-                                let peer_loop_fut = peer_loop(handshake_fut, vec![to_peer_data_unreliable_rx, to_peer_data_reliable_rx]);
+                                connected_peers.insert(sender, to_peer_data_tx);
+                                let peer_loop_fut = peer_loop(handshake_fut, to_peer_data_rx);
                                 peer_loops_b.push(peer_loop_fut);
                                 from_peer_sender
                             });
@@ -140,14 +142,14 @@ async fn message_loop_impl(
             // TODO: maybe use some forward trait instead?
             message = next_peer_message_out => {
                 match message {
-                    Some((peer, channel_index, packet)) => {
+                    Some((channel_index, Some((peer, packet)))) => {
                         let senders = connected_peers.get_mut(&peer)
                             .unwrap_or_else(|| panic!("couldn't find data channel for peer {}", peer));
                         let sender = senders.get_mut(channel_index)
                             .unwrap_or_else(|| panic!("Unexpected data channel index during send: {}", channel_index));
                         sender.unbounded_send(packet).unwrap();
                     },
-                    None => {
+                    Some((_, None)) | None => {
                         // Receiver end of outgoing message channel closed,
                         // which most likely means the socket was dropped.
                         // There could probably be cleaner ways to handle this,
@@ -245,7 +247,7 @@ async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     new_peer_tx: UnboundedSender<PeerId>,
-    from_peer_message_tx: UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<
     (
@@ -265,6 +267,7 @@ async fn handshake_offer(
         signal_peer.id.clone(),
         new_peer_tx,
         from_peer_message_tx,
+        &config.channels,
     )
     .await;
 
@@ -328,7 +331,7 @@ async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
     new_peer_tx: UnboundedSender<PeerId>,
-    from_peer_message_tx: UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<
     (
@@ -348,6 +351,7 @@ async fn handshake_accept(
         signal_peer.id.clone(),
         new_peer_tx,
         from_peer_message_tx,
+        &config.channels,
     )
     .await;
 
@@ -449,28 +453,26 @@ async fn create_data_channel_pair(
     channel_ready: futures_channel::mpsc::Sender<u8>,
     peer_id: PeerId,
     new_peer_tx: UnboundedSender<PeerId>,
-    from_peer_message_tx: UnboundedSender<(PeerId, ChannelIndex, Packet)>,
+    from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
+    channel_configs: &[ChannelConfig],
 ) -> Vec<Arc<RTCDataChannel>> {
-    vec![
-        create_data_channel(
+    let mut channels = vec![];
+    for (i, channel_config) in channel_configs.iter().enumerate() {
+        let channel = create_data_channel(
             connection,
             channel_ready.clone(),
             peer_id.clone(),
             new_peer_tx.clone(),
-            from_peer_message_tx.clone(),
-            Channel::Unreliable,
+            from_peer_message_tx.get(i).unwrap().clone(),
+            channel_config,
+            i,
         )
-        .await,
-        create_data_channel(
-            connection,
-            channel_ready,
-            peer_id,
-            new_peer_tx,
-            from_peer_message_tx,
-            Channel::Reliable,
-        )
-        .await,
-    ]
+        .await;
+
+        channels.push(channel);
+    }
+
+    channels
 }
 
 async fn create_data_channel(
@@ -478,21 +480,15 @@ async fn create_data_channel(
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
     peer_id: PeerId,
     mut new_peer_tx: UnboundedSender<PeerId>,
-    from_peer_message_tx: UnboundedSender<(PeerId, ChannelIndex, Packet)>,
-    channel_type: Channel,
+    from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
+    channel_type: &ChannelConfig,
+    channel_index: usize,
 ) -> Arc<RTCDataChannel> {
-    let config = match &channel_type {
-        Channel::Reliable => RTCDataChannelInit {
-            ordered: Some(true),
-            negotiated: Some(RELIABLE_DATA_CHANNEL_ID),
-            ..Default::default()
-        },
-        Channel::Unreliable => RTCDataChannelInit {
-            ordered: Some(false),
-            max_retransmits: Some(0),
-            negotiated: Some(UNRELIABLE_DATA_CHANNEL_ID),
-            ..Default::default()
-        },
+    let config = RTCDataChannelInit {
+        ordered: Some(channel_type.ordered),
+        negotiated: Some(channel_index as u16),
+        max_retransmits: channel_type.max_retransmits,
+        ..Default::default()
     };
 
     let channel = connection
@@ -509,13 +505,7 @@ async fn create_data_channel(
         })
     }));
 
-    setup_data_channel(
-        &channel,
-        peer_id,
-        from_peer_message_tx,
-        channel_type.get_channel_index(),
-    )
-    .await;
+    setup_data_channel(&channel, peer_id, from_peer_message_tx).await;
 
     channel
 }
@@ -523,8 +513,7 @@ async fn create_data_channel(
 async fn setup_data_channel(
     data_channel: &RTCDataChannel,
     peer_id: PeerId,
-    from_peer_message_tx: UnboundedSender<(PeerId, ChannelIndex, Packet)>,
-    channel_index: ChannelIndex,
+    from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
 ) {
     data_channel.on_close(Box::new(move || {
         // TODO: handle this somehow
@@ -542,7 +531,7 @@ async fn setup_data_channel(
         let packet = (*message.data).into();
         debug!("rx {:?}", packet);
         from_peer_message_tx
-            .unbounded_send((peer_id.clone(), channel_index, packet))
+            .unbounded_send((peer_id.clone(), packet))
             .unwrap();
         Box::pin(async move {})
     }));

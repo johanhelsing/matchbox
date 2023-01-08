@@ -1,7 +1,7 @@
 use async_compat::CompatExt;
 use bytes::Bytes;
 use futures::{
-    future::FusedFuture, pin_mut, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt,
+    future::FusedFuture, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt,
 };
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
@@ -22,12 +22,12 @@ use webrtc::{
     },
 };
 
+use crate::webrtc_socket::{channel_readiness, new_senders_and_receivers, ChannelConfig};
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
     Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
-use crate::webrtc_socket::{new_senders_and_receivers, ChannelConfig};
 
 pub async fn message_loop(
     id: PeerId,
@@ -72,24 +72,17 @@ async fn message_loop_impl(
     let mut peer_loops_a = FuturesUnordered::new();
     let mut peer_loops_b = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
-    let mut connected_peers: HashMap<String, Vec<UnboundedSender<Box<[u8]>>>> = HashMap::new();
+    let mut connected_peers = HashMap::new();
 
     let timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL));
     futures::pin_mut!(timeout);
 
     loop {
-        let next_signal_event = events_receiver.next().fuse();
-
-        let mut next_peer_messages_out = FuturesUnordered::new();
-        peer_messages_out_rx
+        let mut next_peer_messages_out: FuturesUnordered<_> = peer_messages_out_rx
             .iter_mut()
             .enumerate()
-            .map(|(index, r)| async move { (index, r.next().fuse().await) })
-            .for_each(|f| next_peer_messages_out.push(f));
-
-        let next_peer_message_out = next_peer_messages_out.next().fuse();
-
-        pin_mut!(next_signal_event, next_peer_message_out);
+            .map(|(index, rx)| async move { (index, rx.next().await) })
+            .collect();
 
         select! {
             _ = (&mut timeout).fuse() => {
@@ -104,7 +97,7 @@ async fn message_loop_impl(
                 debug!("peer finished");
             },
 
-            message = next_signal_event => {
+            message = events_receiver.next().fuse() => {
                 if let Some(event) = message {
                     debug!("{:?}", event);
                     match event {
@@ -140,7 +133,7 @@ async fn message_loop_impl(
             }
 
             // TODO: maybe use some forward trait instead?
-            message = next_peer_message_out => {
+            message = next_peer_messages_out.next().fuse() => {
                 match message {
                     Some((channel_index, Some((peer, packet)))) => {
                         let senders = connected_peers.get_mut(&peer)
@@ -246,7 +239,7 @@ impl CandidateTrickle {
 async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    new_peer_tx: UnboundedSender<PeerId>,
+    mut new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<
@@ -260,12 +253,11 @@ async fn handshake_offer(
     debug!("making offer");
     let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
 
-    let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
+    let (channel_ready_tx, mut channel_readiness) = channel_readiness(config);
     let data_channels = create_data_channel_pair(
         &connection,
         channel_ready_tx,
         signal_peer.id.clone(),
-        new_peer_tx,
         from_peer_message_tx,
         &config.channels,
     )
@@ -306,17 +298,10 @@ async fn handshake_offer(
         CandidateTrickle::listen_for_remote_candidates(connection, signal_receiver).fuse(),
     );
 
-    let mut channels_pending = data_channels.len();
-
-    let mut channel_ready_fut = channel_ready_rx.next();
     loop {
         select! {
-            _ = channel_ready_fut => {
-                if channels_pending == 0 {
-                    break;
-                }
-
-                channels_pending -= 1;
+            _ = channel_readiness => {
+                break;
             },
             // TODO: this means that the signalling is down, should return an
             // error
@@ -324,13 +309,15 @@ async fn handshake_offer(
         };
     }
 
+    new_peer_tx.send(signal_peer.id.clone()).await.unwrap();
+
     Ok((signal_peer.id, data_channels, trickle_fut))
 }
 
 async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    new_peer_tx: UnboundedSender<PeerId>,
+    mut new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<
@@ -344,12 +331,11 @@ async fn handshake_accept(
     debug!("handshake_accept");
     let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
 
-    let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
+    let (channel_ready_tx, wait_for_channels) = channel_readiness(config);
     let data_channels = create_data_channel_pair(
         &connection,
         channel_ready_tx,
         signal_peer.id.clone(),
-        new_peer_tx,
         from_peer_message_tx,
         &config.channels,
     )
@@ -381,23 +367,19 @@ async fn handshake_accept(
             .fuse(),
     );
 
-    let mut channels_pending = data_channels.len();
-
-    let mut channel_ready_fut = channel_ready_rx.next();
+    futures::pin_mut!(wait_for_channels);
     loop {
         select! {
-            _ = channel_ready_fut => {
-                if channels_pending == 0 {
-                    break;
-                }
-
-                channels_pending -= 1;
+            _ = wait_for_channels => {
+                break;
             },
             // TODO: this means that the signalling is down, should return an
             // error
             _ = trickle_fut => continue,
         };
     }
+
+    new_peer_tx.send(signal_peer.id.clone()).await.unwrap();
 
     Ok((signal_peer.id, data_channels, trickle_fut))
 }
@@ -450,9 +432,8 @@ async fn create_rtc_peer_connection(
 
 async fn create_data_channel_pair(
     connection: &RTCPeerConnection,
-    channel_ready: futures_channel::mpsc::Sender<u8>,
+    mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
     peer_id: PeerId,
-    new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     channel_configs: &[ChannelConfig],
 ) -> Vec<Arc<RTCDataChannel>> {
@@ -460,9 +441,8 @@ async fn create_data_channel_pair(
     for (i, channel_config) in channel_configs.iter().enumerate() {
         let channel = create_data_channel(
             connection,
-            channel_ready.clone(),
+            channel_ready.pop().unwrap(),
             peer_id.clone(),
-            new_peer_tx.clone(),
             from_peer_message_tx.get(i).unwrap().clone(),
             channel_config,
             i,
@@ -479,7 +459,6 @@ async fn create_data_channel(
     connection: &RTCPeerConnection,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
     peer_id: PeerId,
-    mut new_peer_tx: UnboundedSender<PeerId>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
     channel_type: &ChannelConfig,
     channel_index: usize,
@@ -496,11 +475,9 @@ async fn create_data_channel(
         .await
         .unwrap();
 
-    let peer_id2 = peer_id.clone();
     channel.on_open(Box::new(move || {
         debug!("Data channel ready");
         Box::pin(async move {
-            new_peer_tx.send(peer_id2.clone()).await.unwrap();
             channel_ready.try_send(1).unwrap();
         })
     }));

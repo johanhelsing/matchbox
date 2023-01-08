@@ -161,7 +161,7 @@ async fn handshake_offer(
     let conn = create_rtc_peer_connection(config);
     let (channel_open_tx, mut channel_open_rx) = futures_channel::mpsc::channel(1);
 
-    let data_channels = create_data_channel_pair(
+    let data_channels = create_data_channels(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
@@ -328,7 +328,7 @@ async fn handshake_accept(
 
     let conn = create_rtc_peer_connection(config);
     let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
-    let data_channels = create_data_channel_pair(
+    let data_channels = create_data_channels(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
@@ -530,7 +530,7 @@ async fn wait_for_ice_gathering_complete(conn: RtcPeerConnection) {
     debug!("Ice gathering completed");
 }
 
-fn create_data_channel_pair(
+fn create_data_channels(
     connection: RtcPeerConnection,
     mut incoming_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peer_id: PeerId,

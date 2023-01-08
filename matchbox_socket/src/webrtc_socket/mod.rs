@@ -1,6 +1,6 @@
 use std::pin::Pin;
 
-use futures::{Future, FutureExt, StreamExt};
+use futures::{future::Fuse, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use log::debug;
@@ -201,9 +201,6 @@ impl WebRtcSocket {
         debug!("waiting for peers to join");
         let mut addrs = vec![];
         while let Some(id) = self.new_connected_peers.next().await {
-            if addrs.contains(&id) {
-                continue;
-            }
             addrs.push(id.clone());
             if addrs.len() == peers {
                 debug!("all peers joined");
@@ -218,10 +215,8 @@ impl WebRtcSocket {
     pub fn accept_new_connections(&mut self) -> Vec<PeerId> {
         let mut ids = Vec::new();
         while let Ok(Some(id)) = self.new_connected_peers.try_next() {
-            if !self.peers.contains(&id) {
-                self.peers.push(id.clone());
-                ids.push(id);
-            }
+            self.peers.push(id.clone());
+            ids.push(id);
         }
         ids
     }
@@ -336,4 +331,25 @@ pub(crate) fn new_senders_and_receivers<T>(
     (0..config.channels.len())
         .map(|_| futures_channel::mpsc::unbounded())
         .unzip()
+}
+
+fn channel_readiness(
+    config: &WebRtcSocketConfig,
+) -> (
+    Vec<futures_channel::mpsc::Sender<u8>>,
+    Pin<Box<Fuse<impl Future<Output = ()>>>>,
+) {
+    let (senders, receivers) = (0..config.channels.len())
+        .map(|_| futures_channel::mpsc::channel(1))
+        .unzip();
+
+    (senders, Box::pin(wait_for_ready(receivers).fuse()))
+}
+
+async fn wait_for_ready(channel_ready_rx: Vec<futures_channel::mpsc::Receiver<u8>>) {
+    for mut receiver in channel_ready_rx {
+        if receiver.next().await.is_none() {
+            panic!("Sender closed before channel was ready");
+        }
+    }
 }

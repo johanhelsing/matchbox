@@ -546,10 +546,10 @@ fn create_data_channel(
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
     mut channel_open: futures_channel::mpsc::Sender<u8>,
-    channel_type: &ChannelConfig,
+    channel_config: &ChannelConfig,
     channel_id: usize,
 ) -> RtcDataChannel {
-    let mut data_channel_config = data_channel_config(channel_type);
+    let mut data_channel_config = data_channel_config(channel_config);
     data_channel_config.id(channel_id as u16);
 
     let channel = connection.create_data_channel_with_data_channel_dict(
@@ -615,13 +615,13 @@ fn leaking_channel_event_handler<T: FromWasmAbi + 'static>(
     closure.forget();
 }
 
-fn data_channel_config(channel_type: &ChannelConfig) -> RtcDataChannelInit {
+fn data_channel_config(channel_config: &ChannelConfig) -> RtcDataChannelInit {
     let mut data_channel_config = RtcDataChannelInit::new();
 
-    data_channel_config.ordered(channel_type.ordered);
+    data_channel_config.ordered(channel_config.ordered);
     data_channel_config.negotiated(true);
 
-    if let Some(n) = channel_type.max_retransmits {
+    if let Some(n) = channel_config.max_retransmits {
         data_channel_config.max_retransmits(n);
     }
 

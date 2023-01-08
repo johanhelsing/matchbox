@@ -461,18 +461,18 @@ async fn create_data_channel(
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
     peer_id: PeerId,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
-    channel_type: &ChannelConfig,
+    channel_config: &ChannelConfig,
     channel_index: usize,
 ) -> Arc<RTCDataChannel> {
     let config = RTCDataChannelInit {
-        ordered: Some(channel_type.ordered),
+        ordered: Some(channel_config.ordered),
         negotiated: Some(channel_index as u16),
-        max_retransmits: channel_type.max_retransmits,
+        max_retransmits: channel_config.max_retransmits,
         ..Default::default()
     };
 
     let channel = connection
-        .create_data_channel("webudp", Some(config))
+        .create_data_channel(&format!("matchbox_socket_{channel_index}"), Some(config))
         .await
         .unwrap();
 

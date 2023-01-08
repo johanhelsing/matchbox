@@ -230,6 +230,7 @@ impl WebRtcSocket {
     /// channel if you didn't configure any explicitly
     ///
     /// messages are removed from the socket when called
+    ///
     /// See also: [`WebRtcSocket::receive_on_channel`]
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
         self.receive_on_channel(0)

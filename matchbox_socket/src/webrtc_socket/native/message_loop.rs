@@ -22,7 +22,9 @@ use webrtc::{
     },
 };
 
-use crate::webrtc_socket::{channel_readiness, new_senders_and_receivers, ChannelConfig};
+use crate::webrtc_socket::{
+    create_data_channels_ready_fut, new_senders_and_receivers, ChannelConfig,
+};
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
@@ -253,8 +255,8 @@ async fn handshake_offer(
     debug!("making offer");
     let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
 
-    let (channel_ready_tx, mut wait_for_channels) = channel_readiness(config);
-    let data_channels = create_data_channel_pair(
+    let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
+    let data_channels = create_data_channels(
         &connection,
         channel_ready_tx,
         signal_peer.id.clone(),
@@ -331,8 +333,8 @@ async fn handshake_accept(
     debug!("handshake_accept");
     let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
 
-    let (channel_ready_tx, mut wait_for_channels) = channel_readiness(config);
-    let data_channels = create_data_channel_pair(
+    let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
+    let data_channels = create_data_channels(
         &connection,
         channel_ready_tx,
         signal_peer.id.clone(),
@@ -429,7 +431,7 @@ async fn create_rtc_peer_connection(
     Ok((connection, trickle))
 }
 
-async fn create_data_channel_pair(
+async fn create_data_channels(
     connection: &RTCPeerConnection,
     mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
     peer_id: PeerId,
@@ -526,35 +528,30 @@ async fn peer_loop(
     >,
     mut to_peer_message_rx: Vec<UnboundedReceiver<Packet>>,
 ) {
-    let (_peer_id, mut data_channels, mut trickle_fut) = handshake_fut.await.unwrap();
-
-    let mut futures = FuturesUnordered::new();
+    let (_peer_id, data_channels, mut trickle_fut) = handshake_fut.await.unwrap();
 
     assert_eq!(
         data_channels.len(),
         to_peer_message_rx.len(),
         "amount of data channels and receivers differ"
     );
-    for _ in 0..data_channels.len() {
-        let data_channel = data_channels.pop().unwrap();
-        let mut rx = to_peer_message_rx.pop().unwrap();
 
-        let message_loop_fut = async move {
+    let mut message_loop_futs: FuturesUnordered<_> = data_channels
+        .iter()
+        .zip(to_peer_message_rx.iter_mut())
+        .map(|(data_channel, rx)| async move {
             while let Some(message) = rx.next().await {
                 trace!("sending packet {:?}", message);
                 let message = message.clone();
                 let message = Bytes::from(message);
                 data_channel.send(&message).await.unwrap();
             }
-        };
-        let message_loop_fut = message_loop_fut.fuse();
-
-        futures.push(message_loop_fut);
-    }
+        })
+        .collect();
 
     loop {
         select! {
-            _ = futures.next() => break,
+            _ = message_loop_futs.next() => break,
             // TODO: this means that the signalling is down, should return an
             // error
             _ = trickle_fut => continue,

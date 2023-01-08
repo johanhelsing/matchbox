@@ -17,7 +17,7 @@ use web_sys::{
     RtcSdpType, RtcSessionDescriptionInit,
 };
 
-use crate::webrtc_socket::{channel_readiness, ChannelConfig};
+use crate::webrtc_socket::{create_data_channels_ready_fut, ChannelConfig};
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
@@ -159,7 +159,7 @@ async fn handshake_offer(
     debug!("making offer");
 
     let conn = create_rtc_peer_connection(config);
-    let (channel_ready_tx, mut wait_for_channels) = channel_readiness(config);
+    let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
 
     let data_channels = create_data_channels(
         conn.clone(),
@@ -320,7 +320,7 @@ async fn handshake_accept(
     debug!("handshake_accept");
 
     let conn = create_rtc_peer_connection(config);
-    let (channel_ready_tx, mut wait_for_channels) = channel_readiness(config);
+    let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
     let data_channels = create_data_channels(
         conn.clone(),
         messages_from_peers_tx,

@@ -335,7 +335,7 @@ pub(crate) fn new_senders_and_receivers<T>(
         .unzip()
 }
 
-fn channel_readiness(
+fn create_data_channels_ready_fut(
     config: &WebRtcSocketConfig,
 ) -> (
     Vec<futures_channel::mpsc::Sender<u8>>,

@@ -17,7 +17,7 @@ use web_sys::{
     RtcSdpType, RtcSessionDescriptionInit,
 };
 
-use crate::webrtc_socket::ChannelConfig;
+use crate::webrtc_socket::{channel_readiness, ChannelConfig};
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
@@ -159,13 +159,13 @@ async fn handshake_offer(
     debug!("making offer");
 
     let conn = create_rtc_peer_connection(config);
-    let (channel_open_tx, mut channel_open_rx) = futures_channel::mpsc::channel(1);
+    let (channel_ready_tx, mut wait_for_channels) = channel_readiness(config);
 
     let data_channels = create_data_channels(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
-        channel_open_tx,
+        channel_ready_tx,
         &config.channels,
     );
 
@@ -251,20 +251,13 @@ async fn handshake_offer(
         try_add_rtc_ice_candidate(&conn, &candidate).await;
     }
 
-    // Do we need this or is it enough to wait until first channel opened?
-    let mut channels_pending = data_channels.len();
-
     // select for channel ready or ice candidates
     debug!("waiting for data channels to open");
     loop {
         select! {
-            _ = channel_open_rx.next() => {
+            _ = wait_for_channels => {
                 debug!("channel ready");
-                channels_pending -= 1;
-
-                if channels_pending == 0 {
-                    break;
-                }
+                break;
             }
             msg = signal_receiver.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
@@ -327,7 +320,7 @@ async fn handshake_accept(
     debug!("handshake_accept");
 
     let conn = create_rtc_peer_connection(config);
-    let (channel_ready_tx, mut channel_ready_rx) = futures_channel::mpsc::channel(1);
+    let (channel_ready_tx, mut wait_for_channels) = channel_readiness(config);
     let data_channels = create_data_channels(
         conn.clone(),
         messages_from_peers_tx,
@@ -429,18 +422,13 @@ async fn handshake_accept(
         try_add_rtc_ice_candidate(&conn, &candidate).await;
     }
 
-    let mut channels_pending = data_channels.len();
-
     // select for channel ready or ice candidates
     debug!("waiting for data channel to open");
     loop {
         select! {
-            _ = channel_ready_rx.next() => {
+            _ = wait_for_channels => {
                 debug!("channel ready");
-                channels_pending -= 1;
-                if channels_pending == 0 {
-                    break;
-                }
+                break;
             }
             msg = signal_receiver.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
@@ -534,7 +522,7 @@ fn create_data_channels(
     connection: RtcPeerConnection,
     mut incoming_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peer_id: PeerId,
-    channel_ready: futures_channel::mpsc::Sender<u8>,
+    mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
     channel_config: &[ChannelConfig],
 ) -> Vec<RtcDataChannel> {
     channel_config
@@ -545,7 +533,7 @@ fn create_data_channels(
                 connection.clone(),
                 incoming_tx.get_mut(i).unwrap().clone(),
                 peer_id.clone(),
-                channel_ready.clone(),
+                channel_ready.pop().unwrap(),
                 channel,
                 i,
             )

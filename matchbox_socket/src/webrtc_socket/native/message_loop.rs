@@ -253,7 +253,7 @@ async fn handshake_offer(
     debug!("making offer");
     let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
 
-    let (channel_ready_tx, mut channel_readiness) = channel_readiness(config);
+    let (channel_ready_tx, mut wait_for_channels) = channel_readiness(config);
     let data_channels = create_data_channel_pair(
         &connection,
         channel_ready_tx,
@@ -300,7 +300,7 @@ async fn handshake_offer(
 
     loop {
         select! {
-            _ = channel_readiness => {
+            _ = wait_for_channels => {
                 break;
             },
             // TODO: this means that the signalling is down, should return an
@@ -331,7 +331,7 @@ async fn handshake_accept(
     debug!("handshake_accept");
     let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
 
-    let (channel_ready_tx, wait_for_channels) = channel_readiness(config);
+    let (channel_ready_tx, mut wait_for_channels) = channel_readiness(config);
     let data_channels = create_data_channel_pair(
         &connection,
         channel_ready_tx,
@@ -367,7 +367,6 @@ async fn handshake_accept(
             .fuse(),
     );
 
-    futures::pin_mut!(wait_for_channels);
     loop {
         select! {
             _ = wait_for_channels => {

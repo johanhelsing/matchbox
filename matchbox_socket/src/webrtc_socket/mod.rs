@@ -84,7 +84,7 @@ pub struct ChannelConfig {
     /// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/ordered
     pub ordered: bool,
     /// Maximum number of retransmit attempts of a message before giving up
-    /// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/maxRetransmits
+    /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/maxRetransmits>
     pub max_retransmits: Option<u16>,
 }
 

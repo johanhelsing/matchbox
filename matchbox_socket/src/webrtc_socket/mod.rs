@@ -266,6 +266,7 @@ impl WebRtcSocket {
     }
 
     /// Send a packet to the given peer on a specific channel as configured in [`WebRtcSocketConfig::channels`].
+    ///
     /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] as you configured it before
     /// (or 0 for the default channel if you use the default configuration).
     pub fn send_on_channel<T: Into<PeerId>>(&mut self, packet: Packet, id: T, index: usize) {

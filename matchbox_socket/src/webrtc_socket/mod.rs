@@ -81,7 +81,7 @@ pub struct RtcIceServerConfig {
 #[derive(Debug)]
 pub struct ChannelConfig {
     /// Whether messages sent on the channel are guaranteed to arrive in order
-    /// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/ordered
+    /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/ordered>
     pub ordered: bool,
     /// Maximum number of retransmit attempts of a message before giving up
     /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/maxRetransmits>

@@ -33,7 +33,7 @@ bevy_ggrs = { version = "0.11" }
 bytemuck = { version = "1.7", features=["derive"]}
 clap = { version = "4.0.28", features = ["derive"] }
 serde = "1.0"
-winit = "0.26"
+winit = "0.27"
 log = "0.4"
 
 # [profile.dev]

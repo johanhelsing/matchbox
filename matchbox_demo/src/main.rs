@@ -1,3 +1,4 @@
+use bevy::log::LogPlugin;
 use bevy::{prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, Session};
 use ggrs::SessionBuilder;
@@ -53,7 +54,10 @@ fn main() {
         .build(&mut app);
 
     app.insert_resource(ClearColor(SKY_COLOR))
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(LogPlugin {
+            filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
+            level: bevy::log::Level::DEBUG,
+        }))
         // Some of our systems need the query parameters
         .insert_resource(args)
         .init_resource::<FrameCount>()

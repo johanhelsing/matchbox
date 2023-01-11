@@ -110,11 +110,12 @@ pub fn setup_scene_system(
         transform.translation.x = x;
         transform.translation.y = CUBE_SIZE / 2.;
         transform.translation.z = z;
+        let color = PLAYER_COLORS[handle % PLAYER_COLORS.len()];
 
         commands.spawn((
             PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Cube { size: CUBE_SIZE })),
-                material: materials.add(PLAYER_COLORS[handle as usize].into()),
+                material: materials.add(color.into()),
                 transform,
                 ..default()
             },

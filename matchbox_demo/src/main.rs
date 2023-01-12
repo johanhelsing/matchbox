@@ -2,7 +2,6 @@ use bevy::log::LogPlugin;
 use bevy::{prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, Session};
 use ggrs::SessionBuilder;
-use log::info;
 use matchbox_socket::WebRtcSocket;
 
 mod args;

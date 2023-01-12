@@ -47,12 +47,11 @@ pub async fn message_loop(
     let mut timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL)).fuse();
 
     loop {
-        let mut next_peer_messages_out = FuturesUnordered::new();
-        peer_messages_out_rx
+        let mut next_peer_messages_out: FuturesUnordered<_> = peer_messages_out_rx
             .iter_mut()
             .enumerate()
-            .map(|(index, r)| async move { (index, r.next().fuse().await) })
-            .for_each(|f| next_peer_messages_out.push(f));
+            .map(|(index, r)| async move { (index, r.next().await) })
+            .collect();
 
         let mut next_peer_message_out = next_peer_messages_out.next().fuse();
 

@@ -25,7 +25,7 @@ uuid = { version = "1.0", default-features = false, features = ["v4"] }
 log = { version = "0.4", default-features = false }
 
 # ggrs-socket
-ggrs = { version = "0.9", default-features = false, optional = true }
+ggrs = { version = "0.9.3", default-features = false, optional = true }
 bincode = { version = "1.3", default-features = false, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

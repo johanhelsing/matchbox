@@ -82,6 +82,7 @@ pub fn setup_scene_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     session: Res<Session<GGRSConfig>>,
+    mut camera_query: Query<&mut Transform, With<Camera>>,
 ) {
     let num_players = match &*session {
         Session::SyncTestSession(s) => s.num_players(),
@@ -128,14 +129,13 @@ pub fn setup_scene_system(
 
     // light
     commands.spawn(PointLightBundle {
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        transform: Transform::from_xyz(-4.0, 8.0, 4.0),
         ..default()
     });
     // camera
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 7.5, 0.5).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+    for mut transform in camera_query.iter_mut() {
+        *transform = Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y);
+    }
 }
 
 // Example system, manipulating a resource, will be added to the rollback schedule.

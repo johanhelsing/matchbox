@@ -199,7 +199,7 @@ fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {
     match session.as_mut() {
         Session::P2PSession(s) => {
             for event in s.events() {
-                println!("GGRS Event: {:?}", event);
+                info!("GGRS Event: {:?}", event);
             }
         }
         _ => panic!("This example focuses on p2p."),

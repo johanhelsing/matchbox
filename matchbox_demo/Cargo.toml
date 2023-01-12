@@ -24,7 +24,7 @@ console_error_panic_hook = "0.1"
 console_log = "0.2"
 serde_qs = "0.10"
 wasm-bindgen = "0.2"
- ggrs = { version = "0.9.3", features = ["wasm-bindgen"] }
+ggrs = { version = "0.9.3", features = ["wasm-bindgen"] }
 
 [dependencies]
 matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }

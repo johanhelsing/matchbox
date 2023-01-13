@@ -468,6 +468,8 @@ fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection 
         );
     });
     let oniceconnectionstatechange = Closure::wrap(oniceconnectionstatechange);
+    // NOTE: Not attaching a handler on this event causes FF to disconnect after a couple of seconds
+    // see: https://github.com/johanhelsing/matchbox/issues/36
     connection
         .set_oniceconnectionstatechange(Some(oniceconnectionstatechange.as_ref().unchecked_ref()));
     oniceconnectionstatechange.forget();

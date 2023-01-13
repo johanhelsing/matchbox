@@ -1,4 +1,4 @@
-FROM rust:1.64 as builder
+FROM rust:1.66 as builder
 WORKDIR /usr/src/matchbox_server
 COPY Cargo.toml .
 RUN mkdir src \

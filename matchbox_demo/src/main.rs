@@ -2,7 +2,6 @@ use bevy::log::LogPlugin;
 use bevy::{prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, Session};
 use ggrs::SessionBuilder;
-use log::info;
 use matchbox_socket::WebRtcSocket;
 
 mod args;
@@ -54,10 +53,20 @@ fn main() {
         .build(&mut app);
 
     app.insert_resource(ClearColor(SKY_COLOR))
-        .add_plugins(DefaultPlugins.set(LogPlugin {
-            filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
-            level: bevy::log::Level::DEBUG,
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(LogPlugin {
+                    filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
+                    level: bevy::log::Level::DEBUG,
+                })
+                .set(WindowPlugin {
+                    window: WindowDescriptor {
+                        fit_canvas_to_parent: true, // behave on wasm
+                        ..default()
+                    },
+                    ..default()
+                }),
+        )
         // Some of our systems need the query parameters
         .insert_resource(args)
         .init_resource::<FrameCount>()

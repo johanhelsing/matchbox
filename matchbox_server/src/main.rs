@@ -19,7 +19,7 @@ async fn main() {
 
     let health_route = warp::path("health").and_then(health_handler);
 
-    let log = warp::log("made_in_heaven");
+    let log = warp::log("matchbox_server");
 
     // let cors = warp::cors()
     //     .allow_methods(vec!["GET", "POST"])

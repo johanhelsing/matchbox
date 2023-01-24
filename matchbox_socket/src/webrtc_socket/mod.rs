@@ -277,6 +277,22 @@ impl WebRtcSocket {
             .expect("send_to failed");
     }
 
+    /// Send a packet to all connected peers on a specific channel as configured in [`WebRtcSocketConfig::channels`].
+    ///
+    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] on socket creation.
+    pub fn broadcast_on_channel(&mut self, packet: Packet, index: usize) {
+        let sender = self
+            .peer_messages_out
+            .get(index)
+            .unwrap_or_else(|| panic!("No data channel with index {}", index));
+
+        for peer_id in self.connected_peers() {
+            sender
+                .unbounded_send((peer_id, packet.clone()))
+                .expect("send_to failed");
+        }
+    }
+
     /// Returns the id of this peer
     pub fn id(&self) -> &PeerId {
         &self.id

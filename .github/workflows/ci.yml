@@ -6,9 +6,6 @@ name: ci
 
 jobs:
   check-native:
-    # pull requests are a duplicate of a branch push if within the same repo.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
-
     name: Check native
     runs-on: ubuntu-latest
     steps:
@@ -29,7 +26,6 @@ jobs:
 
   check-wasm:
     name: Check wasm
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -51,7 +47,6 @@ jobs:
 
   test:
     name: Test Suite
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -71,7 +66,6 @@ jobs:
 
   lints-native:
     name: Lints native
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -99,7 +93,6 @@ jobs:
 
   clippy-wasm:
     name: Clippy wasm
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -122,7 +115,6 @@ jobs:
 
   server-container:
     name: Build & Push Server Container
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     needs: ["check-native", "check-wasm", "test", "lints-native", "clippy-wasm"]
     runs-on: ubuntu-latest
     steps:

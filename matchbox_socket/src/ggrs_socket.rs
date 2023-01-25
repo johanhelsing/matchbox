@@ -30,7 +30,6 @@ impl ggrs::NonBlockingSocket<String> for WebRtcSocket {
     }
 
     fn receive_all_messages(&mut self) -> Vec<(String, Message)> {
-        // let fake_socket_addrs = self.fake_socket_addrs.clone();
         let mut messages = vec![];
         for (id, packet) in self.receive().into_iter() {
             let msg = bincode::deserialize(&packet).unwrap();

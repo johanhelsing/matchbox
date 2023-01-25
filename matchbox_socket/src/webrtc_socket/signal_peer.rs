@@ -21,12 +21,3 @@ impl SignalPeer {
         Self { id, sender }
     }
 }
-
-// let to_peer_signal_sender = requests_sender.clone().with(move |signal| {
-//     future::ok::<PeerRequest, SendError>(
-//         PeerRequest::Signal {
-//             receiver: peer_uuid.clone(),
-//             data: signal
-//         }
-//     )
-// });

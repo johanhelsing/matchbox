@@ -119,11 +119,7 @@ impl Default for WebRtcSocketConfig {
 impl Default for RtcIceServerConfig {
     fn default() -> Self {
         Self {
-            urls: vec![
-                "stun:stun.l.google.com:19302".to_string(),
-                //"stun:stun.johanhelsing.studio:3478".to_string(),
-                //"turn:stun.johanhelsing.studio:3478".to_string(),
-            ],
+            urls: vec!["stun:stun.l.google.com:19302".to_string()],
             username: Default::default(),
             credential: Default::default(),
         }

@@ -120,17 +120,9 @@ fn parse_room_id(id: String) -> RoomId {
     RoomId(id)
 }
 
-// I don't understand warp well enough to get rid of this warning
-// This is going to be a hard error in the future, though:
-// https://doc.rust-lang.org/nightly/nightly-rustc/rustc_lint/opaque_hidden_inferred_bound/static.OPAQUE_HIDDEN_INFERRED_BOUND.html
-// The compiler hint tells us to add an impl warp::generic::Tuple bound to the
-// Extract associated type. That type is private, though... I'm hoping that in
-// the meantime someone else will run into similar issues with warp and find
-// solutions for them.
-#[allow(opaque_hidden_inferred_bound)]
 pub(crate) fn ws_filter(
     state: Arc<Mutex<State>>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     warp::ws()
         .and(warp::any())
         .and(warp::path::param().map(parse_room_id))

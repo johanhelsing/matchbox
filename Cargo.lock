@@ -3066,6 +3066,7 @@ name = "matchbox_socket"
 version = "0.5.0"
 dependencies = [
  "async-compat",
+ "async-trait",
  "async-tungstenite",
  "bincode",
  "bytes",

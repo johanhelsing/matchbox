@@ -126,7 +126,7 @@ pub(crate) async fn ws_handler(
     State(state): State<Arc<Mutex<ServerState>>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
-    println!("`{addr}` connected.");
+    info!("`{addr}` connected.");
 
     let room_id = room_id.map(|path| path.0).unwrap_or_default();
     let next = params

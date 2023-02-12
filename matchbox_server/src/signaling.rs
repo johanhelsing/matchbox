@@ -6,11 +6,9 @@ use axum::Error;
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
 use log::{error, info, warn};
 use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -39,7 +37,7 @@ use matchbox::*;
 type PeerRequest = matchbox::PeerRequest<serde_json::Value>;
 type PeerEvent = matchbox::PeerEvent<serde_json::Value>;
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RoomId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -123,13 +121,14 @@ impl ServerState {
 /// This is the last point where we can extract TCP/IP metadata such as IP address of the client.
 pub(crate) async fn ws_handler(
     ws: WebSocketUpgrade,
-    Path(room_id): Path<RoomId>,
+    room_id: Option<Path<RoomId>>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<Arc<Mutex<ServerState>>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     println!("`{addr}` connected.");
 
+    let room_id = room_id.map(|path| path.0).unwrap_or_default();
     let next = params
         .get("next")
         .and_then(|next| next.parse::<usize>().ok());

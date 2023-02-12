@@ -27,7 +27,12 @@ async fn main() {
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "matchbox_server=info,tower_http=debug".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .compact()
+                .with_file(false)
+                .with_target(false),
+        )
         .init();
 
     // Parse clap arguments
@@ -37,6 +42,7 @@ async fn main() {
     let server_state = Arc::new(futures::lock::Mutex::new(ServerState::default()));
     let app = Router::new()
         .route("/health", get(health_handler))
+        .route("/", get(ws_handler))
         .route("/:room_id", get(ws_handler))
         .layer(
             // Allow requests from anywhere - Not ideal for production!
@@ -46,6 +52,7 @@ async fn main() {
                 .allow_headers(Any),
         )
         .layer(
+            // Middleware for logging from tower-http
             TraceLayer::new_for_http().on_response(
                 DefaultOnResponse::new()
                     .level(Level::INFO)

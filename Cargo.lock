@@ -2995,7 +2995,6 @@ dependencies = [
  "axum",
  "clap",
  "futures",
- "log",
  "serde",
  "serde_json",
  "thiserror",

@@ -2,13 +2,12 @@ use axum::response::IntoResponse;
 use axum::Router;
 use axum::{http::StatusCode, routing::get};
 use clap::Parser;
-use log::info;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
-use tracing::Level;
+use tracing::{info, Level};
 use tracing_subscriber::prelude::*;
 
 pub use args::Args;

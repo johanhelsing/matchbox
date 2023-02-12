@@ -24,7 +24,6 @@ uuid = { version = "1.0", features = ["serde", "v4"] }
 clap = { version = "4.0", features = ["derive", "env"] }
 thiserror = "1.0"
 tokio-stream = "0.1"
-log = "0.4"
 
 [dev-dependencies]
 tokio = { version = "1.10", features = ["macros", "rt-multi-thread", "time"] }

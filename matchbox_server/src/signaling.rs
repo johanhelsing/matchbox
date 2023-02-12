@@ -4,13 +4,13 @@ use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use axum::Error;
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
-use log::{error, info, warn};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tracing::{error, info, warn};
 
 pub mod matchbox {
     use serde::{Deserialize, Serialize};

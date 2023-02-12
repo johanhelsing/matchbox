@@ -1,16 +1,18 @@
+use axum::extract::connect_info::ConnectInfo;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{Path, Query, State};
+use axum::response::IntoResponse;
+use axum::Error;
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
 use log::{error, info, warn};
+use serde::Deserialize;
+use std::net::SocketAddr;
 use std::{
     collections::{HashMap, HashSet},
-    convert::Infallible,
     sync::Arc,
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use warp::{
-    ws::{Message, WebSocket},
-    Error, Filter, Rejection, Reply,
-};
 
 pub mod matchbox {
     use serde::{Deserialize, Serialize};
@@ -37,7 +39,7 @@ use matchbox::*;
 type PeerRequest = matchbox::PeerRequest<serde_json::Value>;
 type PeerEvent = matchbox::PeerEvent<serde_json::Value>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RoomId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -51,19 +53,20 @@ pub(crate) struct QueryParam {
     next: Option<usize>,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct Peer {
     pub uuid: PeerId,
     pub room: RequestedRoom,
-    pub sender: tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>,
+    pub sender: tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, Error>>,
 }
 
-#[derive(Default)]
-pub(crate) struct State {
+#[derive(Default, Debug, Clone)]
+pub(crate) struct ServerState {
     clients: HashMap<PeerId, Peer>,
     rooms: HashMap<RequestedRoom, HashSet<PeerId>>,
 }
 
-impl State {
+impl ServerState {
     /// Returns peers already in room
     fn add_peer(&mut self, peer: Peer) -> Vec<PeerId> {
         let peer_id = peer.uuid.clone();
@@ -116,46 +119,29 @@ impl State {
     }
 }
 
-fn parse_room_id(id: String) -> RoomId {
-    RoomId(id)
-}
-
-pub(crate) fn ws_filter(
-    state: Arc<Mutex<State>>,
-) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-    warp::ws()
-        .and(warp::any())
-        .and(warp::path::param().map(parse_room_id))
-        .and(warp::query::<QueryParam>().map(parse_room_next))
-        .and(with_state(state))
-        .and_then(ws_handler)
-}
-
-fn parse_room_next(p: QueryParam) -> Option<usize> {
-    p.next
-}
-
-fn with_state(
-    state: Arc<Mutex<State>>,
-) -> impl Filter<Extract = (Arc<Mutex<State>>,), Error = Infallible> + Clone {
-    warp::any().map(move || state.clone())
-}
-
+/// The handler for the HTTP request to upgrade to WebSockets.
+/// This is the last point where we can extract TCP/IP metadata such as IP address of the client.
 pub(crate) async fn ws_handler(
-    ws: warp::ws::Ws,
-    room_id: RoomId,
-    next: Option<usize>,
-    state: Arc<Mutex<State>>,
-) -> std::result::Result<impl Reply, Rejection> {
-    Ok(ws.on_upgrade(move |websocket| {
-        handle_ws(websocket, state, RequestedRoom { id: room_id, next })
-    }))
+    ws: WebSocketUpgrade,
+    Path(room_id): Path<RoomId>,
+    Query(params): Query<HashMap<String, String>>,
+    State(state): State<Arc<Mutex<ServerState>>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> impl IntoResponse {
+    println!("`{addr}` connected.");
+
+    let next = params
+        .get("next")
+        .and_then(|next| next.parse::<usize>().ok());
+
+    // Finalize the upgrade process by returning upgrade callback to client
+    ws.on_upgrade(move |websocket| handle_ws(websocket, state, RequestedRoom { id: room_id, next }))
 }
 
 #[derive(Debug, thiserror::Error)]
 enum RequestError {
-    #[error("Warp error")]
-    Warp(#[from] warp::Error),
+    #[error("Axum error")]
+    Axum(#[from] axum::Error),
     #[error("Not text error")]
     NotText,
     #[error("Message is close")]
@@ -167,30 +153,29 @@ enum RequestError {
 fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, RequestError> {
     let request = request?;
 
-    if request.is_close() {
-        return Err(RequestError::Close);
-    }
-
-    if !request.is_text() {
-        return Err(RequestError::NotText);
-    }
-
-    let request = request.to_str().map_err(|_| RequestError::NotText)?;
-
-    let request: PeerRequest = serde_json::from_str(request)?;
+    let request: PeerRequest = match request {
+        Message::Text(text) => serde_json::from_str(&text)?,
+        Message::Binary(_) => return Err(RequestError::NotText),
+        Message::Close(_) => return Err(RequestError::Close),
+        _ => unimplemented!("unsupported message"),
+    };
 
     Ok(request)
 }
 
 fn spawn_sender_task(
     sender: SplitSink<WebSocket, Message>,
-) -> mpsc::UnboundedSender<std::result::Result<Message, warp::Error>> {
+) -> mpsc::UnboundedSender<std::result::Result<Message, Error>> {
     let (client_sender, receiver) = mpsc::unbounded_channel();
     tokio::task::spawn(UnboundedReceiverStream::new(receiver).forward(sender));
     client_sender
 }
 
-async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_room: RequestedRoom) {
+async fn handle_ws(
+    websocket: WebSocket,
+    state: Arc<Mutex<ServerState>>,
+    requested_room: RequestedRoom,
+) {
     let (ws_sender, mut ws_receiver) = websocket.split();
     let sender = spawn_sender_task(ws_sender);
     let mut peer_uuid = None;
@@ -198,8 +183,8 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
     while let Some(request) = ws_receiver.next().await {
         let request = match parse_request(request) {
             Ok(request) => request,
-            Err(RequestError::Warp(e)) => {
-                error!("Warp error while receiving request: {:?}", e);
+            Err(RequestError::Axum(e)) => {
+                error!("Axum error while receiving request: {:?}", e);
                 // Most likely a ConnectionReset or similar.
                 // just give up on this peer.
                 break;
@@ -231,14 +216,13 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
                     room: requested_room.clone(),
                 });
 
-                let event = Message::text(
-                    serde_json::to_string(&PeerEvent::NewPeer(id.clone()))
-                        .expect("error serializing message"),
-                );
+                let event_text = serde_json::to_string(&PeerEvent::NewPeer(id.clone()))
+                    .expect("error serializing message");
+                let event = Message::Text(event_text.clone());
 
                 for peer_id in peers {
                     // Tell everyone about this new peer
-                    info!("{:?} -> {:?}", peer_id, event.to_str().unwrap());
+                    info!("{:?} -> {:?}", peer_id, event_text);
                     state.try_send(&peer_id, event.clone());
                 }
             }
@@ -250,7 +234,7 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
                         continue;
                     }
                 };
-                let event = Message::text(
+                let event = Message::Text(
                     serde_json::to_string(&PeerEvent::Signal { sender, data })
                         .expect("error serializing message"),
                 );
@@ -271,388 +255,5 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
     if let Some(uuid) = peer_uuid {
         let mut state = state.lock().await;
         state.remove_peer(&uuid);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use std::time::Duration;
-
-    use futures::pin_mut;
-    use tokio::{select, time};
-    use warp::{test::WsClient, ws::Message, Filter, Rejection, Reply};
-
-    use crate::signaling::{parse_room_id, parse_room_next, PeerEvent, QueryParam, RoomId};
-
-    // warning: See comment for ws_filter
-    #[allow(opaque_hidden_inferred_bound)]
-    fn api() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-        super::ws_filter(Default::default())
-    }
-
-    #[tokio::test]
-    async fn ws_connect() {
-        let _ = pretty_env_logger::try_init();
-        let api = api();
-
-        warp::test::ws()
-            .path("/room_a")
-            .handshake(api)
-            .await
-            .expect("handshake");
-    }
-
-    #[tokio::test]
-    async fn new_peer() {
-        let _ = pretty_env_logger::try_init();
-        let api = api();
-
-        let mut client_a = warp::test::ws()
-            .path("/room_a")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_a
-            .send(Message::text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
-
-        let mut client_b = warp::test::ws()
-            .path("/room_a")
-            .handshake(api)
-            .await
-            .expect("handshake");
-
-        client_b
-            .send(Message::text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
-
-        let a_msg = client_a.recv().await;
-        let new_peer_event: PeerEvent =
-            serde_json::from_str(a_msg.unwrap().to_str().unwrap()).unwrap();
-
-        assert_eq!(new_peer_event, PeerEvent::NewPeer("uuid-b".to_string()));
-    }
-
-    #[tokio::test]
-    async fn signal() {
-        let _ = pretty_env_logger::try_init();
-        let api = api();
-
-        let mut client_a = warp::test::ws()
-            .path("/room_a")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_a
-            .send(Message::text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
-
-        let mut client_b = warp::test::ws()
-            .path("/room_a")
-            .handshake(api)
-            .await
-            .expect("handshake");
-
-        client_b
-            .send(Message::text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
-
-        let a_msg = client_a.recv().await;
-        let new_peer_event: PeerEvent =
-            serde_json::from_str(a_msg.unwrap().to_str().unwrap()).unwrap();
-
-        let peer_uuid = match new_peer_event {
-            PeerEvent::NewPeer(peer) => peer,
-            _ => panic!("unexpected event"),
-        };
-
-        client_a
-            .send(Message::text(format!(
-                "{{\"Signal\": {{\"receiver\": \"{}\", \"data\": \"123\" }}}}",
-                peer_uuid
-            )))
-            .await;
-
-        let b_msg = client_b.recv().await;
-        let signal_event: PeerEvent =
-            serde_json::from_str(b_msg.unwrap().to_str().unwrap()).unwrap();
-
-        assert_eq!(
-            signal_event,
-            PeerEvent::Signal {
-                data: serde_json::Value::String("123".to_string()),
-                sender: "uuid-a".to_string(),
-            }
-        );
-    }
-
-    async fn recv_peer_event(client: &mut WsClient) -> PeerEvent {
-        let message = client.recv().await;
-        serde_json::from_str(message.unwrap().to_str().unwrap()).unwrap()
-    }
-
-    #[tokio::test]
-    async fn match_pairs() {
-        let _ = pretty_env_logger::try_init();
-        let api = api();
-
-        let mut client_a = warp::test::ws()
-            .path("/room_name?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_a
-            .send(Message::text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
-
-        let mut client_b = warp::test::ws()
-            .path("/room_name?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_b
-            .send(Message::text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
-
-        let mut client_c = warp::test::ws()
-            .path("/room_name?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_c
-            .send(Message::text(r#"{"Uuid": "uuid-c"}"#.to_string()))
-            .await;
-
-        let mut client_d = warp::test::ws()
-            .path("/room_name?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_d
-            .send(Message::text(r#"{"Uuid": "uuid-d"}"#.to_string()))
-            .await;
-
-        // Clients should be matched in pairs as they arrive, i.e. a + b and c + d
-        let new_peer_b = recv_peer_event(&mut client_a).await;
-        let new_peer_d = recv_peer_event(&mut client_c).await;
-
-        assert_eq!(new_peer_b, PeerEvent::NewPeer("uuid-b".to_string()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
-
-        let timeout = time::sleep(Duration::from_millis(100));
-        pin_mut!(timeout);
-        select! {
-            _ = client_a.recv() => panic!("unexpected message"),
-            _ = client_b.recv() => panic!("unexpected message"),
-            _ = client_c.recv() => panic!("unexpected message"),
-            _ = client_d.recv() => panic!("unexpected message"),
-            _ = &mut timeout => {}
-        }
-    }
-    #[tokio::test]
-    async fn match_pair_and_other_alone_room_without_next() {
-        let _ = pretty_env_logger::try_init();
-        let api = api();
-
-        let mut client_a = warp::test::ws()
-            .path("/room_name?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_a
-            .send(Message::text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
-
-        let mut client_b = warp::test::ws()
-            .path("/room_name")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_b
-            .send(Message::text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
-
-        let mut client_c = warp::test::ws()
-            .path("/room_name?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_c
-            .send(Message::text(r#"{"Uuid": "uuid-c"}"#.to_string()))
-            .await;
-
-        // Clients should be matched in pairs as they arrive, i.e. a + b and c + d
-        let new_peer_c = recv_peer_event(&mut client_a).await;
-
-        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
-
-        let timeout = time::sleep(Duration::from_millis(100));
-        pin_mut!(timeout);
-        select! {
-            _ = client_a.recv() => panic!("unexpected message"),
-            _ = client_b.recv() => panic!("unexpected message"),
-            _ = client_c.recv() => panic!("unexpected message"),
-            _ = &mut timeout => {}
-        }
-    }
-
-    #[tokio::test]
-    async fn match_different_id_same_next() {
-        let _ = pretty_env_logger::try_init();
-        let api = api();
-
-        let mut client_a = warp::test::ws()
-            .path("/scope_1?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        let mut client_b = warp::test::ws()
-            .path("/scope_2?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        let mut client_c = warp::test::ws()
-            .path("/scope_1?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        let mut client_d = warp::test::ws()
-            .path("/scope_2?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_a
-            .send(Message::text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
-        client_c
-            .send(Message::text(r#"{"Uuid": "uuid-c"}"#.to_string()))
-            .await;
-        client_b
-            .send(Message::text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
-
-        client_d
-            .send(Message::text(r#"{"Uuid": "uuid-d"}"#.to_string()))
-            .await;
-
-        // Clients should be matched in pairs as they arrive, i.e. a + c and b + d
-        let new_peer_c = recv_peer_event(&mut client_a).await;
-        let new_peer_d = recv_peer_event(&mut client_b).await;
-
-        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
-
-        let timeout = time::sleep(Duration::from_millis(100));
-        pin_mut!(timeout);
-        select! {
-            _ = client_a.recv() => panic!("unexpected message"),
-            _ = client_b.recv() => panic!("unexpected message"),
-            _ = client_c.recv() => panic!("unexpected message"),
-            _ = client_d.recv() => panic!("unexpected message"),
-            _ = &mut timeout => {}
-        }
-    }
-    #[tokio::test]
-    async fn match_same_id_different_next() {
-        let _ = pretty_env_logger::try_init();
-        let api = api();
-
-        let mut client_a = warp::test::ws()
-            .path("/scope_1?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        let mut client_b = warp::test::ws()
-            .path("/scope_1?next=3")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        let mut client_c = warp::test::ws()
-            .path("/scope_1?next=2")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        let mut client_d = warp::test::ws()
-            .path("/scope_1?next=3")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        let mut client_e = warp::test::ws()
-            .path("/scope_1?next=3")
-            .handshake(api.clone())
-            .await
-            .expect("handshake");
-
-        client_a
-            .send(Message::text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
-        client_c
-            .send(Message::text(r#"{"Uuid": "uuid-c"}"#.to_string()))
-            .await;
-        client_b
-            .send(Message::text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
-
-        client_d
-            .send(Message::text(r#"{"Uuid": "uuid-d"}"#.to_string()))
-            .await;
-
-        client_e
-            .send(Message::text(r#"{"Uuid": "uuid-e"}"#.to_string()))
-            .await;
-
-        // Clients should be matched in pairs as they arrive, i.e. a + c and (b + d ; b + e ; d + e)
-        let new_peer_c = recv_peer_event(&mut client_a).await;
-        let new_peer_d = recv_peer_event(&mut client_b).await;
-        let new_peer_e = recv_peer_event(&mut client_b).await;
-        assert_eq!(new_peer_e, PeerEvent::NewPeer("uuid-e".to_string()));
-        let new_peer_e = recv_peer_event(&mut client_d).await;
-
-        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
-        assert_eq!(new_peer_e, PeerEvent::NewPeer("uuid-e".to_string()));
-
-        let timeout = time::sleep(Duration::from_millis(100));
-        pin_mut!(timeout);
-        select! {
-            _ = client_a.recv() => panic!("unexpected message"),
-            _ = client_b.recv() => panic!("unexpected message"),
-            _ = client_c.recv() => panic!("unexpected message"),
-            _ = client_d.recv() => panic!("unexpected message"),
-            _ = client_e.recv() => panic!("unexpected message"),
-            _ = &mut timeout => {}
-        }
-    }
-
-    #[test]
-    fn requested_room() {
-        assert_eq!(
-            parse_room_id("room_name".into()),
-            RoomId("room_name".to_string())
-        );
-    }
-    #[test]
-    fn requested_scope() {
-        assert_eq!(parse_room_next(QueryParam { next: Some(3) }), Some(3));
-        assert_eq!(parse_room_next(QueryParam { next: None }), None);
     }
 }

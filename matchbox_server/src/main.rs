@@ -1,70 +1,57 @@
+use axum::response::IntoResponse;
+use axum::Router;
+use axum::{http::StatusCode, routing::get};
 use clap::Parser;
 use log::info;
-use std::env;
-use warp::{http::StatusCode, hyper::Method, Filter, Rejection, Reply};
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
+use tracing_subscriber::prelude::*;
 
 pub use args::Args;
 pub use signaling::matchbox::PeerId;
+
+use crate::signaling::{ws_handler, ServerState};
 
 mod args;
 mod signaling;
 
 #[tokio::main]
 async fn main() {
-    if env::var_os("RUST_LOG").is_none() {
-        env::set_var("RUST_LOG", "matchbox_server=info");
-    }
-    pretty_env_logger::init();
+    // Initialize logger
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "matchbox_server=info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    // Parse clap arguments
     let args = Args::parse();
 
-    let health_route = warp::path("health").and_then(health_handler);
+    // Setup router
+    let server_state = Arc::new(futures::lock::Mutex::new(ServerState::default()));
+    let app = Router::new()
+        .route("/health", get(health_handler))
+        .route("/:room_id", get(ws_handler))
+        .layer(
+            // Allow requests from anywhere - Not ideal for production!
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
+        .with_state(server_state);
 
-    let log = warp::log("matchbox_server");
-
-    // let cors = warp::cors()
-    //     .allow_methods(vec!["GET", "POST"])
-    //     .allow_header("content-type")
-    //     .allow_header("authorization")
-    //     .allow_any_origin()
-    //     .build();
-
-    let cors = warp::cors()
-        .allow_any_origin()
-        .allow_headers(vec![
-            "Access-Control-Allow-Headers",
-            "Access-Control-Request-Method",
-            "Access-Control-Request-Headers",
-            "Origin",
-            "Accept",
-            "X-Requested-With",
-            "Content-Type",
-        ])
-        .allow_methods(&[
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::PATCH,
-            Method::DELETE,
-            Method::OPTIONS,
-            Method::HEAD,
-        ]);
-
-    // let cors = warp::cors()
-    //     .allow_any_origin()
-    //     .allow_methods(&[Method::GET]);
-
-    let routes = health_route
-        .or(signaling::ws_filter(Default::default()))
-        .with(cors)
-        .with(log);
-
-    info!(
-        "Starting matchbox signaling server at port {}",
-        args.host.port()
-    );
-    warp::serve(routes).run(args.host).await;
+    // Run server
+    info!("Matchbox Signaling Server: {}", args.host,);
+    axum::Server::bind(&args.host)
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .expect("Unable to run signalling server, is it already running?");
 }
 
-pub async fn health_handler() -> std::result::Result<impl Reply, Rejection> {
-    Ok(StatusCode::OK)
+pub async fn health_handler() -> impl IntoResponse {
+    StatusCode::OK
 }

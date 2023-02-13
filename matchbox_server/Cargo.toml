@@ -26,5 +26,4 @@ thiserror = "1.0"
 tokio-stream = "0.1"
 
 [dev-dependencies]
-tokio = { version = "1.10", features = ["macros", "rt-multi-thread", "time"] }
 tokio-tungstenite = "0.18.0"

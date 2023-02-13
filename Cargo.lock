@@ -3000,6 +3000,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-tungstenite",
  "tower-http",
  "tracing",
  "tracing-subscriber",

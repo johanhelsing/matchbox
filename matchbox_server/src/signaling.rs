@@ -256,3 +256,354 @@ async fn handle_ws(
         state.remove_peer(&uuid);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::signaling::PeerEvent;
+    use axum::routing::get;
+    use axum::Router;
+    use futures::lock::Mutex;
+    use futures::{pin_mut, SinkExt, StreamExt};
+    use std::net::{Ipv4Addr, SocketAddr};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::{net::TcpStream, select, time};
+    use tokio_tungstenite::tungstenite::Message;
+    use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+
+    use super::{ws_handler, ServerState};
+
+    fn app() -> Router {
+        Router::new()
+            .route("/:room_id", get(ws_handler))
+            .with_state(Arc::new(Mutex::new(ServerState::default())))
+    }
+
+    // Helper to take the next PeerEvent from a stream
+    async fn recv_peer_event(client: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> PeerEvent {
+        let message: Message = futures::StreamExt::next(client)
+            .await
+            .expect("some message")
+            .expect("socket message");
+        serde_json::from_str(&message.to_string()).expect("json peer event")
+    }
+
+    #[tokio::test]
+    async fn ws_connect() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+            .await
+            .expect("handshake");
+    }
+
+    #[tokio::test]
+    async fn new_peer() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client_a, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        _ = client_a
+            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+
+        let (mut client_b, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        _ = client_b
+            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+
+        let new_peer_event = recv_peer_event(&mut client_a).await;
+
+        assert_eq!(new_peer_event, PeerEvent::NewPeer("uuid-b".to_string()));
+    }
+
+    #[tokio::test]
+    async fn signal() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client_a, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        _ = client_a
+            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+
+        let (mut client_b, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        _ = client_b
+            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+
+        let new_peer_event = recv_peer_event(&mut client_a).await;
+        let peer_uuid = match new_peer_event {
+            PeerEvent::NewPeer(peer) => peer,
+            _ => panic!("unexpected event"),
+        };
+
+        _ = client_a
+            .send(Message::text(format!(
+                "{{\"Signal\": {{\"receiver\": \"{peer_uuid}\", \"data\": \"123\" }}}}"
+            )))
+            .await;
+
+        let signal_event = recv_peer_event(&mut client_b).await;
+        assert_eq!(
+            signal_event,
+            PeerEvent::Signal {
+                data: serde_json::Value::String("123".to_string()),
+                sender: "uuid-a".to_string(),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn match_pairs() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client_a, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+                .await
+                .unwrap();
+        _ = client_a
+            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+
+        let (mut client_b, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+                .await
+                .unwrap();
+        _ = client_b
+            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+
+        let (mut client_c, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+                .await
+                .unwrap();
+        _ = client_c
+            .send(Message::Text(r#"{"Uuid": "uuid-c"}"#.to_string()))
+            .await;
+
+        let (mut client_d, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+                .await
+                .unwrap();
+        _ = client_d
+            .send(Message::Text(r#"{"Uuid": "uuid-d"}"#.to_string()))
+            .await;
+
+        // Clients should be matched in pairs as they arrive, i.e. a + b and c + d
+        let new_peer_b = recv_peer_event(&mut client_a).await;
+        let new_peer_d = recv_peer_event(&mut client_c).await;
+
+        assert_eq!(new_peer_b, PeerEvent::NewPeer("uuid-b".to_string()));
+        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
+
+        let timeout = time::sleep(Duration::from_millis(100));
+        pin_mut!(timeout);
+        select! {
+            _ = client_a.next() => panic!("unexpected message"),
+            _ = client_b.next() => panic!("unexpected message"),
+            _ = client_c.next() => panic!("unexpected message"),
+            _ = client_d.next() => panic!("unexpected message"),
+            _ = &mut timeout => {}
+        }
+    }
+    #[tokio::test]
+    async fn match_pair_and_other_alone_room_without_next() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client_a, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+                .await
+                .unwrap();
+        _ = client_a
+            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+
+        let (mut client_b, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name"))
+                .await
+                .unwrap();
+        _ = client_b
+            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+
+        let (mut client_c, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+                .await
+                .unwrap();
+        _ = client_c
+            .send(Message::Text(r#"{"Uuid": "uuid-c"}"#.to_string()))
+            .await;
+        // Clients should be matched in pairs as they arrive, i.e. a + b and c + d
+        let new_peer_c = recv_peer_event(&mut client_a).await;
+
+        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
+
+        let timeout = time::sleep(Duration::from_millis(100));
+        pin_mut!(timeout);
+        select! {
+            _ = client_a.next() => panic!("unexpected message"),
+            _ = client_b.next() => panic!("unexpected message"),
+            _ = client_c.next() => panic!("unexpected message"),
+            _ = &mut timeout => {}
+        }
+    }
+
+    #[tokio::test]
+    async fn match_different_id_same_next() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client_a, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))
+                .await
+                .unwrap();
+
+        let (mut client_b, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_2?next=2"))
+                .await
+                .unwrap();
+
+        let (mut client_c, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))
+                .await
+                .unwrap();
+
+        let (mut client_d, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_2?next=2"))
+                .await
+                .unwrap();
+
+        _ = client_a
+            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+        _ = client_c
+            .send(Message::Text(r#"{"Uuid": "uuid-c"}"#.to_string()))
+            .await;
+        _ = client_b
+            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+        _ = client_d
+            .send(Message::Text(r#"{"Uuid": "uuid-d"}"#.to_string()))
+            .await;
+
+        // Clients should be matched in pairs as they arrive, i.e. a + c and b + d
+        let new_peer_c = recv_peer_event(&mut client_a).await;
+        let new_peer_d = recv_peer_event(&mut client_b).await;
+
+        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
+        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
+
+        let timeout = time::sleep(Duration::from_millis(100));
+        pin_mut!(timeout);
+        select! {
+            _ = client_a.next() => panic!("unexpected message"),
+            _ = client_b.next() => panic!("unexpected message"),
+            _ = client_c.next() => panic!("unexpected message"),
+            _ = client_d.next() => panic!("unexpected message"),
+            _ = &mut timeout => {}
+        }
+    }
+    #[tokio::test]
+    async fn match_same_id_different_next() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client_a, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))
+                .await
+                .unwrap();
+
+        let (mut client_b, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=3"))
+                .await
+                .unwrap();
+
+        let (mut client_c, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))
+                .await
+                .unwrap();
+
+        let (mut client_d, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=3"))
+                .await
+                .unwrap();
+
+        let (mut client_e, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=3"))
+                .await
+                .unwrap();
+
+        _ = client_a
+            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+        _ = client_c
+            .send(Message::Text(r#"{"Uuid": "uuid-c"}"#.to_string()))
+            .await;
+        _ = client_b
+            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+        _ = client_d
+            .send(Message::Text(r#"{"Uuid": "uuid-d"}"#.to_string()))
+            .await;
+        _ = client_e
+            .send(Message::Text(r#"{"Uuid": "uuid-e"}"#.to_string()))
+            .await;
+
+        // Clients should be matched in pairs as they arrive, i.e. a + c and (b + d ; b + e ; d + e)
+        let new_peer_c = recv_peer_event(&mut client_a).await;
+        let new_peer_d = recv_peer_event(&mut client_b).await;
+        let new_peer_e = recv_peer_event(&mut client_b).await;
+        assert_eq!(new_peer_e, PeerEvent::NewPeer("uuid-e".to_string()));
+        let new_peer_e = recv_peer_event(&mut client_d).await;
+
+        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
+        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
+        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
+        assert_eq!(new_peer_e, PeerEvent::NewPeer("uuid-e".to_string()));
+
+        let timeout = time::sleep(Duration::from_millis(100));
+        pin_mut!(timeout);
+        select! {
+            _ = client_a.next() => panic!("unexpected message"),
+            _ = client_b.next() => panic!("unexpected message"),
+            _ = client_c.next() => panic!("unexpected message"),
+            _ = client_d.next() => panic!("unexpected message"),
+            _ = client_e.next() => panic!("unexpected message"),
+            _ = &mut timeout => {}
+        }
+    }
+}

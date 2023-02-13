@@ -29,6 +29,7 @@ pub mod matchbox {
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
     pub enum PeerEvent<S> {
         NewPeer(PeerId),
+        PeerLeft(PeerId),
         Signal { sender: PeerId, data: S },
     }
 }
@@ -270,6 +271,22 @@ async fn handle_ws(websocket: WebSocket, state: Arc<Mutex<State>>, requested_roo
     info!("Removing peer: {:?}", peer_uuid);
     if let Some(uuid) = peer_uuid {
         let mut state = state.lock().await;
+        // Remove the peer from the state and tell everyone about it
+        if let Some(room) = state.clients.get(&uuid).map(|peer| peer.room.clone()) {
+            state.rooms.get(&room).map(|peers| {
+                peers
+                    .iter()
+                    .filter(|peer_id| peer_id != &&uuid)
+                    .for_each(|peer_id| {
+                        let event = Message::text(
+                            serde_json::to_string(&PeerEvent::PeerLeft(uuid.clone()))
+                                .expect("error serializing message"),
+                        );
+                        state.try_send(peer_id, event);
+                        info!("Notify peer remove to: {:?}", peer_id);
+                    })
+            });
+        }
         state.remove_peer(&uuid);
     }
 }

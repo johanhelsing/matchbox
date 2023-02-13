@@ -6,6 +6,7 @@ pub(crate) type PeerId = String;
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerEvent {
     NewPeer(PeerId),
+    PeerLeft(PeerId),
     Signal { sender: PeerId, data: PeerSignal },
 }
 

@@ -46,6 +46,11 @@ async fn async_main() {
             info!("Received from {:?}: {:?}", peer, packet);
         }
 
+        let disconnected_peers = socket.disconnected_peers();
+        if disconnected_peers.len() > 0 {
+            info!("Disconnected peers: {:?}", disconnected_peers);
+        }
+
         select! {
             _ = (&mut timeout).fuse() => {
                 timeout.reset(Duration::from_millis(100));

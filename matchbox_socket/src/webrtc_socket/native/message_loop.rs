@@ -38,6 +38,7 @@ pub async fn message_loop(
     events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) {
     message_loop_impl(
@@ -47,6 +48,7 @@ pub async fn message_loop(
         events_receiver,
         peer_messages_out_rx,
         new_connected_peers_tx,
+        disconnected_peers_tx,
         messages_from_peers_tx,
     )
     // web-rtc is tokio-based so we use compat here to make it work with other async run-times
@@ -61,6 +63,7 @@ async fn message_loop_impl(
     mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     mut peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) {
     debug!("Entering native WebRtcSocket message loop");
@@ -112,6 +115,9 @@ async fn message_loop_impl(
 
                             connected_peers.insert(peer_uuid, to_peer_data_tx);
                             peer_loops_a.push(peer_loop(handshake_fut, to_peer_data_rx));
+                        }
+                        PeerEvent::PeerLeft(peer_uuid) => {
+                            disconnected_peers_tx.unbounded_send(peer_uuid).expect("fail to send disconnected peer");
                         }
                         PeerEvent::Signal { sender, data } => {
                             let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {

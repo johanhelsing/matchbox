@@ -60,7 +60,7 @@ async fn main() {
         .with_state(server_state);
 
     // Run server
-    info!("Matchbox Signaling Server: {}", args.host,);
+    info!("Matchbox Signaling Server: {}", args.host);
     axum::Server::bind(&args.host)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await

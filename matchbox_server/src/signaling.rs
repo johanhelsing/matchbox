@@ -156,7 +156,7 @@ fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, Request
         Message::Text(text) => serde_json::from_str(&text)?,
         Message::Binary(_) => return Err(RequestError::NotText),
         Message::Close(_) => return Err(RequestError::Close),
-        _ => unimplemented!("unsupported message"),
+        Message::Ping(_) | Message::Pong(_) => unimplemented!("unsupported message"),
     };
 
     Ok(request)

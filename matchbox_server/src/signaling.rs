@@ -147,6 +147,8 @@ enum RequestError {
     Close,
     #[error("Json error")]
     Json(#[from] serde_json::Error),
+    #[error("Unsupported message type")]
+    UnsupportedType,
 }
 
 fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, RequestError> {
@@ -156,7 +158,7 @@ fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, Request
         Message::Text(text) => serde_json::from_str(&text)?,
         Message::Binary(_) => return Err(RequestError::NotText),
         Message::Close(_) => return Err(RequestError::Close),
-        Message::Ping(_) | Message::Pong(_) => unimplemented!("unsupported message"),
+        _ => return Err(RequestError::UnsupportedType),
     };
 
     Ok(request)

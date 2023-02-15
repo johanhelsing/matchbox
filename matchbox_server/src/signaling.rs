@@ -1,3 +1,4 @@
+use crate::error::{ClientRequestError, ServerError};
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
@@ -65,7 +66,7 @@ pub(crate) struct ServerState {
 }
 
 impl ServerState {
-    /// Returns peers already in room
+    /// Add a peer, returning the peers already in room
     fn add_peer(&mut self, peer: Peer) -> Vec<PeerId> {
         let peer_id = peer.uuid.clone();
         let room = peer.room.clone();
@@ -89,31 +90,32 @@ impl ServerState {
         }
     }
 
-    fn remove_peer(&mut self, peer_id: &PeerId) {
+    /// Remove a peer from the state, returning the peer removed.
+    fn remove_peer(&mut self, peer_id: &PeerId) -> Result<Peer, ServerError> {
         let peer = self
             .clients
             .remove(peer_id)
-            .expect("Couldn't find uuid to remove");
+            .ok_or(ServerError::UnknownPeer)?;
 
-        let room_peers = self.rooms.get_mut(&peer.room);
-
-        if let Some(room_peers) = room_peers {
-            room_peers.remove(peer_id);
-        }
+        // Best effort to remove user from their room, never panics
+        _ = self
+            .rooms
+            .get_mut(&peer.room)
+            .map(|room| room.remove(peer_id));
+        Ok(peer)
     }
 
-    fn try_send(&self, id: &PeerId, message: Message) {
+    /// Send a message to a peer without blocking.
+    fn try_send(&self, id: &PeerId, message: Message) -> Result<(), ServerError> {
         let peer = self.clients.get(id);
         let peer = match peer {
             Some(peer) => peer,
             None => {
-                error!("Unknown peer {:?}", id);
-                return;
+                return Err(ServerError::UnknownPeer);
             }
         };
-        if let Err(e) = peer.sender.send(Ok(message)) {
-            error!("Error sending message {:?}", e);
-        }
+
+        peer.sender.send(Ok(message)).map_err(ServerError::from)
     }
 }
 
@@ -137,28 +139,14 @@ pub(crate) async fn ws_handler(
     ws.on_upgrade(move |websocket| handle_ws(websocket, state, RequestedRoom { id: room_id, next }))
 }
 
-#[derive(Debug, thiserror::Error)]
-enum RequestError {
-    #[error("Axum error")]
-    Axum(#[from] axum::Error),
-    #[error("Not text error")]
-    NotText,
-    #[error("Message is close")]
-    Close,
-    #[error("Json error")]
-    Json(#[from] serde_json::Error),
-    #[error("Unsupported message type")]
-    UnsupportedType,
-}
-
-fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, RequestError> {
+fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, ClientRequestError> {
     let request = request?;
 
     let request: PeerRequest = match request {
         Message::Text(text) => serde_json::from_str(&text)?,
-        Message::Binary(_) => return Err(RequestError::NotText),
-        Message::Close(_) => return Err(RequestError::Close),
-        _ => return Err(RequestError::UnsupportedType),
+        Message::Binary(_) => return Err(ClientRequestError::NotText),
+        Message::Close(_) => return Err(ClientRequestError::Close),
+        _ => return Err(ClientRequestError::UnsupportedType),
     };
 
     Ok(request)
@@ -172,6 +160,7 @@ fn spawn_sender_task(
     client_sender
 }
 
+/// One of these handlers is spawned for every web socket.
 async fn handle_ws(
     websocket: WebSocket,
     state: Arc<Mutex<ServerState>>,
@@ -181,16 +170,19 @@ async fn handle_ws(
     let sender = spawn_sender_task(ws_sender);
     let mut peer_uuid = None;
 
+    // The state machine for the data channel established for this websocket.
     while let Some(request) = ws_receiver.next().await {
         let request = match parse_request(request) {
             Ok(request) => request,
-            Err(RequestError::Axum(e)) => {
-                error!("Axum error while receiving request: {:?}", e);
+            Err(ClientRequestError::Axum(e)) => {
                 // Most likely a ConnectionReset or similar.
-                // just give up on this peer.
-                break;
+                error!("Axum error while receiving request: {:?}", e);
+                if let Some(ref peer_uuid) = peer_uuid {
+                    warn!("Severing connection with {peer_uuid}")
+                }
+                break; // give up on this peer.
             }
-            Err(RequestError::Close) => {
+            Err(ClientRequestError::Close) => {
                 info!("Received websocket close from {peer_uuid:?}");
                 break;
             }
@@ -208,8 +200,8 @@ async fn handle_ws(
                     error!("client set uuid more than once");
                     continue;
                 }
-                peer_uuid = Some(id.clone());
 
+                peer_uuid.replace(id.clone());
                 let mut state = state.lock().await;
                 let peers = state.add_peer(Peer {
                     uuid: id.clone(),
@@ -223,8 +215,11 @@ async fn handle_ws(
 
                 for peer_id in peers {
                     // Tell everyone about this new peer
-                    info!("{:?} -> {:?}", peer_id, event_text);
-                    state.try_send(&peer_id, event.clone());
+                    if let Err(e) = state.try_send(&peer_id, event.clone()) {
+                        error!("error sending to {peer_id}: {e:?}");
+                    } else {
+                        info!("{:?} -> {:?}", peer_id, event_text);
+                    }
                 }
             }
             PeerRequest::Signal { receiver, data } => {
@@ -255,7 +250,9 @@ async fn handle_ws(
     info!("Removing peer: {:?}", peer_uuid);
     if let Some(uuid) = peer_uuid {
         let mut state = state.lock().await;
-        state.remove_peer(&uuid);
+        if let Err(e) = state.remove_peer(&uuid) {
+            error!("error removing {uuid}: {:?}", e);
+        }
     }
 }
 

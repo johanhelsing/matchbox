@@ -44,7 +44,7 @@ type Packet = Box<[u8]>;
 pub struct WebRtcSocketConfig {
     /// The url for the room to connect to
     ///
-    /// This is a websocket url, starting with `ws://` or `ws://` followed by
+    /// This is a websocket url, starting with `ws://` or `wss://` followed by
     /// the hostname and path to a matchbox server, followed by a room id and
     /// optional query parameters.
     ///

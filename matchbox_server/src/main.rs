@@ -16,7 +16,7 @@ pub use signaling::matchbox::PeerId;
 use crate::signaling::{ws_handler, ServerState};
 
 mod args;
-pub(crate) mod error;
+mod error;
 mod signaling;
 
 #[tokio::main]

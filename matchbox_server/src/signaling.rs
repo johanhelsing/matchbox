@@ -154,7 +154,7 @@ fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, ClientR
 
 fn spawn_sender_task(
     sender: SplitSink<WebSocket, Message>,
-) -> mpsc::UnboundedSender<std::result::Result<Message, Error>> {
+) -> mpsc::UnboundedSender<Result<Message, Error>> {
     let (client_sender, receiver) = mpsc::unbounded_channel();
     tokio::task::spawn(UnboundedReceiverStream::new(receiver).forward(sender));
     client_sender

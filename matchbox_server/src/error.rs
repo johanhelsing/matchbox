@@ -19,8 +19,6 @@ pub enum ClientRequestError {
 /// An error in server logic.
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
-    #[error("Axum error")]
-    Axum(#[from] axum::Error),
     #[error("Unknown recipient peer")]
     UnknownPeer,
     #[error("Undeliverable message")]

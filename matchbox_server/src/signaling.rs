@@ -283,7 +283,8 @@ mod tests {
 
     // Helper to take the next PeerEvent from a stream
     async fn recv_peer_event(client: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> PeerEvent {
-        let message: Message = futures::StreamExt::next(client)
+        let message: Message = client
+            .next()
             .await
             .expect("some message")
             .expect("socket message");

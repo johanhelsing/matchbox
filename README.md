@@ -83,6 +83,7 @@ Similarly, you can send packets to clients using a simple non-blocking method.
 
 You can also use a room slug for even more tailored matching.
 Matchmaking queue buckets differ for all 3 of the following examples:
+
 - `wss://match.example.com/room_a?next=2`
 - `wss://match.example.com/room_a?next=3`
 - `wss://match.example.com/room_b?next=2`

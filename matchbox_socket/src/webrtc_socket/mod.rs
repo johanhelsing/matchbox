@@ -42,18 +42,13 @@ type Packet = Box<[u8]>;
 /// See [`WebRtcSocket::new_with_config`]
 #[derive(Debug)]
 pub struct WebRtcSocketConfig {
-    /// The url for the room to connect to
+    /// The url for the session to connect to
     ///
     /// This is a websocket url, starting with `ws://` or `wss://` followed by
-    /// the hostname and path to a matchbox server, followed by a room id and
-    /// optional query parameters.
+    /// the hostname and path to a matchbox server.
     ///
     /// e.g.: `wss://matchbox.example.com/your_game`
-    ///
-    /// or: `wss://matchbox.example.com/your_game?next=2`
-    ///
-    /// The last form will pair player in the order they connect.
-    pub room_url: String,
+    pub session_url: String,
     /// Configuration for the (single) ICE server
     pub ice_server: RtcIceServerConfig,
     /// Configuration for one or multiple reliable or unreliable data channels
@@ -106,16 +101,6 @@ impl ChannelConfig {
     }
 }
 
-impl Default for WebRtcSocketConfig {
-    fn default() -> Self {
-        WebRtcSocketConfig {
-            room_url: "ws://localhost:3536/example_room".to_string(),
-            ice_server: RtcIceServerConfig::default(),
-            channels: vec![ChannelConfig::unreliable()],
-        }
-    }
-}
-
 impl Default for RtcIceServerConfig {
     fn default() -> Self {
         Self {
@@ -145,16 +130,17 @@ pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()>>>;
 
 impl WebRtcSocket {
-    /// Create a new connection to the given room with a single unreliable data channel
+    /// Create a new connection to the given session with a single unreliable data channel
     ///
-    /// See [`WebRtcSocketConfig::room_url`] for details on the room url.
+    /// See [`WebRtcSocketConfig::session_url`] for details on the session url.
     ///
     /// The returned future should be awaited in order for messages to be sent and received.
     #[must_use]
-    pub fn new<T: Into<String>>(room_url: T) -> (Self, MessageLoopFuture) {
+    pub fn new(session_url: impl Into<String>) -> (Self, MessageLoopFuture) {
         WebRtcSocket::new_with_config(WebRtcSocketConfig {
-            room_url: room_url.into(),
-            ..Default::default()
+            session_url: session_url.into(),
+            ice_server: RtcIceServerConfig::default(),
+            channels: vec![ChannelConfig::unreliable()],
         })
     }
 
@@ -236,12 +222,12 @@ impl WebRtcSocket {
     /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] as you configured it before
     /// (or 0 for the default channel if you use the default configuration).
     ///
-    /// messages are removed from the socket when called   
+    /// messages are removed from the socket when called
     pub fn receive_on_channel(&mut self, index: usize) -> Vec<(PeerId, Packet)> {
         std::iter::repeat_with(|| {
             self.messages_from_peers
                 .get_mut(index)
-                .unwrap_or_else(|| panic!("No data channel with index {}", index))
+                .unwrap_or_else(|| panic!("No data channel with index {index}"))
                 .try_next()
         })
         // .map_while(|poll| match p { // map_while is nightly-only :(
@@ -268,7 +254,7 @@ impl WebRtcSocket {
     pub fn send_on_channel<T: Into<PeerId>>(&mut self, packet: Packet, id: T, index: usize) {
         self.peer_messages_out
             .get(index)
-            .unwrap_or_else(|| panic!("No data channel with index {}", index))
+            .unwrap_or_else(|| panic!("No data channel with index {index}"))
             .unbounded_send((id.into(), packet))
             .expect("send_to failed");
     }
@@ -280,7 +266,7 @@ impl WebRtcSocket {
         let sender = self
             .peer_messages_out
             .get(index)
-            .unwrap_or_else(|| panic!("No data channel with index {}", index));
+            .unwrap_or_else(|| panic!("No data channel with index {index}"));
 
         for peer_id in self.connected_peers() {
             sender
@@ -308,7 +294,7 @@ async fn run_socket(
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
     let signalling_loop_fut =
-        signalling_loop(config.room_url.clone(), requests_receiver, events_sender);
+        signalling_loop(config.session_url.clone(), requests_receiver, events_sender);
 
     let message_loop_fut = message_loop(
         id,

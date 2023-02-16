@@ -139,9 +139,9 @@ async fn message_loop_impl(
                 match message {
                     Some((channel_index, Some((peer, packet)))) => {
                         let senders = connected_peers.get_mut(&peer)
-                            .unwrap_or_else(|| panic!("couldn't find data channel for peer {}", peer));
+                            .unwrap_or_else(|| panic!("couldn't find data channel for peer {peer}"));
                         let sender = senders.get_mut(channel_index)
-                            .unwrap_or_else(|| panic!("Unexpected data channel index during send: {}", channel_index));
+                            .unwrap_or_else(|| panic!("Unexpected data channel index during send: {channel_index}"));
                         sender.unbounded_send(packet).unwrap();
                     },
                     Some((_, None)) | None => {

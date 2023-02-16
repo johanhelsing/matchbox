@@ -6,12 +6,12 @@ use log::{debug, warn};
 use crate::webrtc_socket::messages::{PeerEvent, PeerRequest};
 
 pub async fn signalling_loop(
-    room_url: String,
+    session_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
 ) {
     debug!("Signalling loop started");
-    let (mut wsio, _response) = connect_async(&room_url)
+    let (mut wsio, _response) = connect_async(&session_url)
         .await
         .expect("failed to connect to signalling server");
 
@@ -33,7 +33,7 @@ pub async fn signalling_loop(
                     Some(Ok(Message::Text(message))) => {
                         debug!("{}", message);
                         let event: PeerEvent = serde_json::from_str(&message)
-                            .unwrap_or_else(|err| panic!("couldn't parse peer event: {}.\nEvent: {}", err, message));
+                            .unwrap_or_else(|err| panic!("couldn't parse peer event: {err}.\nEvent: {message}"));
                         events_sender.unbounded_send(event).unwrap();
                     },
                     Some(Ok(message)) => {
@@ -41,7 +41,7 @@ pub async fn signalling_loop(
                     },
                     Some(Err(e)) => {
                         // TODO: propagate errors or recover
-                        panic!("WebSocket error {:?}", e)
+                        panic!("WebSocket error {e:?}")
                     },
                     None => {} // Disconnected from signalling server
                 };

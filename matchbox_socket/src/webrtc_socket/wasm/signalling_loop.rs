@@ -5,11 +5,11 @@ use log::{debug, error};
 use ws_stream_wasm::{WsMessage, WsMeta};
 
 pub async fn signalling_loop(
-    room_url: String,
+    session_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
 ) {
-    let (_ws, wsio) = WsMeta::connect(&room_url, None)
+    let (_ws, wsio) = WsMeta::connect(&session_url, None)
         .await
         .expect("failed to connect to signalling server");
 

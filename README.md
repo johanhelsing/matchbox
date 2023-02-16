@@ -77,14 +77,15 @@ Packets include a boxed `u8` slice and the corresponding client's id.
 
 Similarly, you can send packets to clients using a simple non-blocking method.
 
-### Next rooms
+### Matchmaking
 
-`matchbox_server` supports a rudimentary form of matchmaking. By appending
-`?next=3` to the room id, the next three players to join will be connected, and
-then the next three players will be connected separately to the first three.
+`matchbox_server` is a decent general purpose signalling server that supports a rudimentary form of matchmaking. The server supports the the `next` query to match users into "rooms" of that size. For instance, `?next=3` will conntect pairs of three players together to the same room, in the order the server discovers them.
 
-You can also use the room id for scoping what kind of players you want to
-match. i.e.: `wss://match.example.com/awesome_game_v1.1.0_pvp?next=2`
+You can also use a room slug for even more tailored matching.
+Matchmaking queue buckets differ for all 3 of the following examples:
+- `wss://match.example.com/room_a?next=2`
+- `wss://match.example.com/room_a?next=3`
+- `wss://match.example.com/room_b?next=2`
 
 ## Showcase
 

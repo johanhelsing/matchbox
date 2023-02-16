@@ -91,17 +91,16 @@ impl ServerState {
     }
 
     /// Remove a peer from the state, returning the peer removed.
-    fn remove_peer(&mut self, peer_id: &PeerId) -> Result<Peer, ServerError> {
-        let peer = self
-            .clients
-            .remove(peer_id)
-            .ok_or(ServerError::UnknownPeer)?;
+    fn remove_peer(&mut self, peer_id: &PeerId) -> Option<Peer> {
+        let peer = self.clients.remove(peer_id);
 
-        // Best effort to remove user from their room, never panics
-        _ = self
-            .rooms
-            .get_mut(&peer.room)
-            .map(|room| room.remove(peer_id));
+        if let Some(peer) = peer {
+            // Best effort to remove peer from their room
+            _ = self
+                .rooms
+                .get_mut(&peer.room)
+                .map(|room| room.remove(peer_id));
+        }
         Ok(peer)
     }
 
@@ -249,8 +248,8 @@ async fn handle_ws(
     info!("Removing peer: {:?}", peer_uuid);
     if let Some(uuid) = peer_uuid {
         let mut state = state.lock().await;
-        if let Err(e) = state.remove_peer(&uuid) {
-            error!("error removing {uuid}: {:?}", e);
+        if let None = state.remove_peer(&uuid) {
+            error!("couldn't remove {uuid}, not found");
         }
     }
 }

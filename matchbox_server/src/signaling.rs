@@ -94,14 +94,14 @@ impl ServerState {
     fn remove_peer(&mut self, peer_id: &PeerId) -> Option<Peer> {
         let peer = self.clients.remove(peer_id);
 
-        if let Some(peer) = peer {
+        if let Some(ref peer) = peer {
             // Best effort to remove peer from their room
             _ = self
                 .rooms
                 .get_mut(&peer.room)
                 .map(|room| room.remove(peer_id));
         }
-        Ok(peer)
+        peer
     }
 
     /// Send a message to a peer without blocking.
@@ -248,7 +248,7 @@ async fn handle_ws(
     info!("Removing peer: {:?}", peer_uuid);
     if let Some(uuid) = peer_uuid {
         let mut state = state.lock().await;
-        if let None = state.remove_peer(&uuid) {
+        if state.remove_peer(&uuid).is_none() {
             error!("couldn't remove {uuid}, not found");
         }
     }

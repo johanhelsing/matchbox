@@ -90,7 +90,8 @@ impl ServerState {
         }
     }
 
-    /// Remove a peer from the state, returning the peer removed.
+    /// Remove a peer from the state if it existed, returning the peer removed.
+    #[must_use]
     fn remove_peer(&mut self, peer_id: &PeerId) -> Option<Peer> {
         let peer = self.clients.remove(peer_id);
 

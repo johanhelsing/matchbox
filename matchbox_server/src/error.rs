@@ -6,8 +6,6 @@ use tokio::sync::mpsc::error::SendError;
 pub enum ClientRequestError {
     #[error("Axum error")]
     Axum(#[from] axum::Error),
-    #[error("Not text error")]
-    NotText,
     #[error("Message is close")]
     Close,
     #[error("Json error")]

@@ -144,7 +144,6 @@ fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, ClientR
 
     let request: PeerRequest = match request {
         Message::Text(text) => serde_json::from_str(&text)?,
-        Message::Binary(_) => return Err(ClientRequestError::NotText),
         Message::Close(_) => return Err(ClientRequestError::Close),
         _ => return Err(ClientRequestError::UnsupportedType),
     };

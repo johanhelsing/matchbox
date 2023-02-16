@@ -79,7 +79,7 @@ Similarly, you can send packets to clients using a simple non-blocking method.
 
 ### Matchmaking
 
-`matchbox_server` is a decent general purpose signalling server that supports a rudimentary form of matchmaking. The server supports the the `next` query to match users into "rooms" of that size. For instance, `?next=3` will conntect pairs of three players together to the same room, in the order the server discovers them.
+`matchbox_server` is a decent general purpose signalling server that supports a rudimentary form of matchmaking. The server supports the the `next` query to match users into "rooms" of that size. For instance, `?next=3` will connect groups of three players together to the same room, in the order they connect to the server.
 
 You can also use a room slug for even more tailored matching.
 Matchmaking queue buckets differ for all 3 of the following examples:

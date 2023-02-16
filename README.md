@@ -95,6 +95,15 @@ Projects using Matchbox:
 - [Matchbox demo](https://helsing.studio/box_game/)
 - [A Janitors Nightmare](https://gorktheork.itch.io/bevy-jam-1-submission) - 2-player jam game
 
+## Contributing
+
+PRs welcome!
+
+If you have questions or suggestions, feel free to make an
+[issue](https://github.com/johanhelsing/matchbox/issues). There's also a
+[Matchbox channel on Discord](https://discord.gg/Rzw8f9cY) if you want to get in
+touch.
+
 ## Thanks!
 
 - A huge thanks to Ernest Wong for his [Dango Tribute

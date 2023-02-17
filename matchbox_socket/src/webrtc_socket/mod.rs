@@ -45,9 +45,14 @@ pub struct WebRtcSocketConfig {
     /// The url for the session to connect to
     ///
     /// This is a websocket url, starting with `ws://` or `wss://` followed by
-    /// the hostname and path to a matchbox server.
+    /// the hostname and path to a matchbox server, followed by a session id and
+    /// optional query parameters.
     ///
     /// e.g.: `wss://matchbox.example.com/your_game`
+    ///
+    /// or: `wss://matchbox.example.com/your_game?next=2`
+    ///
+    /// The last form will pair player in the order they connect.
     pub session_url: String,
     /// Configuration for the (single) ICE server
     pub ice_server: RtcIceServerConfig,

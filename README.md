@@ -49,7 +49,7 @@ http or https connections. In production, this usually means the public
 internet.
 
 When a client wants to join a p2p (mesh) network, it connects to the signalling
-service and provides a room id. The signalling server then notifies the peers
+service and provides a session id. The signalling server then notifies the peers
 that have already connected about the new peer (sends a `new_peer` event).
 
 The existing peers then send back WebRTC connection offers through the
@@ -61,7 +61,7 @@ data channel is opened.
 All of this, however, is hidden from rust application code. All you will need to
 do on the client side, is:
 
-- Create a new socket, and give it a signalling server url and a room id
+- Create a new socket, and give it a signalling server url and a session id
 - `.await` the message loop future that processes new messages. If you are
   using Bevy, it can be spawned as a Bevy io task (see
   [`matchbox_demo`](https://github.com/johanhelsing/matchbox/tree/main/matchbox_demo)).
@@ -79,14 +79,14 @@ Similarly, you can send packets to clients using a simple non-blocking method.
 
 ### Matchmaking
 
-`matchbox_server` is a decent general purpose signalling server that supports a rudimentary form of matchmaking. The server supports the the `next` query to match users into "rooms" of that size. For instance, `?next=3` will connect groups of three players together to the same room, in the order they connect to the server.
+`matchbox_server` is a decent general purpose signalling server that supports a rudimentary form of matchmaking. The server supports the the `next` query to match users into sessions of that size. For instance, `?next=3` will connect groups of three players together to the same session, in the order they connect to the server.
 
-You can also use a room slug for even more tailored matching.
+You can also use a session slug (e.g. `/session_a`) to further bucket the matching process.
 Matchmaking queue buckets differ for all 3 of the following examples:
 
-- `wss://match.example.com/room_a?next=2`
-- `wss://match.example.com/room_a?next=3`
-- `wss://match.example.com/room_b?next=2`
+- `wss://match.example.com/session_a?next=2`
+- `wss://match.example.com/session_a?next=3`
+- `wss://match.example.com/session_b?next=2`
 
 ## Showcase
 

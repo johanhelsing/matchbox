@@ -39,11 +39,11 @@ type PeerRequest = matchbox::PeerRequest<serde_json::Value>;
 type PeerEvent = matchbox::PeerEvent<serde_json::Value>;
 
 #[derive(Debug, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct RoomId(String);
+pub(crate) struct SessionId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct RequestedRoom {
-    id: RoomId,
+pub(crate) struct RequestedSession {
+    id: SessionId,
     next: Option<usize>,
 }
 
@@ -55,33 +55,33 @@ pub(crate) struct QueryParam {
 #[derive(Debug, Clone)]
 pub(crate) struct Peer {
     pub uuid: PeerId,
-    pub room: RequestedRoom,
+    pub session: RequestedSession,
     pub sender: tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, Error>>,
 }
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct ServerState {
     clients: HashMap<PeerId, Peer>,
-    rooms: HashMap<RequestedRoom, HashSet<PeerId>>,
+    sessions: HashMap<RequestedSession, HashSet<PeerId>>,
 }
 
 impl ServerState {
-    /// Add a peer, returning the peers already in room
+    /// Add a peer, returning the peers already in the session
     fn add_peer(&mut self, peer: Peer) -> Vec<PeerId> {
         let peer_id = peer.uuid.clone();
-        let room = peer.room.clone();
+        let session = peer.session.clone();
         self.clients.insert(peer.uuid.clone(), peer);
-        let peers = self.rooms.entry(room.clone()).or_default();
+        let peers = self.sessions.entry(session.clone()).or_default();
 
         let ret = peers.iter().cloned().collect();
-        match room.next {
+        match session.next {
             None => {
                 peers.insert(peer_id);
                 ret
             }
             Some(num_players) => {
                 if peers.len() == num_players - 1 {
-                    peers.clear(); // the room is complete, we can forget about it now
+                    peers.clear(); // the session is complete, we can forget about it now
                 } else {
                     peers.insert(peer_id);
                 }
@@ -96,11 +96,11 @@ impl ServerState {
         let peer = self.clients.remove(peer_id);
 
         if let Some(ref peer) = peer {
-            // Best effort to remove peer from their room
+            // Best effort to remove peer from server state
             _ = self
-                .rooms
-                .get_mut(&peer.room)
-                .map(|room| room.remove(peer_id));
+                .sessions
+                .get_mut(&peer.session)
+                .map(|session| session.remove(peer_id));
         }
         peer
     }
@@ -123,20 +123,29 @@ impl ServerState {
 /// This is the last point where we can extract TCP/IP metadata such as IP address of the client.
 pub(crate) async fn ws_handler(
     ws: WebSocketUpgrade,
-    room_id: Option<Path<RoomId>>,
+    session_id: Option<Path<SessionId>>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<Arc<Mutex<ServerState>>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     info!("`{addr}` connected.");
 
-    let room_id = room_id.map(|path| path.0).unwrap_or_default();
+    let session_id = session_id.map(|path| path.0).unwrap_or_default();
     let next = params
         .get("next")
         .and_then(|next| next.parse::<usize>().ok());
 
     // Finalize the upgrade process by returning upgrade callback to client
-    ws.on_upgrade(move |websocket| handle_ws(websocket, state, RequestedRoom { id: room_id, next }))
+    ws.on_upgrade(move |websocket| {
+        handle_ws(
+            websocket,
+            state,
+            RequestedSession {
+                id: session_id,
+                next,
+            },
+        )
+    })
 }
 
 fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, ClientRequestError> {
@@ -163,7 +172,7 @@ fn spawn_sender_task(
 async fn handle_ws(
     websocket: WebSocket,
     state: Arc<Mutex<ServerState>>,
-    requested_room: RequestedRoom,
+    requested_session: RequestedSession,
 ) {
     let (ws_sender, mut ws_receiver) = websocket.split();
     let sender = spawn_sender_task(ws_sender);
@@ -205,7 +214,7 @@ async fn handle_ws(
                 let peers = state.add_peer(Peer {
                     uuid: id.clone(),
                     sender: sender.clone(),
-                    room: requested_room.clone(),
+                    session: requested_session.clone(),
                 });
 
                 let event_text = serde_json::to_string(&PeerEvent::NewPeer(id.clone()))
@@ -273,7 +282,7 @@ mod tests {
 
     fn app() -> Router {
         Router::new()
-            .route("/:room_id", get(ws_handler))
+            .route("/:session_id", get(ws_handler))
             .with_state(Arc::new(Mutex::new(ServerState::default())))
     }
 
@@ -294,7 +303,7 @@ mod tests {
         let addr = server.local_addr();
         tokio::spawn(server);
 
-        tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+        tokio_tungstenite::connect_async(format!("ws://{addr}/session_a"))
             .await
             .expect("handshake");
     }
@@ -307,7 +316,7 @@ mod tests {
         tokio::spawn(server);
 
         let (mut client_a, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_a"))
                 .await
                 .unwrap();
 
@@ -316,7 +325,7 @@ mod tests {
             .await;
 
         let (mut client_b, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_a"))
                 .await
                 .unwrap();
 
@@ -337,7 +346,7 @@ mod tests {
         tokio::spawn(server);
 
         let (mut client_a, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_a"))
                 .await
                 .unwrap();
 
@@ -346,7 +355,7 @@ mod tests {
             .await;
 
         let (mut client_b, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_a"))
                 .await
                 .unwrap();
 
@@ -384,7 +393,7 @@ mod tests {
         tokio::spawn(server);
 
         let (mut client_a, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_name?next=2"))
                 .await
                 .unwrap();
         _ = client_a
@@ -392,7 +401,7 @@ mod tests {
             .await;
 
         let (mut client_b, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_name?next=2"))
                 .await
                 .unwrap();
         _ = client_b
@@ -400,7 +409,7 @@ mod tests {
             .await;
 
         let (mut client_c, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_name?next=2"))
                 .await
                 .unwrap();
         _ = client_c
@@ -408,7 +417,7 @@ mod tests {
             .await;
 
         let (mut client_d, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_name?next=2"))
                 .await
                 .unwrap();
         _ = client_d
@@ -433,14 +442,14 @@ mod tests {
         }
     }
     #[tokio::test]
-    async fn match_pair_and_other_alone_room_without_next() {
+    async fn match_pair_and_other_alone_session_without_next() {
         let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
 
         let (mut client_a, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_name?next=2"))
                 .await
                 .unwrap();
         _ = client_a
@@ -448,7 +457,7 @@ mod tests {
             .await;
 
         let (mut client_b, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_name"))
                 .await
                 .unwrap();
         _ = client_b
@@ -456,7 +465,7 @@ mod tests {
             .await;
 
         let (mut client_c, _response) =
-            tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/session_name?next=2"))
                 .await
                 .unwrap();
         _ = client_c

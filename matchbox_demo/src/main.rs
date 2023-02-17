@@ -84,14 +84,14 @@ fn main() {
 }
 
 fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
-    let room_id = match &args.room {
+    let session_id = match &args.session {
         Some(id) => id.clone(),
         None => format!("matchbox_demo?next={}", &args.players),
     };
 
-    let room_url = format!("{}/{}", &args.matchbox, room_id);
-    info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcSocket::new(room_url);
+    let session_url = format!("{}/{}", &args.matchbox, session_id);
+    info!("connecting to matchbox server: {:?}", session_url);
+    let (socket, message_loop) = WebRtcSocket::new(session_url);
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.

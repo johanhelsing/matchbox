@@ -15,7 +15,7 @@ pub struct Args {
     #[clap(default_value = "ws://127.0.0.1:3536")]
     pub matchbox: String,
 
-    pub room: Option<String>,
+    pub session: Option<String>,
 
     #[clap(default_value = "2")]
     pub players: usize,

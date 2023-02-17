@@ -42,7 +42,7 @@ async fn main() {
     let server_state = Arc::new(futures::lock::Mutex::new(ServerState::default()));
     let app = Router::new()
         .route("/health", get(health_handler))
-        .route("/:room_id", get(ws_handler))
+        .route("/:session_id", get(ws_handler))
         .layer(
             // Allow requests from anywhere - Not ideal for production!
             CorsLayer::new()

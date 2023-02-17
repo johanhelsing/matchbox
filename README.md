@@ -93,9 +93,19 @@ Matchmaking queue buckets differ for all 3 of the following examples:
 Projects using Matchbox:
 
 - [NES Bundler](https://github.com/tedsteen/nes-bundler) - Transform your NES game into a single executable targeting your favorite OS!
+- [Cargo Space](https://helsing.studio/cargospace) (in development) - A coop 2D space game about building and flying a ship together
 - [Extreme Bevy](https://helsing.studio/extreme) - Simple 2-player arcade shooter
 - [Matchbox demo](https://helsing.studio/box_game/)
 - [A Janitors Nightmare](https://gorktheork.itch.io/bevy-jam-1-submission) - 2-player jam game
+
+## Contributing
+
+PRs welcome!
+
+If you have questions or suggestions, feel free to make an
+[issue](https://github.com/johanhelsing/matchbox/issues). There's also a
+[Matchbox channel on Discord](https://discord.gg/Rzw8f9cY) if you want to get in
+touch.
 
 ## Thanks!
 

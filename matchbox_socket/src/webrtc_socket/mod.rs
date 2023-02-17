@@ -104,7 +104,13 @@ impl ChannelConfig {
 impl Default for RtcIceServerConfig {
     fn default() -> Self {
         Self {
-            urls: vec!["stun:stun.l.google.com:19302".to_string()],
+            urls: vec![
+                "stun:stun.l.google.com:19302".to_string(),
+                "stun:stun1.l.google.com:19302".to_string(),
+                "stun:stun2.l.google.com:19302".to_string(),
+                "stun:stun3.l.google.com:19302".to_string(),
+                "stun:stun4.l.google.com:19302".to_string(),
+            ],
             username: Default::default(),
             credential: Default::default(),
         }

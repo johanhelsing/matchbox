@@ -247,26 +247,34 @@ async fn handle_ws(
         }
     }
 
-    info!("Removing peer: {:?}", peer_uuid);
+    // Peer disconnected or otherwise ended communication.
     if let Some(uuid) = peer_uuid {
+        info!("Removing peer: {:?}", uuid);
         let mut state = state.lock().await;
-        // Remove the peer from the state and tell everyone about it
-        if let Some(room) = state.clients.get(&uuid).map(|peer| peer.room.clone()) {
-            state.rooms.get(&room).map(|peers| {
-                peers
-                    .iter()
-                    .filter(|peer_id| peer_id != &&uuid)
-                    .for_each(|peer_id| {
-                        let event = Message::text(
-                            serde_json::to_string(&PeerEvent::PeerLeft(uuid.clone()))
-                                .expect("error serializing message"),
-                        );
-                        state.try_send(peer_id, event);
-                        info!("Notify peer remove to: {:?}", peer_id);
-                    })
-            });
+        if let Some(removed_peer) = state.remove_peer(&uuid) {
+            let room = removed_peer.room;
+            let peers = state
+                .rooms
+                .get(&room)
+                .map(|room_peers| {
+                    room_peers
+                        .iter()
+                        .filter(|peer_id| *peer_id != &uuid)
+                        .collect::<Vec<&String>>()
+                })
+                .unwrap_or_default();
+            // Tell each connected peer about the disconnected peer.
+            for peer_id in peers {
+                let event = Message::Text(
+                    serde_json::to_string(&PeerEvent::PeerLeft(removed_peer.uuid.clone()))
+                        .expect("error serializing message"),
+                );
+                match state.try_send(peer_id, event) {
+                    Ok(_) => info!("Sent peer remove to: {:?}", peer_id),
+                    Err(e) => error!("Failure sending peer remove: {e:?}"),
+                }
+            }
         }
-        state.remove_peer(&uuid);
     }
 }
 

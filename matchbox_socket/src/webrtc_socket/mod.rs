@@ -1,4 +1,4 @@
-use futures::{future::Fuse, Future, FutureExt, StreamExt};
+use futures::{future::Fuse, stream::FusedStream, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use log::debug;
@@ -229,12 +229,18 @@ impl WebRtcSocket {
     ///
     /// See also: [`WebRtcSocket::connected_peers`]
     pub fn disconnected_peers(&mut self) -> Vec<PeerId> {
-        let mut ids = Vec::new();
+        let mut ids = vec![];
+        // Collect all disconnected peers
         while let Ok(Some(id)) = self.disconnected_peers.try_next() {
             if let Some(index) = self.peers.iter().position(|x| x == &id) {
                 self.peers.remove(index);
             }
             ids.push(id);
+        }
+        // If the channel dropped or becomes terminated, flush all peers
+        if self.disconnected_peers.is_terminated() {
+            ids.extend(self.peers.clone());
+            self.peers.clear();
         }
         ids
     }

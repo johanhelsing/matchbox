@@ -47,7 +47,7 @@ async fn async_main() {
         }
 
         let disconnected_peers = socket.disconnected_peers();
-        if disconnected_peers.len() > 0 {
+        if !disconnected_peers.is_empty() {
             info!("Disconnected peers: {:?}", disconnected_peers);
         }
 

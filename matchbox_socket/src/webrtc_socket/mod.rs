@@ -8,7 +8,7 @@ use uuid::Uuid;
 mod messages;
 mod signal_peer;
 
-/// The duration, in milliseconds, to send "Keep Alive" packets
+/// The duration, in milliseconds, to send "Keep Alive" requests
 const KEEP_ALIVE_INTERVAL: u64 = 10_000;
 
 /// The raw format of data being sent and received.

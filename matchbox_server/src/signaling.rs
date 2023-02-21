@@ -383,8 +383,8 @@ mod tests {
 
         // Disconnect Peer B
         _ = client_b.close(None).await;
-        let new_peer_event = recv_peer_event(&mut client_a).await;
-        assert_eq!(new_peer_event, PeerEvent::PeerLeft("uuid-b".to_string()));
+        let peer_left_event = recv_peer_event(&mut client_a).await;
+        assert_eq!(peer_left_event, PeerEvent::PeerLeft("uuid-b".to_string()));
     }
 
     #[tokio::test]

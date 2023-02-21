@@ -30,6 +30,7 @@ pub mod matchbox {
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
     pub enum PeerEvent<S> {
         NewPeer(PeerId),
+        PeerLeft(PeerId),
         Signal { sender: PeerId, data: S },
     }
 }
@@ -246,11 +247,33 @@ async fn handle_ws(
         }
     }
 
-    info!("Removing peer: {:?}", peer_uuid);
+    // Peer disconnected or otherwise ended communication.
     if let Some(uuid) = peer_uuid {
+        info!("Removing peer: {:?}", uuid);
         let mut state = state.lock().await;
-        if state.remove_peer(&uuid).is_none() {
-            error!("couldn't remove {uuid}, not found");
+        if let Some(removed_peer) = state.remove_peer(&uuid) {
+            let room = removed_peer.room;
+            let peers = state
+                .rooms
+                .get(&room)
+                .map(|room_peers| {
+                    room_peers
+                        .iter()
+                        .filter(|peer_id| *peer_id != &uuid)
+                        .collect::<Vec<&String>>()
+                })
+                .unwrap_or_default();
+            // Tell each connected peer about the disconnected peer.
+            let event = Message::Text(
+                serde_json::to_string(&PeerEvent::PeerLeft(removed_peer.uuid))
+                    .expect("error serializing message"),
+            );
+            for peer_id in peers {
+                match state.try_send(peer_id, event.clone()) {
+                    Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
+                    Err(e) => error!("Failure sending peer remove: {e:?}"),
+                }
+            }
         }
     }
 }
@@ -327,6 +350,41 @@ mod tests {
         let new_peer_event = recv_peer_event(&mut client_a).await;
 
         assert_eq!(new_peer_event, PeerEvent::NewPeer("uuid-b".to_string()));
+    }
+
+    #[tokio::test]
+    async fn disconnect_peer() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client_a, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        _ = client_a
+            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+
+        let (mut client_b, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        _ = client_b
+            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+
+        // Ensure Peer B was received
+        let new_peer_event = recv_peer_event(&mut client_a).await;
+        assert_eq!(new_peer_event, PeerEvent::NewPeer("uuid-b".to_string()));
+
+        // Disconnect Peer B
+        _ = client_b.close(None).await;
+        let peer_left_event = recv_peer_event(&mut client_a).await;
+        assert_eq!(peer_left_event, PeerEvent::PeerLeft("uuid-b".to_string()));
     }
 
     #[tokio::test]

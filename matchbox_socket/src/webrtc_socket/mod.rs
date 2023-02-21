@@ -1,14 +1,18 @@
-use std::pin::Pin;
-
-use futures::{future::Fuse, Future, FutureExt, StreamExt};
+use futures::{future::Fuse, stream::FusedStream, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use log::debug;
-
+use messages::*;
+use std::pin::Pin;
+use uuid::Uuid;
 mod messages;
 mod signal_peer;
 
+/// The duration, in milliseconds, to send "Keep Alive" requests
 const KEEP_ALIVE_INTERVAL: u64 = 10_000;
+
+/// The raw format of data being sent and received.
+type Packet = Box<[u8]>;
 
 // TODO: maybe use cfg-if to make this slightly tidier
 #[cfg(not(target_arch = "wasm32"))]
@@ -18,6 +22,8 @@ mod native {
     pub use message_loop::*;
     pub use signalling_loop::*;
 }
+#[cfg(not(target_arch = "wasm32"))]
+use native::*;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
@@ -26,16 +32,8 @@ mod wasm {
     pub use message_loop::*;
     pub use signalling_loop::*;
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-use native::*;
 #[cfg(target_arch = "wasm32")]
 use wasm::*;
-
-use messages::*;
-use uuid::Uuid;
-
-type Packet = Box<[u8]>;
 
 /// General configuration options for a WebRtc connection.
 ///
@@ -139,6 +137,7 @@ impl Default for RtcIceServerConfig {
 pub struct WebRtcSocket {
     messages_from_peers: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
+    disconnected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
     peer_messages_out: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peers: Vec<PeerId>,
     id: PeerId,
@@ -175,6 +174,7 @@ impl WebRtcSocket {
 
         let (messages_from_peers_tx, messages_from_peers) = new_senders_and_receivers(&config);
         let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
+        let (disconnected_peers_tx, disconnected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
 
         // Would perhaps be smarter to let signalling server decide this...
@@ -186,6 +186,7 @@ impl WebRtcSocket {
                 messages_from_peers,
                 peer_messages_out: peer_messages_out_tx,
                 new_connected_peers,
+                disconnected_peers,
                 peers: vec![],
             },
             Box::pin(run_socket(
@@ -193,6 +194,7 @@ impl WebRtcSocket {
                 id,
                 peer_messages_out_rx,
                 new_connected_peers_tx,
+                disconnected_peers_tx,
                 messages_from_peers_tx,
             )),
         )
@@ -223,7 +225,29 @@ impl WebRtcSocket {
         ids
     }
 
-    /// Returns a Vec of the ids of the connected peers
+    /// Check for peer disconnections and return a Vec of ids of disconnected peers.
+    ///
+    /// See also: [`WebRtcSocket::connected_peers`]
+    pub fn disconnected_peers(&mut self) -> Vec<PeerId> {
+        let mut ids = vec![];
+        // Collect all disconnected peers
+        while let Ok(Some(id)) = self.disconnected_peers.try_next() {
+            if let Some(index) = self.peers.iter().position(|x| x == &id) {
+                self.peers.remove(index);
+            }
+            ids.push(id);
+        }
+        // If the channel dropped or becomes terminated, flush all peers
+        if self.disconnected_peers.is_terminated() {
+            ids.extend(self.peers.clone());
+            self.peers.clear();
+        }
+        ids
+    }
+
+    /// Returns a Vec of the ids of the connected peers.
+    ///
+    /// See also: [`WebRtcSocket::disconnected_peers`]
     pub fn connected_peers(&self) -> Vec<PeerId> {
         self.peers.clone() // TODO: could probably be an iterator or reference instead?
     }
@@ -301,11 +325,22 @@ impl WebRtcSocket {
     }
 }
 
+/// All the channels needed for the messaging loop.
+pub struct MessageLoopChannels {
+    requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
+    events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
+    peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
+    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
+}
+
 async fn run_socket(
     config: WebRtcSocketConfig,
     id: PeerId,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) {
     debug!("Starting WebRtcSocket message loop");
@@ -316,15 +351,15 @@ async fn run_socket(
     let signalling_loop_fut =
         signalling_loop(config.room_url.clone(), requests_receiver, events_sender);
 
-    let message_loop_fut = message_loop(
-        id,
-        config,
+    let channels = MessageLoopChannels {
         requests_sender,
         events_receiver,
         peer_messages_out_rx,
         new_connected_peers_tx,
+        disconnected_peers_tx,
         messages_from_peers_tx,
-    );
+    };
+    let message_loop_fut = message_loop(id, config, channels);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());

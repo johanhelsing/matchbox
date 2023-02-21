@@ -1,5 +1,10 @@
-use futures::FutureExt;
-use futures::{stream::FuturesUnordered, StreamExt};
+use crate::webrtc_socket::{
+    create_data_channels_ready_fut,
+    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+    signal_peer::SignalPeer,
+    ChannelConfig, MessageLoopChannels, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
@@ -8,8 +13,8 @@ use log::{debug, error, warn};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::time::Duration;
-use wasm_bindgen::convert::FromWasmAbi;
-use wasm_bindgen::{prelude::*, JsCast, JsValue};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::{convert::FromWasmAbi, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
@@ -17,22 +22,15 @@ use web_sys::{
     RtcSdpType, RtcSessionDescriptionInit,
 };
 
-use crate::webrtc_socket::{create_data_channels_ready_fut, ChannelConfig};
-use crate::webrtc_socket::{
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-    signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
-};
-
-pub async fn message_loop(
-    id: PeerId,
-    config: WebRtcSocketConfig,
-    requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
-    mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    mut peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
-    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
-) {
+pub async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: MessageLoopChannels) {
+    let MessageLoopChannels {
+        requests_sender,
+        mut events_receiver,
+        mut peer_messages_out_rx,
+        new_connected_peers_tx,
+        disconnected_peers_tx,
+        messages_from_peers_tx,
+    } = channels;
     debug!("Entering WebRtcSocket message loop");
 
     requests_sender
@@ -87,6 +85,9 @@ pub async fn message_loop(
                             handshake_signals.insert(peer_uuid.clone(), signal_sender);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
                             offer_handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone(), &config));
+                        }
+                        PeerEvent::PeerLeft(peer_uuid) => {
+                            disconnected_peers_tx.unbounded_send(peer_uuid).expect("fail to send disconnected peer");
                         }
                         PeerEvent::Signal { sender, data } => {
                             let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {

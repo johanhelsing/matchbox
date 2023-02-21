@@ -264,12 +264,12 @@ async fn handle_ws(
                 })
                 .unwrap_or_default();
             // Tell each connected peer about the disconnected peer.
+            let event = Message::Text(
+                serde_json::to_string(&PeerEvent::PeerLeft(removed_peer.uuid))
+                    .expect("error serializing message"),
+            );
             for peer_id in peers {
-                let event = Message::Text(
-                    serde_json::to_string(&PeerEvent::PeerLeft(removed_peer.uuid.clone()))
-                        .expect("error serializing message"),
-                );
-                match state.try_send(peer_id, event) {
+                match state.try_send(peer_id, event.clone()) {
                     Ok(_) => info!("Sent peer remove to: {:?}", peer_id),
                     Err(e) => error!("Failure sending peer remove: {e:?}"),
                 }

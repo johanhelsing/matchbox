@@ -635,18 +635,15 @@ fn check(res: &Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>>
     res.as_ref().expect("handshake failed");
 }
 
-// The bellow is just to wrap Result<JsValue, JsValue> into something sensible-ish
+// The below is just to wrap Result<JsValue, JsValue> into something sensible-ish
 
 trait JsErrorExt<T> {
-    fn efix(self) -> Result<T, Box<dyn std::error::Error>>;
+    fn efix(self) -> Result<T, JsError>;
 }
 
 impl<T> JsErrorExt<T> for Result<T, JsValue> {
-    fn efix(self) -> Result<T, Box<dyn std::error::Error>> {
-        self.map_err(|e| {
-            let e: Box<dyn std::error::Error> = Box::new(JsError(e));
-            e
-        })
+    fn efix(self) -> Result<T, JsError> {
+        self.map_err(JsError)
     }
 }
 

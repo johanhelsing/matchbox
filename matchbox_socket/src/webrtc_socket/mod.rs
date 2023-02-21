@@ -1,14 +1,18 @@
-use std::pin::Pin;
-
 use futures::{future::Fuse, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use log::debug;
-
+use messages::*;
+use std::pin::Pin;
+use uuid::Uuid;
 mod messages;
 mod signal_peer;
 
+/// The duration, in milliseconds, to send "Keep Alive" packets
 const KEEP_ALIVE_INTERVAL: u64 = 10_000;
+
+/// The raw format of data being sent and received.
+type Packet = Box<[u8]>;
 
 // TODO: maybe use cfg-if to make this slightly tidier
 #[cfg(not(target_arch = "wasm32"))]
@@ -18,6 +22,8 @@ mod native {
     pub use message_loop::*;
     pub use signalling_loop::*;
 }
+#[cfg(not(target_arch = "wasm32"))]
+use native::*;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
@@ -26,16 +32,8 @@ mod wasm {
     pub use message_loop::*;
     pub use signalling_loop::*;
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-use native::*;
 #[cfg(target_arch = "wasm32")]
 use wasm::*;
-
-use messages::*;
-use uuid::Uuid;
-
-type Packet = Box<[u8]>;
 
 /// General configuration options for a WebRtc connection.
 ///

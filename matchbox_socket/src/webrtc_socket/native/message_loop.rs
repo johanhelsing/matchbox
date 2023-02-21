@@ -1,34 +1,27 @@
+use crate::webrtc_socket::{
+    create_data_channels_ready_fut,
+    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+    new_senders_and_receivers,
+    signal_peer::SignalPeer,
+    ChannelConfig, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+};
 use async_compat::CompatExt;
 use bytes::Bytes;
-use futures::{
-    future::FusedFuture, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt,
-};
+use futures::{future::FusedFuture, stream::FuturesUnordered};
+use futures::{Future, FutureExt, SinkExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
-use webrtc::{
-    api::APIBuilder,
-    data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
-    ice_transport::{
-        ice_candidate::{RTCIceCandidate, RTCIceCandidateInit},
-        ice_server::RTCIceServer,
-    },
-    peer_connection::{
-        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
-        RTCPeerConnection,
-    },
-};
-
-use crate::webrtc_socket::{
-    create_data_channels_ready_fut, new_senders_and_receivers, ChannelConfig,
-};
-use crate::webrtc_socket::{
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-    signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+use webrtc::api::APIBuilder;
+use webrtc::data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel};
+use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
+use webrtc::ice_transport::ice_server::RTCIceServer;
+use webrtc::peer_connection::RTCPeerConnection;
+use webrtc::peer_connection::{
+    configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
 };
 
 pub async fn message_loop(

@@ -1,5 +1,10 @@
-use futures::FutureExt;
-use futures::{stream::FuturesUnordered, StreamExt};
+use crate::webrtc_socket::{
+    create_data_channels_ready_fut,
+    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+    signal_peer::SignalPeer,
+    ChannelConfig, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
@@ -8,20 +13,13 @@ use log::{debug, error, warn};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::time::Duration;
-use wasm_bindgen::convert::FromWasmAbi;
-use wasm_bindgen::{prelude::*, JsCast, JsValue};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::{convert::FromWasmAbi, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
     RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcPeerConnectionIceEvent,
     RtcSdpType, RtcSessionDescriptionInit,
-};
-
-use crate::webrtc_socket::{create_data_channels_ready_fut, ChannelConfig};
-use crate::webrtc_socket::{
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-    signal_peer::SignalPeer,
-    Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
 
 pub async fn message_loop(

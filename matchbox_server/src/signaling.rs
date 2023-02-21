@@ -270,7 +270,7 @@ async fn handle_ws(
             );
             for peer_id in peers {
                 match state.try_send(peer_id, event.clone()) {
-                    Ok(_) => info!("Sent peer remove to: {:?}", peer_id),
+                    Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
                     Err(e) => error!("Failure sending peer remove: {e:?}"),
                 }
             }

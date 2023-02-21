@@ -315,6 +315,16 @@ impl WebRtcSocket {
     }
 }
 
+/// All the channels needed for the messaging loop.
+pub struct MessageLoopChannels {
+    requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
+    events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
+    peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
+    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
+    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
+}
+
 async fn run_socket(
     config: WebRtcSocketConfig,
     id: PeerId,
@@ -331,16 +341,15 @@ async fn run_socket(
     let signalling_loop_fut =
         signalling_loop(config.room_url.clone(), requests_receiver, events_sender);
 
-    let message_loop_fut = message_loop(
-        id,
-        config,
+    let channels = MessageLoopChannels {
         requests_sender,
         events_receiver,
         peer_messages_out_rx,
         new_connected_peers_tx,
         disconnected_peers_tx,
         messages_from_peers_tx,
-    );
+    };
+    let message_loop_fut = message_loop(id, config, channels);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());

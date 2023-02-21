@@ -1,9 +1,7 @@
+use crate::webrtc_socket::messages::{PeerEvent, PeerId, PeerRequest, PeerSignal};
 use crate::webrtc_socket::{
-    create_data_channels_ready_fut,
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-    new_senders_and_receivers,
-    signal_peer::SignalPeer,
-    ChannelConfig, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+    create_data_channels_ready_fut, new_senders_and_receivers, signal_peer::SignalPeer,
+    ChannelConfig, MessageLoopChannels, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
 use async_compat::CompatExt;
 use bytes::Bytes;
@@ -24,41 +22,22 @@ use webrtc::peer_connection::{
     configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
 };
 
-pub async fn message_loop(
-    id: PeerId,
-    config: WebRtcSocketConfig,
-    requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
-    events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
-    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
-) {
-    message_loop_impl(
-        id,
-        &config,
+pub async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: MessageLoopChannels) {
+    message_loop_impl(id, &config, channels)
+        // web-rtc is tokio-based so we use compat here to make it work with other async run-times
+        .compat()
+        .await
+}
+
+async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: MessageLoopChannels) {
+    let MessageLoopChannels {
         requests_sender,
-        events_receiver,
-        peer_messages_out_rx,
+        mut events_receiver,
+        mut peer_messages_out_rx,
         new_connected_peers_tx,
         disconnected_peers_tx,
         messages_from_peers_tx,
-    )
-    // web-rtc is tokio-based so we use compat here to make it work with other async run-times
-    .compat()
-    .await
-}
-
-async fn message_loop_impl(
-    id: PeerId,
-    config: &WebRtcSocketConfig,
-    requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
-    mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    mut peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
-    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
-) {
+    } = channels;
     debug!("Entering native WebRtcSocket message loop");
 
     debug!("I am {:?}", id);

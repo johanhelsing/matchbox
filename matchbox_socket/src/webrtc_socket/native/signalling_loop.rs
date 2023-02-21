@@ -1,5 +1,5 @@
 use crate::webrtc_socket::messages::{PeerEvent, PeerRequest};
-use async_tungstenite::async_std::{connect_async, tungstenite::Message};
+use async_tungstenite::{async_std::connect_async, tungstenite::Message};
 use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
 use futures_util::select;
 use log::{debug, warn};

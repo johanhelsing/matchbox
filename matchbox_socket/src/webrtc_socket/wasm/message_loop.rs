@@ -2,7 +2,7 @@ use crate::webrtc_socket::{
     create_data_channels_ready_fut,
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
-    ChannelConfig, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+    ChannelConfig, MessageLoopChannels, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -22,16 +22,15 @@ use web_sys::{
     RtcSdpType, RtcSessionDescriptionInit,
 };
 
-pub async fn message_loop(
-    id: PeerId,
-    config: WebRtcSocketConfig,
-    requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
-    mut events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
-    mut peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
-    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
-) {
+pub async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: MessageLoopChannels) {
+    let MessageLoopChannels {
+        requests_sender,
+        mut events_receiver,
+        mut peer_messages_out_rx,
+        new_connected_peers_tx,
+        disconnected_peers_tx,
+        messages_from_peers_tx,
+    } = channels;
     debug!("Entering WebRtcSocket message loop");
 
     requests_sender

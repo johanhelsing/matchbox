@@ -225,7 +225,9 @@ impl WebRtcSocket {
         ids
     }
 
-    /// Check if any peers have disconnected and if so remove them from the list of peers
+    /// Check for peer disconnections and return a Vec of ids of disconnected peers.
+    ///
+    /// See also: [`WebRtcSocket::connected_peers`]
     pub fn disconnected_peers(&mut self) -> Vec<PeerId> {
         let mut ids = Vec::new();
         while let Ok(Some(id)) = self.disconnected_peers.try_next() {
@@ -237,7 +239,9 @@ impl WebRtcSocket {
         ids
     }
 
-    /// Returns a Vec of the ids of the connected peers
+    /// Returns a Vec of the ids of the connected peers.
+    ///
+    /// See also: [`WebRtcSocket::disconnected_peers`]
     pub fn connected_peers(&self) -> Vec<PeerId> {
         self.peers.clone() // TODO: could probably be an iterator or reference instead?
     }

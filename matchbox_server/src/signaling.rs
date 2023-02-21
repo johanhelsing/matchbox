@@ -353,6 +353,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn disconnect_peer() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client_a, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        _ = client_a
+            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
+            .await;
+
+        let (mut client_b, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        _ = client_b
+            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
+            .await;
+
+        // Ensure Peer B was received
+        let new_peer_event = recv_peer_event(&mut client_a).await;
+        assert_eq!(new_peer_event, PeerEvent::NewPeer("uuid-b".to_string()));
+
+        // Disconnect Peer B
+        _ = client_b.close(None).await;
+        let new_peer_event = recv_peer_event(&mut client_a).await;
+        assert_eq!(new_peer_event, PeerEvent::PeerLeft("uuid-b".to_string()));
+    }
+
+    #[tokio::test]
     async fn signal() {
         let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());

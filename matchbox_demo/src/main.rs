@@ -1,5 +1,4 @@
-use bevy::log::LogPlugin;
-use bevy::{prelude::*, tasks::IoTaskPool};
+use bevy::{log::LogPlugin, prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, Session};
 use ggrs::SessionBuilder;
 use matchbox_socket::WebRtcSocket;
@@ -34,7 +33,8 @@ fn main() {
     GGRSPlugin::<GGRSConfig>::new()
         // define frequency of rollback game logic update
         .with_update_frequency(FPS)
-        // define system that returns inputs given a player handle, so GGRS can send the inputs around
+        // define system that returns inputs given a player handle, so GGRS can send the inputs
+        // around
         .with_input_system(input)
         // register types of components AND resources you want to be rolled back
         .register_rollback_component::<Transform>()

@@ -88,7 +88,8 @@ pub struct ChannelConfig {
 }
 
 impl ChannelConfig {
-    /// Messages sent via an unreliable channel may arrive in any order or not at all, but arrive as quickly as possible
+    /// Messages sent via an unreliable channel may arrive in any order or not at all, but arrive as
+    /// quickly as possible
     pub fn unreliable() -> Self {
         ChannelConfig {
             ordered: false,
@@ -96,7 +97,8 @@ impl ChannelConfig {
         }
     }
 
-    /// Messages sent via a reliable channel are guaranteed to arrive in order and will be resent until they arrive
+    /// Messages sent via a reliable channel are guaranteed to arrive in order and will be resent
+    /// until they arrive
     pub fn reliable() -> Self {
         ChannelConfig {
             ordered: true,
@@ -253,8 +255,8 @@ impl WebRtcSocket {
         self.peers.clone() // TODO: could probably be an iterator or reference instead?
     }
 
-    /// Call this where you want to handle new received messages from the default channel (with index 0) which will be the only
-    /// channel if you didn't configure any explicitly
+    /// Call this where you want to handle new received messages from the default channel (with
+    /// index 0) which will be the only channel if you didn't configure any explicitly
     ///
     /// messages are removed from the socket when called
     ///
@@ -263,9 +265,10 @@ impl WebRtcSocket {
         self.receive_on_channel(0)
     }
 
-    /// Call this where you want to handle new received messages from a specific channel as configured in [`WebRtcSocketConfig::channels`].
-    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] as you configured it before
-    /// (or 0 for the default channel if you use the default configuration).
+    /// Call this where you want to handle new received messages from a specific channel as
+    /// configured in [`WebRtcSocketConfig::channels`]. The index of a channel is its index in
+    /// the vec [`WebRtcSocketConfig::channels`] as you configured it before (or 0 for the
+    /// default channel if you use the default configuration).
     ///
     /// messages are removed from the socket when called   
     pub fn receive_on_channel(&mut self, index: usize) -> Vec<(PeerId, Packet)> {
@@ -292,10 +295,12 @@ impl WebRtcSocket {
         self.send_on_channel(packet, id, 0);
     }
 
-    /// Send a packet to the given peer on a specific channel as configured in [`WebRtcSocketConfig::channels`].
+    /// Send a packet to the given peer on a specific channel as configured in
+    /// [`WebRtcSocketConfig::channels`].
     ///
-    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] as you configured it before
-    /// (or 0 for the default channel if you use the default configuration).
+    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] as you
+    /// configured it before (or 0 for the default channel if you use the default
+    /// configuration).
     pub fn send_on_channel<T: Into<PeerId>>(&mut self, packet: Packet, id: T, index: usize) {
         self.peer_messages_out
             .get(index)
@@ -304,9 +309,11 @@ impl WebRtcSocket {
             .expect("send_to failed");
     }
 
-    /// Send a packet to all connected peers on a specific channel as configured in [`WebRtcSocketConfig::channels`].
+    /// Send a packet to all connected peers on a specific channel as configured in
+    /// [`WebRtcSocketConfig::channels`].
     ///
-    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] on socket creation.
+    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] on socket
+    /// creation.
     pub fn broadcast_on_channel(&mut self, packet: Packet, index: usize) {
         let sender = self
             .peer_messages_out

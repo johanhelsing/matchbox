@@ -11,10 +11,8 @@ use futures_util::select;
 use js_sys::{Function, Reflect};
 use log::{debug, error, warn};
 use serde::Serialize;
-use std::collections::HashMap;
-use std::time::Duration;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::{convert::FromWasmAbi, JsCast, JsValue};
+use std::{collections::HashMap, time::Duration};
+use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
@@ -603,7 +601,8 @@ fn create_data_channel(
     channel
 }
 
-/// Note that this fuction leaks some memory because the rust closure is dropped but still needs to be accessed by javascript of the browser
+/// Note that this fuction leaks some memory because the rust closure is dropped but still needs to
+/// be accessed by javascript of the browser
 ///
 /// See also: https://rustwasm.github.io/wasm-bindgen/api/wasm_bindgen/closure/struct.Closure.html#method.into_js_value
 fn leaking_channel_event_handler<T: FromWasmAbi + 'static>(

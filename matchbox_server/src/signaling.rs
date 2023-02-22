@@ -1,14 +1,20 @@
 use crate::error::{ClientRequestError, ServerError};
-use axum::extract::connect_info::ConnectInfo;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, Query, State};
-use axum::response::IntoResponse;
-use axum::Error;
+use axum::{
+    extract::{
+        connect_info::ConnectInfo,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, Query, State,
+    },
+    response::IntoResponse,
+    Error,
+};
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};
@@ -281,16 +287,15 @@ async fn handle_ws(
 #[cfg(test)]
 mod tests {
     use crate::signaling::PeerEvent;
-    use axum::routing::get;
-    use axum::Router;
-    use futures::lock::Mutex;
-    use futures::{pin_mut, SinkExt, StreamExt};
-    use std::net::{Ipv4Addr, SocketAddr};
-    use std::sync::Arc;
-    use std::time::Duration;
+    use axum::{routing::get, Router};
+    use futures::{lock::Mutex, pin_mut, SinkExt, StreamExt};
+    use std::{
+        net::{Ipv4Addr, SocketAddr},
+        sync::Arc,
+        time::Duration,
+    };
     use tokio::{net::TcpStream, select, time};
-    use tokio_tungstenite::tungstenite::Message;
-    use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+    use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
     use super::{ws_handler, ServerState};
 

@@ -21,7 +21,8 @@ const FRICTION: f32 = 0.9;
 const PLANE_SIZE: f32 = 5.0;
 const CUBE_SIZE: f32 = 0.2;
 
-/// You need to define a config struct to bundle all the generics of GGRS. You can safely ignore `State` and leave it as u8 for all GGRS functionality.
+/// You need to define a config struct to bundle all the generics of GGRS. You can safely ignore
+/// `State` and leave it as u8 for all GGRS functionality.
 /// TODO: Find a way to hide the state type.
 #[derive(Debug)]
 pub struct GGRSConfig;
@@ -97,9 +98,11 @@ pub fn setup_scene_system(
         ..default()
     });
 
-    // player cube - just spawn whatever entity you want, then add a `Rollback` component with a unique id (for example through the `RollbackIdProvider` resource).
-    // Every entity that you want to be saved/loaded needs a `Rollback` component with a unique rollback id.
-    // When loading entities from the past, this extra id is necessary to connect entities over different game states
+    // player cube - just spawn whatever entity you want, then add a `Rollback` component with a
+    // unique id (for example through the `RollbackIdProvider` resource). Every entity that you
+    // want to be saved/loaded needs a `Rollback` component with a unique rollback id.
+    // When loading entities from the past, this extra id is necessary to connect entities over
+    // different game states
     let r = PLANE_SIZE / 4.;
 
     for handle in 0..num_players {
@@ -122,7 +125,8 @@ pub fn setup_scene_system(
             },
             Player { handle },
             Velocity::default(),
-            // this component indicates bevy_GGRS that parts of this entity should be saved and loaded
+            // this component indicates bevy_GGRS that parts of this entity should be saved and
+            // loaded
             Rollback::new(rip.next_id()),
         ));
     }
@@ -139,8 +143,9 @@ pub fn setup_scene_system(
 }
 
 // Example system, manipulating a resource, will be added to the rollback schedule.
-// Increases the frame count by 1 every update step. If loading and saving resources works correctly,
-// you should see this resource rolling back, counting back up and finally increasing by 1 every update step
+// Increases the frame count by 1 every update step. If loading and saving resources works
+// correctly, you should see this resource rolling back, counting back up and finally increasing by
+// 1 every update step
 #[allow(dead_code)]
 pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
     frame_count.frame += 1;

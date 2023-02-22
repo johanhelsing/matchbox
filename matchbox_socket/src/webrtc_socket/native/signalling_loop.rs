@@ -5,7 +5,7 @@ use crate::webrtc_socket::{
 use async_tungstenite::{async_std::connect_async, tungstenite::Message};
 use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
 use futures_util::select;
-use log::{debug, warn};
+use log::{debug, error, warn};
 
 pub async fn signalling_loop(
     room_url: String,

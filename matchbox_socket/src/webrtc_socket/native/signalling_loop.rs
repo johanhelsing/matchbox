@@ -1,4 +1,7 @@
-use crate::webrtc_socket::messages::{PeerEvent, PeerRequest};
+use crate::webrtc_socket::{
+    error::SignallingError,
+    messages::{PeerEvent, PeerRequest},
+};
 use async_tungstenite::{async_std::connect_async, tungstenite::Message};
 use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
 use futures_util::select;
@@ -8,11 +11,11 @@ pub async fn signalling_loop(
     room_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
-) {
+) -> Result<(), SignallingError> {
     debug!("Signalling loop started");
     let (mut wsio, _response) = connect_async(&room_url)
         .await
-        .expect("failed to connect to signalling server");
+        .map_err(SignallingError::from)?;
 
     loop {
         let next_request = requests_receiver.next().fuse();
@@ -46,7 +49,7 @@ pub async fn signalling_loop(
                 };
             }
 
-            complete => break
+            complete => break Ok(())
         }
     }
 }

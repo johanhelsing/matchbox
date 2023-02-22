@@ -1,4 +1,4 @@
-use crate::webrtc_socket::messages::*;
+use crate::webrtc_socket::{error::SignallingError, messages::*};
 use futures::{SinkExt, StreamExt};
 use futures_util::select;
 use log::{debug, error};
@@ -8,11 +8,10 @@ pub async fn signalling_loop(
     room_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
-) {
+) -> Result<(), SignallingError> {
     let (_ws, wsio) = WsMeta::connect(&room_url, None)
         .await
-        .expect("failed to connect to signalling server");
-
+        .map_err(SignallingError::from)?;
     let mut wsio = wsio.fuse();
 
     loop {
@@ -36,12 +35,12 @@ pub async fn signalling_loop(
                     },
                     None => {
                         error!("Disconnected from signalling server!");
-                        break;
+                        break Err(SignallingError::StreamExhausted)
                     }
                 }
             }
 
-            complete => break
+            complete => break Ok(())
         }
     }
 }

@@ -1,10 +1,11 @@
 use futures::{future::Fuse, stream::FusedStream, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
-use log::debug;
+use log::{debug, error};
 use messages::*;
 use std::pin::Pin;
 use uuid::Uuid;
+pub(crate) mod error;
 mod messages;
 mod signal_peer;
 
@@ -370,9 +371,14 @@ async fn run_socket(
                 break;
             }
 
-            _ = signalling_loop_done => {
-                debug!("Signalling loop completed");
-                // todo!{"reconnect?"}
+            sigloop = signalling_loop_done => {
+                match sigloop {
+                    Ok(()) => debug!("Signalling loop completed"),
+                    Err(e) => {
+                        error!("{e:?}");
+                        // TODO: Reconnect X attempts if configured to reconnect.
+                    },
+                }
             }
 
             complete => break

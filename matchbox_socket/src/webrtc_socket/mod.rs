@@ -243,8 +243,7 @@ impl WebRtcSocket {
         }
         // If the channel dropped or becomes terminated, flush all peers
         if self.disconnected_peers.is_terminated() {
-            ids.extend(self.peers.clone());
-            self.peers.clear();
+            ids.append(&mut self.peers);
         }
         ids
     }

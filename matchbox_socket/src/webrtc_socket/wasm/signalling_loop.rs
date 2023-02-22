@@ -12,6 +12,7 @@ pub async fn signalling_loop(
     let (_ws, wsio) = WsMeta::connect(&room_url, None)
         .await
         .map_err(SignallingError::from)?;
+
     let mut wsio = wsio.fuse();
 
     loop {

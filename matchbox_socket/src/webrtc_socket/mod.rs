@@ -432,7 +432,7 @@ mod test {
     #[futures_test::test]
     async fn unreachable_server() {
         // .invalid is a reserved tld for testing and documentation
-        let (_socket, fut) = WebRtcSocket::new("wss://invalid.xyz");
+        let (_socket, fut) = WebRtcSocket::new("wss://example.invalid");
 
         let result = fut.await;
         assert!(result.is_err());

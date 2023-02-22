@@ -408,3 +408,18 @@ async fn wait_for_ready(channel_ready_rx: Vec<futures_channel::mpsc::Receiver<u8
         }
     }
 }
+
+#[cfg(all(test, not(target_arch = "wasm32-unknown-unknown")))]
+mod test {
+    use crate::WebRtcSocket;
+
+    #[futures_test::test]
+    async fn unreachable_server() {
+        // .invalid is a reserved tld for testing and documentation
+        let (_socket, fut) = WebRtcSocket::new("wss://matchbox.invalid");
+
+        let _ = fut.await; // should not panic
+
+        // todo: assert on actual error returned
+    }
+}

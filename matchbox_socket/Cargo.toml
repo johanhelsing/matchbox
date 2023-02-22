@@ -50,3 +50,4 @@ async-tungstenite = { version = "0.19", default-features = false, features = [ "
 webrtc = { version = "0.6", default-features = false }
 bytes = { version = "1.1", default-features = false }
 async-compat = { version = "0.2.1", default-features = false }
+futures-test = { version = "0.3" }

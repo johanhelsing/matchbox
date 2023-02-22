@@ -27,7 +27,7 @@ pub async fn signalling_loop(
             request = next_request => {
                 let request = serde_json::to_string(&request).expect("serializing request");
                 debug!("-> {}", request);
-                wsio.send(Message::Text(request)).await.expect("request send error");
+                wsio.send(Message::Text(request)).await.map_err(SignallingError::from)?;
             }
 
             message = next_websocket_message => {
@@ -36,16 +36,18 @@ pub async fn signalling_loop(
                         debug!("{}", message);
                         let event: PeerEvent = serde_json::from_str(&message)
                             .unwrap_or_else(|err| panic!("couldn't parse peer event: {}.\nEvent: {}", err, message));
-                        events_sender.unbounded_send(event).unwrap();
+                        events_sender.unbounded_send(event).map_err(SignallingError::from)?;
                     },
                     Some(Ok(message)) => {
                         warn!("ignoring unexpected non-text message from signalling server: {:?}", message)
                     },
                     Some(Err(e)) => {
-                        // TODO: propagate errors or recover
-                        panic!("WebSocket error {:?}", e)
+                        break Err(SignallingError::from(e))
                     },
-                    None => {} // Disconnected from signalling server
+                    None => {
+                        error!("Disconnected from signalling server!");
+                        break Err(SignallingError::StreamExhausted)
+                    }
                 };
             }
 

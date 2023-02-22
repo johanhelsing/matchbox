@@ -1,3 +1,4 @@
+use crate::Error;
 use futures::{future::Fuse, stream::FusedStream, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
@@ -147,10 +148,10 @@ pub struct WebRtcSocket {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 // TODO: figure out if it's possible to implement Send in wasm as well
 #[cfg(target_arch = "wasm32")]
-pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()>>>;
+pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
 
 impl WebRtcSocket {
     /// Create a new connection to the given room with a single unreliable data channel
@@ -350,7 +351,7 @@ async fn run_socket(
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
-) {
+) -> Result<(), Error> {
     debug!("Starting WebRtcSocket message loop");
 
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
@@ -382,8 +383,9 @@ async fn run_socket(
                 match sigloop {
                     Ok(()) => debug!("Signalling loop completed"),
                     Err(e) => {
-                        error!("{e:?}");
                         // TODO: Reconnect X attempts if configured to reconnect.
+                        error!("{e:?}");
+                        return Err(Error::from(e));
                     },
                 }
             }
@@ -391,6 +393,7 @@ async fn run_socket(
             complete => break
         }
     }
+    Ok(())
 }
 
 pub(crate) fn new_senders_and_receivers<T>(

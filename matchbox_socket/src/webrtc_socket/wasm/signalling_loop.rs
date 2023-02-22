@@ -1,4 +1,4 @@
-use crate::webrtc_socket::messages::*;
+use crate::webrtc_socket::{error::SignallingError, messages::*};
 use futures::{SinkExt, StreamExt};
 use futures_util::select;
 use log::{debug, error};
@@ -8,10 +8,10 @@ pub async fn signalling_loop(
     room_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
-) {
+) -> Result<(), SignallingError> {
     let (_ws, wsio) = WsMeta::connect(&room_url, None)
         .await
-        .expect("failed to connect to signalling server");
+        .map_err(SignallingError::from)?;
 
     let mut wsio = wsio.fuse();
 
@@ -20,7 +20,7 @@ pub async fn signalling_loop(
             request = requests_receiver.next() => {
                 let request = serde_json::to_string(&request).expect("serializing request");
                 debug!("-> {}", request);
-                wsio.send(WsMessage::Text(request)).await.expect("request send error");
+                wsio.send(WsMessage::Text(request)).await.map_err(SignallingError::from)?;
             }
 
             message = wsio.next() => {
@@ -29,19 +29,19 @@ pub async fn signalling_loop(
                         debug!("{}", message);
                         let event: PeerEvent = serde_json::from_str(&message)
                             .unwrap_or_else(|_| panic!("couldn't parse peer event {}", message));
-                        events_sender.unbounded_send(event).unwrap();
+                        events_sender.unbounded_send(event).map_err(SignallingError::from)?;
                     },
                     Some(WsMessage::Binary(_)) => {
                         error!("Received binary data from signal server (expected text). Ignoring.");
                     },
                     None => {
                         error!("Disconnected from signalling server!");
-                        break;
+                        break Err(SignallingError::StreamExhausted)
                     }
                 }
             }
 
-            complete => break
+            complete => break Ok(())
         }
     }
 }

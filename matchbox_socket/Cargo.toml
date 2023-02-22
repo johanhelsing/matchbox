@@ -23,6 +23,7 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 uuid = { version = "1.0", default-features = false, features = ["v4"] }
 log = { version = "0.4", default-features = false }
+thiserror = "1.0"
 
 # ggrs-socket
 ggrs = { version = "0.9.3", default-features = false, optional = true }
@@ -50,3 +51,6 @@ async-tungstenite = { version = "0.19", default-features = false, features = [ "
 webrtc = { version = "0.6", default-features = false }
 bytes = { version = "1.1", default-features = false }
 async-compat = { version = "0.2.1", default-features = false }
+
+[dev-dependencies]
+futures-test = { version = "0.3" }

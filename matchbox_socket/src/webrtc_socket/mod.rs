@@ -1,10 +1,12 @@
+use crate::Error;
 use futures::{future::Fuse, stream::FusedStream, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
-use log::debug;
+use log::{debug, error};
 use messages::*;
 use std::pin::Pin;
 use uuid::Uuid;
+pub(crate) mod error;
 mod messages;
 mod signal_peer;
 
@@ -146,10 +148,10 @@ pub struct WebRtcSocket {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 // TODO: figure out if it's possible to implement Send in wasm as well
 #[cfg(target_arch = "wasm32")]
-pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = ()>>>;
+pub(crate) type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
 
 impl WebRtcSocket {
     /// Create a new connection to the given room with a single unreliable data channel
@@ -349,7 +351,7 @@ async fn run_socket(
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
-) {
+) -> Result<(), Error> {
     debug!("Starting WebRtcSocket message loop");
 
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
@@ -377,14 +379,21 @@ async fn run_socket(
                 break;
             }
 
-            _ = signalling_loop_done => {
-                debug!("Signalling loop completed");
-                // todo!{"reconnect?"}
+            sigloop = signalling_loop_done => {
+                match sigloop {
+                    Ok(()) => debug!("Signalling loop completed"),
+                    Err(e) => {
+                        // TODO: Reconnect X attempts if configured to reconnect.
+                        error!("{e:?}");
+                        return Err(Error::from(e));
+                    },
+                }
             }
 
             complete => break
         }
     }
+    Ok(())
 }
 
 pub(crate) fn new_senders_and_receivers<T>(
@@ -413,5 +422,20 @@ async fn wait_for_ready(channel_ready_rx: Vec<futures_channel::mpsc::Receiver<u8
         if receiver.next().await.is_none() {
             panic!("Sender closed before channel was ready");
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{Error, WebRtcSocket};
+
+    #[futures_test::test]
+    async fn unreachable_server() {
+        // .invalid is a reserved tld for testing and documentation
+        let (_socket, fut) = WebRtcSocket::new("wss://example.invalid");
+
+        let result = fut.await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::Signalling(_)));
     }
 }

@@ -424,3 +424,18 @@ async fn wait_for_ready(channel_ready_rx: Vec<futures_channel::mpsc::Receiver<u8
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{Error, WebRtcSocket};
+
+    #[futures_test::test]
+    async fn unreachable_server() {
+        // .invalid is a reserved tld for testing and documentation
+        let (_socket, fut) = WebRtcSocket::new("wss://invalid.xyz");
+
+        let result = fut.await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::Signalling(_)));
+    }
+}

@@ -55,18 +55,3 @@ pub async fn signalling_loop(
         }
     }
 }
-
-#[cfg(all(test, not(target_arch = "wasm32-unknown-unknown")))]
-mod test {
-    use crate::{Error, WebRtcSocket};
-
-    #[futures_test::test]
-    async fn unreachable_server() {
-        // .invalid is a reserved tld for testing and documentation
-        let (_socket, fut) = WebRtcSocket::new("wss://invalid.xyz");
-
-        let result = fut.await;
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::Signalling(_)));
-    }
-}

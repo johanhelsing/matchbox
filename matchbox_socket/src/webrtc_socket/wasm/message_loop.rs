@@ -1,7 +1,7 @@
 use crate::webrtc_socket::{
-    create_data_channels_ready_fut,
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
+    socket::create_data_channels_ready_fut,
     ChannelConfig, MessageLoopChannels, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
@@ -122,7 +122,7 @@ pub async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: Mess
                         let data_channel = data_channels.get(&peer)
                             .expect("couldn't find data channel for peer")
                             .get(channel_index)
-                            .unwrap_or_else(|| panic!("couldn't find data channel with index {}", channel_index));
+                            .unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
 
                         if let Err(err) = data_channel.send_with_u8_array(&packet) {
                             // This likely means the other peer disconnected

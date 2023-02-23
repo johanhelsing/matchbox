@@ -1,9 +1,12 @@
+use crate::webrtc_socket::messages::PeerEvent;
+use futures_channel::mpsc::TrySendError;
+
 /// An error that can occur with WebRTC signalling.
 #[derive(Debug, thiserror::Error)]
 pub enum SignallingError {
     // Common
     #[error("failed to send event to signalling server")]
-    Undeliverable(#[from] futures_channel::mpsc::TrySendError<super::messages::PeerEvent>),
+    Undeliverable(#[from] TrySendError<PeerEvent>),
     #[error("The stream is exhausted")]
     StreamExhausted,
 

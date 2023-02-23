@@ -286,7 +286,7 @@ async fn handle_ws(
 
 #[cfg(test)]
 mod tests {
-    use crate::signaling::PeerEvent;
+    use crate::{signaling::PeerEvent, ws_handler, ServerState};
     use axum::{routing::get, Router};
     use futures::{lock::Mutex, pin_mut, SinkExt, StreamExt};
     use std::{
@@ -296,8 +296,6 @@ mod tests {
     };
     use tokio::{net::TcpStream, select, time};
     use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
-
-    use super::{ws_handler, ServerState};
 
     fn app() -> Router {
         Router::new()

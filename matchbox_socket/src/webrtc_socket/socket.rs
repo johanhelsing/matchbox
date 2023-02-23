@@ -1,5 +1,8 @@
 use crate::{
-    webrtc_socket::{message_loop, messages::PeerId, signalling_loop, MessageLoopFuture, Packet},
+    webrtc_socket::{
+        message_loop, messages::PeerId, signalling_loop, MessageLoopFuture, Packet, PeerEvent,
+        PeerRequest,
+    },
     Error,
 };
 use futures::{future::Fuse, select, stream::FusedStream, Future, FutureExt, StreamExt};
@@ -7,8 +10,6 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use std::pin::Pin;
 use uuid::Uuid;
-
-use super::messages::{PeerEvent, PeerRequest};
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>

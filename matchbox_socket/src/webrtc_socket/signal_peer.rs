@@ -1,6 +1,5 @@
+use crate::webrtc_socket::{PeerId, PeerRequest, PeerSignal};
 use futures_channel::mpsc::UnboundedSender;
-
-use super::{PeerId, PeerRequest, PeerSignal};
 
 #[derive(Debug, Clone)]
 pub struct SignalPeer {

@@ -19,6 +19,7 @@ pub enum PeerRequest {
     KeepAlive,
 }
 
+/// Signals go from peer to peer
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerSignal {
     IceCandidate(String),

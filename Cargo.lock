@@ -3047,6 +3047,7 @@ dependencies = [
  "async-tungstenite",
  "bincode",
  "bytes",
+ "cfg-if",
  "futures",
  "futures-channel",
  "futures-test",

@@ -25,7 +25,7 @@ async fn main() {
 
 async fn async_main() {
     info!("Connecting to matchbox");
-    let (mut socket, loop_fut) = WebRtcSocket::new("ws://localhost:3536/example_room");
+    let (mut socket, loop_fut) = WebRtcSocket::new_unreliable("ws://localhost:3536/example_room");
 
     info!("my id is {:?}", socket.id());
 

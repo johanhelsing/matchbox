@@ -1,8 +1,7 @@
 use crate::webrtc_socket::{
-    create_data_channels_ready_fut,
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-    new_senders_and_receivers,
     signal_peer::SignalPeer,
+    socket::{create_data_channels_ready_fut, new_senders_and_receivers},
     ChannelConfig, MessageLoopChannels, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
 use async_compat::CompatExt;
@@ -123,9 +122,9 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
                 match message {
                     Some((channel_index, Some((peer, packet)))) => {
                         let senders = connected_peers.get_mut(&peer)
-                            .unwrap_or_else(|| panic!("couldn't find data channel for peer {}", peer));
+                            .unwrap_or_else(|| panic!("couldn't find data channel for peer {peer}"));
                         let sender = senders.get_mut(channel_index)
-                            .unwrap_or_else(|| panic!("Unexpected data channel index during send: {}", channel_index));
+                            .unwrap_or_else(|| panic!("Unexpected data channel index during send: {channel_index}"));
                         sender.unbounded_send(packet).unwrap();
                     },
                     Some((_, None)) | None => {

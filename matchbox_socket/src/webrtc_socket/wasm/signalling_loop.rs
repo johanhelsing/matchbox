@@ -28,7 +28,7 @@ pub async fn signalling_loop(
                     Some(WsMessage::Text(message)) => {
                         debug!("{}", message);
                         let event: PeerEvent = serde_json::from_str(&message)
-                            .unwrap_or_else(|_| panic!("couldn't parse peer event {}", message));
+                            .unwrap_or_else(|_| panic!("couldn't parse peer event {message}"));
                         events_sender.unbounded_send(event).map_err(SignallingError::from)?;
                     },
                     Some(WsMessage::Binary(_)) => {

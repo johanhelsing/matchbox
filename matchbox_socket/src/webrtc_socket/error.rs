@@ -10,7 +10,7 @@ pub enum SignallingError {
     #[error("The stream is exhausted")]
     StreamExhausted,
     #[error("The maximum allowed signalling attempts have been exhausted")]
-    NoMoreAttempts,
+    NoMoreAttempts(#[from] Box<SignallingError>),
 
     // Native
     #[cfg(not(target_arch = "wasm32"))]

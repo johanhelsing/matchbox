@@ -5,11 +5,9 @@ use crate::{
     },
     Error,
 };
-use futures::{
-    future::Fuse, lock::Mutex, select, stream::FusedStream, Future, FutureExt, StreamExt,
-};
+use futures::{future::Fuse, lock::Mutex, stream::FusedStream, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use log::{debug, error};
+use log::{debug, info, warn};
 use std::{pin::Pin, sync::Arc};
 use uuid::Uuid;
 
@@ -158,19 +156,18 @@ impl WebRtcSocket {
         let id = Uuid::new_v4().to_string();
 
         let channels: Arc<Mutex<Option<ReceiverChannels>>> = Arc::new(None.into());
-        let socket = Self {
-            id: id.clone(),
-            channels: Arc::clone(&channels),
-            peers: vec![],
-        };
         (
-            socket,
+            Self {
+                id: id.clone(),
+                channels: Arc::clone(&channels),
+                peers: vec![],
+            },
             Box::pin(run_retriable_socket(Arc::clone(&channels), config, id)),
         )
     }
 
     pub async fn is_connected(&self) -> bool {
-        log::info!("{:?}", self.channels.lock().await);
+        log::info!("connected: {:?}", self.channels.lock().await.is_some());
         false
     }
 
@@ -395,120 +392,58 @@ async fn run_retriable_socket(
     config: WebRtcSocketConfig,
     id: PeerId,
 ) -> Result<(), Error> {
-    match config.max_retries {
-        Some(mut attempts_left) => loop {
-            let (messages_from_peers_tx, messages_from_peers_rx) =
-                new_senders_and_receivers(&config);
-            let (new_connected_peers_tx, new_connected_peers_rx) =
-                futures_channel::mpsc::unbounded();
-            let (disconnected_peers_tx, disconnected_peers_rx) = futures_channel::mpsc::unbounded();
-            let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
-
-            match run_socket(
-                config.clone(),
-                id.clone(),
-                peer_messages_out_rx,
-                new_connected_peers_tx,
-                disconnected_peers_tx,
-                messages_from_peers_tx,
-            )
-            .await
-            {
-                Ok(()) => {
-                    channels.lock().await.replace(ReceiverChannels {
-                        messages_from_peers_rx,
-                        new_connected_peers_rx,
-                        disconnected_peers_rx,
-                        peer_messages_out_tx,
-                    });
-                    break Ok(());
-                }
-                Err(_) => {
-                    if attempts_left == 0 {
-                        break Err(Error::Signalling(SignallingError::NoMoreAttempts));
-                    }
-                    attempts_left -= 1;
+    let mut attempt = 0;
+    'signalling: loop {
+        info!("Signalling attempt #{attempt}");
+        let (requests_sender, requests_receiver) =
+            futures_channel::mpsc::unbounded::<PeerRequest>();
+        let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
+        info!("a");
+        if let Err(e) =
+            signalling_loop(config.room_url.clone(), requests_receiver, events_sender).await
+        {
+            if let Some(max_retries) = config.max_retries {
+                if attempt >= max_retries {
+                    return Err(Error::Signalling(SignallingError::NoMoreAttempts(
+                        Box::new(e),
+                    )));
                 }
             }
-        },
-        None => {
-            let (messages_from_peers_tx, messages_from_peers_rx) =
-                new_senders_and_receivers(&config);
-            let (new_connected_peers_tx, new_connected_peers_rx) =
-                futures_channel::mpsc::unbounded();
-            let (disconnected_peers_tx, disconnected_peers_rx) = futures_channel::mpsc::unbounded();
-            let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
-
-            channels.lock().await.replace(ReceiverChannels {
-                messages_from_peers_rx,
-                new_connected_peers_rx,
-                disconnected_peers_rx,
-                peer_messages_out_tx,
-            });
-
-            run_socket(
-                config,
-                id,
-                peer_messages_out_rx,
-                new_connected_peers_tx,
-                disconnected_peers_tx,
-                messages_from_peers_tx,
-            )
-            .await
+            warn!("attempt failed: {e:?}");
+            attempt += 1;
+            continue 'signalling;
         }
+        info!("b");
+        let (messages_from_peers_tx, messages_from_peers_rx) = new_senders_and_receivers(&config);
+        let (new_connected_peers_tx, new_connected_peers_rx) = futures_channel::mpsc::unbounded();
+        let (disconnected_peers_tx, disconnected_peers_rx) = futures_channel::mpsc::unbounded();
+        let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
+        channels.lock().await.replace(ReceiverChannels {
+            messages_from_peers_rx,
+            new_connected_peers_rx,
+            disconnected_peers_rx,
+            peer_messages_out_tx,
+        });
+        let msg_loop_channels = MessageLoopChannels {
+            requests_sender,
+            events_receiver,
+            peer_messages_out_rx,
+            new_connected_peers_tx,
+            disconnected_peers_tx,
+            messages_from_peers_tx,
+        };
+        break run_socket(config, id, msg_loop_channels).await;
     }
 }
 
 async fn run_socket(
     config: WebRtcSocketConfig,
     id: PeerId,
-    peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
-    new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
-    messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
+    msg_loop_channels: MessageLoopChannels,
 ) -> Result<(), Error> {
-    debug!("Starting WebRtcSocket");
-
-    let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
-    let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
-
-    let signalling_loop_fut =
-        signalling_loop(config.room_url.clone(), requests_receiver, events_sender);
-
-    let channels = MessageLoopChannels {
-        requests_sender,
-        events_receiver,
-        peer_messages_out_rx,
-        new_connected_peers_tx,
-        disconnected_peers_tx,
-        messages_from_peers_tx,
-    };
-    let message_loop_fut = message_loop(id, config, channels);
-
-    let mut message_loop_done = Box::pin(message_loop_fut.fuse());
-    let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());
-
-    loop {
-        select! {
-            _ = message_loop_done => {
-                debug!("Message loop completed");
-                break;
-            }
-
-            sigloop = signalling_loop_done => {
-                match sigloop {
-                    Ok(()) => debug!("Signalling loop completed"),
-                    Err(e) => {
-                        // TODO: Reconnect X attempts if configured to reconnect.
-                        error!("{e:?}");
-                        return Err(Error::from(e));
-                    },
-                }
-            }
-
-            complete => break
-        }
-    }
+    debug!("Starting message loop");
+    message_loop(id, config, msg_loop_channels).await;
+    debug!("Finishe message loop");
     Ok(())
 }
 

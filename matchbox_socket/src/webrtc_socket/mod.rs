@@ -3,6 +3,7 @@ use cfg_if::cfg_if;
 use futures::Future;
 use messages::*;
 use std::pin::Pin;
+mod channels;
 mod messages;
 mod signal_peer;
 mod socket;

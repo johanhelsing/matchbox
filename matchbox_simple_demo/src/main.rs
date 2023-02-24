@@ -36,19 +36,22 @@ async fn async_main() {
     futures::pin_mut!(timeout);
 
     loop {
-        for peer in socket.accept_new_connections() {
-            info!("Found a peer {:?}", peer);
-            let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
-            socket.send(packet, peer);
-        }
+        if socket.is_connected().await {
+            info!("connected");
+            for peer in socket.accept_new_connections().await {
+                info!("Found a peer {:?}", peer);
+                let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
+                socket.send(packet, peer).await;
+            }
 
-        for (peer, packet) in socket.receive() {
-            info!("Received from {:?}: {:?}", peer, packet);
-        }
+            for (peer, packet) in socket.receive() {
+                info!("Received from {:?}: {:?}", peer, packet);
+            }
 
-        let disconnected_peers = socket.disconnected_peers();
-        if !disconnected_peers.is_empty() {
-            info!("Disconnected peers: {:?}", disconnected_peers);
+            let disconnected_peers = socket.disconnected_peers().await;
+            if !disconnected_peers.is_empty() {
+                info!("Disconnected peers: {:?}", disconnected_peers);
+            }
         }
 
         select! {

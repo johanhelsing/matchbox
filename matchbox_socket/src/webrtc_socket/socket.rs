@@ -1,19 +1,23 @@
 use crate::{
     webrtc_socket::{
-        message_loop, messages::PeerId, signalling_loop, MessageLoopFuture, Packet, PeerEvent,
-        PeerRequest,
+        error::SignallingError, message_loop, messages::PeerId, signalling_loop, MessageLoopFuture,
+        Packet, PeerEvent, PeerRequest,
     },
     Error,
 };
-use futures::{future::Fuse, select, stream::FusedStream, Future, FutureExt, StreamExt};
+use futures::{
+    future::Fuse, lock::Mutex, select, stream::FusedStream, Future, FutureExt, StreamExt,
+};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 use uuid::Uuid;
+
+use super::channels::ReceiverChannels;
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RtcIceServerConfig {
     /// An ICE server instance can have several URLs
     pub urls: Vec<String>,
@@ -29,7 +33,7 @@ pub struct RtcIceServerConfig {
 
 /// Configuration options for a data channel
 /// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChannelConfig {
     /// Whether messages sent on the channel are guaranteed to arrive in order
     /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/ordered>
@@ -78,7 +82,7 @@ impl Default for RtcIceServerConfig {
 /// General configuration options for a WebRtc connection.
 ///
 /// See [`WebRtcSocket::new_with_config`]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebRtcSocketConfig {
     /// The url for the room to connect to
     ///
@@ -96,6 +100,8 @@ pub struct WebRtcSocketConfig {
     pub ice_server: RtcIceServerConfig,
     /// Configuration for one or multiple reliable or unreliable data channels
     pub channels: Vec<ChannelConfig>,
+    /// Signalling retries allowed
+    pub max_retries: Option<u16>,
 }
 
 /// Contains the interface end of a full-mesh web rtc connection
@@ -103,10 +109,7 @@ pub struct WebRtcSocketConfig {
 /// Used to send and receive messages from other peers
 #[derive(Debug)]
 pub struct WebRtcSocket {
-    messages_from_peers: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
-    new_connected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
-    disconnected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
-    peer_messages_out: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
+    channels: Arc<Mutex<Option<ReceiverChannels>>>,
     peers: Vec<PeerId>,
     id: PeerId,
 }
@@ -123,6 +126,7 @@ impl WebRtcSocket {
             room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::unreliable()],
+            max_retries: Some(2), // 3 total attempts
         })
     }
 
@@ -137,6 +141,7 @@ impl WebRtcSocket {
             room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::reliable()],
+            max_retries: Some(2), // 3 total attempts
         })
     }
 
@@ -149,39 +154,40 @@ impl WebRtcSocket {
             panic!("You need to configure at least one channel in WebRtcSocketConfig");
         }
 
-        let (messages_from_peers_tx, messages_from_peers) = new_senders_and_receivers(&config);
-        let (new_connected_peers_tx, new_connected_peers) = futures_channel::mpsc::unbounded();
-        let (disconnected_peers_tx, disconnected_peers) = futures_channel::mpsc::unbounded();
-        let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
-
         // Would perhaps be smarter to let signalling server decide this...
         let id = Uuid::new_v4().to_string();
 
+        let channels: Arc<Mutex<Option<ReceiverChannels>>> = Arc::new(None.into());
+        let socket = Self {
+            id: id.clone(),
+            channels: Arc::clone(&channels),
+            peers: vec![],
+        };
         (
-            Self {
-                id: id.clone(),
-                messages_from_peers,
-                peer_messages_out: peer_messages_out_tx,
-                new_connected_peers,
-                disconnected_peers,
-                peers: vec![],
-            },
-            Box::pin(run_socket(
-                config,
-                id,
-                peer_messages_out_rx,
-                new_connected_peers_tx,
-                disconnected_peers_tx,
-                messages_from_peers_tx,
-            )),
+            socket,
+            Box::pin(run_retriable_socket(Arc::clone(&channels), config, id)),
         )
+    }
+
+    pub async fn is_connected(&self) -> bool {
+        log::info!("{:?}", self.channels.lock().await);
+        false
     }
 
     /// Returns a future that resolves when the given number of peers have connected
     pub async fn wait_for_peers(&mut self, peers: usize) -> Vec<PeerId> {
         debug!("waiting for peers to join");
         let mut addrs = vec![];
-        while let Some(id) = self.new_connected_peers.next().await {
+        while let Some(id) = self
+            .channels
+            .lock()
+            .await
+            .as_mut()
+            .expect("socket not connected")
+            .new_connected_peers_rx
+            .next()
+            .await
+        {
             addrs.push(id.clone());
             if addrs.len() == peers {
                 debug!("all peers joined");
@@ -193,9 +199,17 @@ impl WebRtcSocket {
     }
 
     /// Check if new peers have connected and if so add them as peers
-    pub fn accept_new_connections(&mut self) -> Vec<PeerId> {
+    pub async fn accept_new_connections(&mut self) -> Vec<PeerId> {
         let mut ids = Vec::new();
-        while let Ok(Some(id)) = self.new_connected_peers.try_next() {
+        while let Ok(Some(id)) = self
+            .channels
+            .lock()
+            .await
+            .as_mut()
+            .expect("socket not connected")
+            .new_connected_peers_rx
+            .try_next()
+        {
             self.peers.push(id.clone());
             ids.push(id);
         }
@@ -205,17 +219,33 @@ impl WebRtcSocket {
     /// Check for peer disconnections and return a Vec of ids of disconnected peers.
     ///
     /// See also: [`WebRtcSocket::connected_peers`]
-    pub fn disconnected_peers(&mut self) -> Vec<PeerId> {
+    pub async fn disconnected_peers(&mut self) -> Vec<PeerId> {
         let mut ids = vec![];
         // Collect all disconnected peers
-        while let Ok(Some(id)) = self.disconnected_peers.try_next() {
+        while let Ok(Some(id)) = self
+            .channels
+            .lock()
+            .await
+            .as_mut()
+            .expect("socket not connected")
+            .disconnected_peers_rx
+            .try_next()
+        {
             if let Some(index) = self.peers.iter().position(|x| x == &id) {
                 self.peers.remove(index);
             }
             ids.push(id);
         }
         // If the channel dropped or becomes terminated, flush all peers
-        if self.disconnected_peers.is_terminated() {
+        if self
+            .channels
+            .lock()
+            .await
+            .as_ref()
+            .expect("socket not connected")
+            .disconnected_peers_rx
+            .is_terminated()
+        {
             ids.append(&mut self.peers);
         }
         ids
@@ -245,27 +275,34 @@ impl WebRtcSocket {
     ///
     /// messages are removed from the socket when called
     pub fn receive_on_channel(&mut self, index: usize) -> Vec<(PeerId, Packet)> {
-        std::iter::repeat_with(|| {
-            self.messages_from_peers
-                .get_mut(index)
-                .unwrap_or_else(|| panic!("No data channel with index {index}"))
-                .try_next()
-        })
-        // .map_while(|poll| match p { // map_while is nightly-only :(
-        .take_while(|p| !p.is_err())
-        .map(|p| match p.unwrap() {
-            Some((peer_id, packet)) => (peer_id, packet),
-            None => todo!("Handle connection closed??"),
-        })
-        .collect()
+        if let Some(mut guard) = self.channels.try_lock() {
+            std::iter::repeat_with(|| {
+                guard
+                    .as_mut()
+                    .expect("socket not connected")
+                    .messages_from_peers_rx
+                    .get_mut(index)
+                    .unwrap_or_else(|| panic!("No data channel with index {index}"))
+                    .try_next()
+            })
+            // .map_while(|poll| match p { // map_while is nightly-only :(
+            .take_while(|p| !p.is_err())
+            .map(|p| match p.unwrap() {
+                Some((peer_id, packet)) => (peer_id, packet),
+                None => todo!("Handle connection closed??"),
+            })
+            .collect()
+        } else {
+            vec![]
+        }
     }
 
     /// Send a packet to the given peer on the default channel (with index 0) which will be the only
     /// channel if you didn't configure any explicitly
     ///
     /// See also [`WebRtcSocket::send_on_channel`]
-    pub fn send<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
-        self.send_on_channel(packet, id, 0);
+    pub async fn send<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
+        self.send_on_channel(packet, id, 0).await;
     }
 
     /// Send a packet to the given peer on a specific channel as configured in
@@ -274,8 +311,13 @@ impl WebRtcSocket {
     /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] as you
     /// configured it before (or 0 for the default channel if you use the default
     /// configuration).
-    pub fn send_on_channel<T: Into<PeerId>>(&mut self, packet: Packet, id: T, index: usize) {
-        self.peer_messages_out
+    pub async fn send_on_channel<T: Into<PeerId>>(&mut self, packet: Packet, id: T, index: usize) {
+        self.channels
+            .lock()
+            .await
+            .as_ref()
+            .expect("socket not connected")
+            .peer_messages_out_tx
             .get(index)
             .unwrap_or_else(|| panic!("No data channel with index {index}"))
             .unbounded_send((id.into(), packet))
@@ -287,9 +329,12 @@ impl WebRtcSocket {
     ///
     /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] on socket
     /// creation.
-    pub fn broadcast_on_channel(&mut self, packet: Packet, index: usize) {
-        let sender = self
-            .peer_messages_out
+    pub async fn broadcast_on_channel(&mut self, packet: Packet, index: usize) {
+        let channel_lock = self.channels.lock().await;
+        let sender = channel_lock
+            .as_ref()
+            .expect("socket not connected")
+            .peer_messages_out_tx
             .get(index)
             .unwrap_or_else(|| panic!("No data channel with index {index}"));
 
@@ -345,6 +390,75 @@ pub struct MessageLoopChannels {
     pub messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 }
 
+async fn run_retriable_socket(
+    channels: Arc<Mutex<Option<ReceiverChannels>>>,
+    config: WebRtcSocketConfig,
+    id: PeerId,
+) -> Result<(), Error> {
+    match config.max_retries {
+        Some(mut attempts_left) => loop {
+            let (messages_from_peers_tx, messages_from_peers_rx) =
+                new_senders_and_receivers(&config);
+            let (new_connected_peers_tx, new_connected_peers_rx) =
+                futures_channel::mpsc::unbounded();
+            let (disconnected_peers_tx, disconnected_peers_rx) = futures_channel::mpsc::unbounded();
+            let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
+
+            match run_socket(
+                config.clone(),
+                id.clone(),
+                peer_messages_out_rx,
+                new_connected_peers_tx,
+                disconnected_peers_tx,
+                messages_from_peers_tx,
+            )
+            .await
+            {
+                Ok(()) => {
+                    channels.lock().await.replace(ReceiverChannels {
+                        messages_from_peers_rx,
+                        new_connected_peers_rx,
+                        disconnected_peers_rx,
+                        peer_messages_out_tx,
+                    });
+                    break Ok(());
+                }
+                Err(_) => {
+                    if attempts_left == 0 {
+                        break Err(Error::Signalling(SignallingError::NoMoreAttempts));
+                    }
+                    attempts_left -= 1;
+                }
+            }
+        },
+        None => {
+            let (messages_from_peers_tx, messages_from_peers_rx) =
+                new_senders_and_receivers(&config);
+            let (new_connected_peers_tx, new_connected_peers_rx) =
+                futures_channel::mpsc::unbounded();
+            let (disconnected_peers_tx, disconnected_peers_rx) = futures_channel::mpsc::unbounded();
+            let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
+
+            channels.lock().await.replace(ReceiverChannels {
+                messages_from_peers_rx,
+                new_connected_peers_rx,
+                disconnected_peers_rx,
+                peer_messages_out_tx,
+            });
+
+            run_socket(
+                config,
+                id,
+                peer_messages_out_rx,
+                new_connected_peers_tx,
+                disconnected_peers_tx,
+                messages_from_peers_tx,
+            )
+            .await
+        }
+    }
+}
+
 async fn run_socket(
     config: WebRtcSocketConfig,
     id: PeerId,
@@ -373,6 +487,7 @@ async fn run_socket(
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());
+
     loop {
         select! {
             _ = message_loop_done => {

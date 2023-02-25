@@ -9,6 +9,8 @@ pub enum SignallingError {
     Undeliverable(#[from] TrySendError<PeerEvent>),
     #[error("The stream is exhausted")]
     StreamExhausted,
+    #[error("The maximum allowed signalling attempts have been exhausted")]
+    NoMoreAttempts(#[from] Box<SignallingError>),
 
     // Native
     #[cfg(not(target_arch = "wasm32"))]

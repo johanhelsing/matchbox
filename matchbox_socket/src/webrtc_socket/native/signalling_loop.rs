@@ -8,14 +8,31 @@ use futures_util::select;
 use log::{debug, error, warn};
 
 pub async fn signalling_loop(
+    mut attempts: u16,
     room_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
 ) -> Result<(), SignallingError> {
     debug!("Signalling loop started");
-    let (mut wsio, _response) = connect_async(&room_url)
-        .await
-        .map_err(SignallingError::from)?;
+
+    let (mut wsio, _) = 'signalling: loop {
+        match connect_async(&room_url)
+            .await
+            .map_err(SignallingError::from)
+        {
+            Ok((x, y)) => break (x, y),
+            Err(e) => {
+                if attempts == 0 {
+                    error!("last attempt failed");
+                    return Err(e);
+                } else {
+                    warn!("attemp failed");
+                    attempts -= 1;
+                    continue 'signalling;
+                }
+            }
+        };
+    };
 
     loop {
         let next_request = requests_receiver.next().fuse();

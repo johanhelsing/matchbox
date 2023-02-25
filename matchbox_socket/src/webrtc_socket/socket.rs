@@ -359,7 +359,7 @@ async fn run_socket(
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
     let signalling_loop_fut =
-        signalling_loop(config.room_url.clone(), requests_receiver, events_sender);
+        signalling_loop(3, config.room_url.clone(), requests_receiver, events_sender);
 
     let channels = MessageLoopChannels {
         requests_sender,

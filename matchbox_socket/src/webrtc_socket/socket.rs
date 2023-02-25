@@ -7,7 +7,7 @@ use crate::{
 };
 use futures::{future::Fuse, select, stream::FusedStream, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use std::pin::Pin;
 use uuid::Uuid;
 
@@ -410,6 +410,7 @@ async fn run_signalling(
         {
             if let Some(max_retries) = config.max_retries {
                 if attempt >= max_retries {
+                    error!("last attempt failed: {e:?}");
                     return Err(Error::Signalling(SignallingError::NoMoreAttempts(
                         Box::new(e),
                     )));
@@ -472,6 +473,6 @@ mod test {
         let socket = WebRtcSocket::new_reliable("wss://example.invalid");
         let result = socket.connect().await;
         assert!(result.is_err());
-        //assert!(matches!(result.unwrap_err(), Error::Signalling(_)));
+        assert!(matches!(result.err().unwrap(), Error::Signalling(_)));
     }
 }

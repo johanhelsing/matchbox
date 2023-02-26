@@ -5,12 +5,13 @@ use super::Signaller;
 use async_trait::async_trait;
 use futures::{stream::Fuse, SinkExt, StreamExt};
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
-pub(crate) struct WASMSignaller {
+
+pub(crate) struct WasmSignaller {
     websocket_stream: Fuse<WsStream>,
 }
 
 #[async_trait(?Send)]
-impl Signaller for WASMSignaller {
+impl Signaller for WasmSignaller {
     async fn new(room_url: &str) -> Result<Self, SignallingError> {
         Ok(Self {
             websocket_stream: WsMeta::connect(room_url, None)

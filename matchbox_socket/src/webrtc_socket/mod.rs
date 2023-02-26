@@ -21,7 +21,7 @@ cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm;
         use wasm::message_loop::message_loop;
-        type UseSignaller =wasm::WASMSignaller ;
+        type UseSignaller =wasm::WasmSignaller ;
         type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
     } else {
         mod native;
@@ -63,7 +63,7 @@ async fn signalling_loop<S: Signaller>(
             message = signaller.next_message().fuse() => {
                 match message {
                     Ok(message) => {
-                        debug!("Recieved {message}");
+                        debug!("Received {message}");
                         let event: PeerEvent = serde_json::from_str(&message)
                             .unwrap_or_else(|err| panic!("couldn't parse peer event: {}.\nEvent: {}", err, message));
                         events_sender.unbounded_send(event).map_err(SignallingError::from)?;

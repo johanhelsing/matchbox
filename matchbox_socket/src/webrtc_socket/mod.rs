@@ -86,13 +86,9 @@ type Packet = Box<[u8]>;
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 trait Messenger {
-    async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: MessageLoopChannels);
+    async fn message_loop(config: WebRtcSocketConfig, channels: MessageLoopChannels);
 }
 
-async fn message_loop<M: Messenger>(
-    id: PeerId,
-    config: WebRtcSocketConfig,
-    channels: MessageLoopChannels,
-) {
-    M::message_loop(id, config, channels).await
+async fn message_loop<M: Messenger>(config: WebRtcSocketConfig, channels: MessageLoopChannels) {
+    M::message_loop(config, channels).await
 }

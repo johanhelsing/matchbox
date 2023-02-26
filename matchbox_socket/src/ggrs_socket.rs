@@ -7,17 +7,10 @@ impl WebRtcSocket {
     #[must_use]
     pub fn players(&self) -> Vec<PlayerType<String>> {
         // needs to be consistent order across all peers
-        let mut ids = self.connected_peers();
-        ids.push(self.id().to_owned());
-        ids.sort();
-        ids.iter()
-            .map(|id| {
-                if id == self.id() {
-                    PlayerType::Local
-                } else {
-                    PlayerType::Remote(id.to_owned())
-                }
-            })
+        self.connected_peers()
+            .iter()
+            .map(|id| PlayerType::Remote(id.clone()))
+            .chain([PlayerType::Local].into_iter())
             .collect()
     }
 }

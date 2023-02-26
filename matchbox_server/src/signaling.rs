@@ -27,7 +27,6 @@ pub mod matchbox {
     /// Requests go from peer to signalling server
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
     pub enum PeerRequest<S> {
-        Uuid(PeerId),
         Signal { receiver: PeerId, data: S },
         KeepAlive,
     }
@@ -35,6 +34,7 @@ pub mod matchbox {
     /// Events go from signalling server to peer
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
     pub enum PeerEvent<S> {
+        IdAssigned(PeerId),
         NewPeer(PeerId),
         PeerLeft(PeerId),
         Signal { sender: PeerId, data: S },
@@ -174,7 +174,41 @@ async fn handle_ws(
 ) {
     let (ws_sender, mut ws_receiver) = websocket.split();
     let sender = spawn_sender_task(ws_sender);
-    let mut peer_uuid = None;
+
+    let peer_uuid = uuid::Uuid::new_v4().to_string();
+
+    {
+        let mut add_peer_state = state.lock().await;
+
+        let peers = add_peer_state.add_peer(Peer {
+            uuid: peer_uuid.clone(),
+            sender: sender.clone(),
+            room: requested_room.clone(),
+        });
+
+        let event_text = serde_json::to_string(&PeerEvent::IdAssigned(peer_uuid.clone()))
+            .expect("error serializing message");
+        let event = Message::Text(event_text.clone());
+
+        if let Err(e) = add_peer_state.try_send(&peer_uuid, event) {
+            error!("error sending to {peer_uuid}: {e:?}");
+        } else {
+            info!("{:?} -> {:?}", peer_uuid, event_text);
+        };
+
+        let event_text = serde_json::to_string(&PeerEvent::NewPeer(peer_uuid.clone()))
+            .expect("error serializing message");
+        let event = Message::Text(event_text.clone());
+
+        for peer_id in peers {
+            // Tell everyone about this new peer
+            if let Err(e) = add_peer_state.try_send(&peer_id, event.clone()) {
+                error!("error sending to {peer_id}: {e:?}");
+            } else {
+                info!("{:?} -> {:?}", peer_id, event_text);
+            }
+        }
+    }
 
     // The state machine for the data channel established for this websocket.
     while let Some(request) = ws_receiver.next().await {
@@ -183,9 +217,7 @@ async fn handle_ws(
             Err(ClientRequestError::Axum(e)) => {
                 // Most likely a ConnectionReset or similar.
                 error!("Axum error while receiving request: {:?}", e);
-                if let Some(ref peer_uuid) = peer_uuid {
-                    warn!("Severing connection with {peer_uuid}")
-                }
+                warn!("Severing connection with {peer_uuid}");
                 break; // give up on this peer.
             }
             Err(ClientRequestError::Close) => {
@@ -201,44 +233,13 @@ async fn handle_ws(
         info!("{:?} <- {:?}", peer_uuid, request);
 
         match request {
-            PeerRequest::Uuid(id) => {
-                if peer_uuid.is_some() {
-                    error!("client set uuid more than once");
-                    continue;
-                }
-
-                peer_uuid.replace(id.clone());
-                let mut state = state.lock().await;
-                let peers = state.add_peer(Peer {
-                    uuid: id.clone(),
-                    sender: sender.clone(),
-                    room: requested_room.clone(),
-                });
-
-                let event_text = serde_json::to_string(&PeerEvent::NewPeer(id.clone()))
-                    .expect("error serializing message");
-                let event = Message::Text(event_text.clone());
-
-                for peer_id in peers {
-                    // Tell everyone about this new peer
-                    if let Err(e) = state.try_send(&peer_id, event.clone()) {
-                        error!("error sending to {peer_id}: {e:?}");
-                    } else {
-                        info!("{:?} -> {:?}", peer_id, event_text);
-                    }
-                }
-            }
             PeerRequest::Signal { receiver, data } => {
-                let sender = match peer_uuid.clone() {
-                    Some(sender) => sender,
-                    None => {
-                        error!("client is trying signal before sending uuid");
-                        continue;
-                    }
-                };
                 let event = Message::Text(
-                    serde_json::to_string(&PeerEvent::Signal { sender, data })
-                        .expect("error serializing message"),
+                    serde_json::to_string(&PeerEvent::Signal {
+                        sender: peer_uuid.clone(),
+                        data,
+                    })
+                    .expect("error serializing message"),
                 );
                 let state = state.lock().await;
                 if let Some(peer) = state.clients.get(&receiver) {
@@ -257,31 +258,29 @@ async fn handle_ws(
     }
 
     // Peer disconnected or otherwise ended communication.
-    if let Some(uuid) = peer_uuid {
-        info!("Removing peer: {:?}", uuid);
-        let mut state = state.lock().await;
-        if let Some(removed_peer) = state.remove_peer(&uuid) {
-            let room = removed_peer.room;
-            let peers = state
-                .rooms
-                .get(&room)
-                .map(|room_peers| {
-                    room_peers
-                        .iter()
-                        .filter(|peer_id| *peer_id != &uuid)
-                        .collect::<Vec<&String>>()
-                })
-                .unwrap_or_default();
-            // Tell each connected peer about the disconnected peer.
-            let event = Message::Text(
-                serde_json::to_string(&PeerEvent::PeerLeft(removed_peer.uuid))
-                    .expect("error serializing message"),
-            );
-            for peer_id in peers {
-                match state.try_send(peer_id, event.clone()) {
-                    Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
-                    Err(e) => error!("Failure sending peer remove: {e:?}"),
-                }
+    info!("Removing peer: {:?}", peer_uuid);
+    let mut state = state.lock().await;
+    if let Some(removed_peer) = state.remove_peer(&peer_uuid) {
+        let room = removed_peer.room;
+        let peers = state
+            .rooms
+            .get(&room)
+            .map(|room_peers| {
+                room_peers
+                    .iter()
+                    .filter(|peer_id| *peer_id != &peer_uuid)
+                    .collect::<Vec<&String>>()
+            })
+            .unwrap_or_default();
+        // Tell each connected peer about the disconnected peer.
+        let event = Message::Text(
+            serde_json::to_string(&PeerEvent::PeerLeft(removed_peer.uuid))
+                .expect("error serializing message"),
+        );
+        for peer_id in peers {
+            match state.try_send(peer_id, event.clone()) {
+                Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
+                Err(e) => error!("Failure sending peer remove: {e:?}"),
             }
         }
     }
@@ -289,7 +288,7 @@ async fn handle_ws(
 
 #[cfg(test)]
 mod tests {
-    use crate::{signaling::PeerEvent, ws_handler, ServerState};
+    use crate::{signaling::PeerEvent, ws_handler, PeerId, ServerState};
     use axum::{routing::get, Router};
     use futures::{lock::Mutex, pin_mut, SinkExt, StreamExt};
     use std::{
@@ -316,6 +315,14 @@ mod tests {
         serde_json::from_str(&message.to_string()).expect("json peer event")
     }
 
+    fn get_peer_id(peer_event: PeerEvent) -> PeerId {
+        if let PeerEvent::IdAssigned(id) = peer_event {
+            return id;
+        } else {
+            panic!("Peer_event was not IdAssigned: {peer_event:?}");
+        }
+    }
+
     #[tokio::test]
     async fn ws_connect() {
         let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
@@ -326,6 +333,23 @@ mod tests {
         tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
             .expect("handshake");
+    }
+
+    #[tokio::test]
+    async fn uuid_assigned() {
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let addr = server.local_addr();
+        tokio::spawn(server);
+
+        let (mut client, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        let id_assigned_event = recv_peer_event(&mut client).await;
+
+        assert!(matches!(id_assigned_event, PeerEvent::IdAssigned(..)));
     }
 
     #[tokio::test]
@@ -340,22 +364,18 @@ mod tests {
                 .await
                 .unwrap();
 
-        _ = client_a
-            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
+        let _a_uuid = get_peer_id(recv_peer_event(&mut client_a).await);
 
         let (mut client_b, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
                 .await
                 .unwrap();
 
-        _ = client_b
-            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
+        let b_uuid = get_peer_id(recv_peer_event(&mut client_b).await);
 
         let new_peer_event = recv_peer_event(&mut client_a).await;
 
-        assert_eq!(new_peer_event, PeerEvent::NewPeer("uuid-b".to_string()));
+        assert_eq!(new_peer_event, PeerEvent::NewPeer(b_uuid));
     }
 
     #[tokio::test]
@@ -370,27 +390,24 @@ mod tests {
                 .await
                 .unwrap();
 
-        _ = client_a
-            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
+        let _a_uuid = get_peer_id(recv_peer_event(&mut client_a).await);
 
         let (mut client_b, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
                 .await
                 .unwrap();
 
-        _ = client_b
-            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
+        let b_uuid = get_peer_id(recv_peer_event(&mut client_b).await);
 
         // Ensure Peer B was received
         let new_peer_event = recv_peer_event(&mut client_a).await;
-        assert_eq!(new_peer_event, PeerEvent::NewPeer("uuid-b".to_string()));
+        assert_eq!(new_peer_event, PeerEvent::NewPeer(b_uuid.clone()));
 
         // Disconnect Peer B
         _ = client_b.close(None).await;
         let peer_left_event = recv_peer_event(&mut client_a).await;
-        assert_eq!(peer_left_event, PeerEvent::PeerLeft("uuid-b".to_string()));
+
+        assert_eq!(peer_left_event, PeerEvent::PeerLeft(b_uuid));
     }
 
     #[tokio::test]
@@ -405,18 +422,14 @@ mod tests {
                 .await
                 .unwrap();
 
-        _ = client_a
-            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
+        let a_uuid = get_peer_id(recv_peer_event(&mut client_a).await);
 
         let (mut client_b, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
                 .await
                 .unwrap();
 
-        _ = client_b
-            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
+        let _b_uuid = get_peer_id(recv_peer_event(&mut client_b).await);
 
         let new_peer_event = recv_peer_event(&mut client_a).await;
         let peer_uuid = match new_peer_event {
@@ -435,7 +448,7 @@ mod tests {
             signal_event,
             PeerEvent::Signal {
                 data: serde_json::Value::String("123".to_string()),
-                sender: "uuid-a".to_string(),
+                sender: a_uuid,
             }
         );
     }
@@ -451,40 +464,36 @@ mod tests {
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
                 .await
                 .unwrap();
-        _ = client_a
-            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
+
+        let _a_uuid = get_peer_id(recv_peer_event(&mut client_a).await);
 
         let (mut client_b, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
                 .await
                 .unwrap();
-        _ = client_b
-            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
+
+        let b_uuid = get_peer_id(recv_peer_event(&mut client_b).await);
 
         let (mut client_c, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
                 .await
                 .unwrap();
-        _ = client_c
-            .send(Message::Text(r#"{"Uuid": "uuid-c"}"#.to_string()))
-            .await;
+
+        let _c_uuid = get_peer_id(recv_peer_event(&mut client_c).await);
 
         let (mut client_d, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
                 .await
                 .unwrap();
-        _ = client_d
-            .send(Message::Text(r#"{"Uuid": "uuid-d"}"#.to_string()))
-            .await;
+
+        let d_uuid = get_peer_id(recv_peer_event(&mut client_d).await);
 
         // Clients should be matched in pairs as they arrive, i.e. a + b and c + d
         let new_peer_b = recv_peer_event(&mut client_a).await;
         let new_peer_d = recv_peer_event(&mut client_c).await;
 
-        assert_eq!(new_peer_b, PeerEvent::NewPeer("uuid-b".to_string()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
+        assert_eq!(new_peer_b, PeerEvent::NewPeer(b_uuid));
+        assert_eq!(new_peer_d, PeerEvent::NewPeer(d_uuid));
 
         let timeout = time::sleep(Duration::from_millis(100));
         pin_mut!(timeout);
@@ -507,29 +516,27 @@ mod tests {
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
                 .await
                 .unwrap();
-        _ = client_a
-            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
+
+        let _a_uuid = get_peer_id(recv_peer_event(&mut client_a).await);
 
         let (mut client_b, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name"))
                 .await
                 .unwrap();
-        _ = client_b
-            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
+
+        let _b_uuid = get_peer_id(recv_peer_event(&mut client_b).await);
 
         let (mut client_c, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
                 .await
                 .unwrap();
-        _ = client_c
-            .send(Message::Text(r#"{"Uuid": "uuid-c"}"#.to_string()))
-            .await;
+
+        let c_uuid = get_peer_id(recv_peer_event(&mut client_c).await);
+
         // Clients should be matched in pairs as they arrive, i.e. a + b and c + d
         let new_peer_c = recv_peer_event(&mut client_a).await;
 
-        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
+        assert_eq!(new_peer_c, PeerEvent::NewPeer(c_uuid));
 
         let timeout = time::sleep(Duration::from_millis(100));
         pin_mut!(timeout);
@@ -553,40 +560,35 @@ mod tests {
                 .await
                 .unwrap();
 
+        let _a_uuid = get_peer_id(recv_peer_event(&mut client_a).await);
+
         let (mut client_b, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_2?next=2"))
                 .await
                 .unwrap();
+
+        let _b_uuid = get_peer_id(recv_peer_event(&mut client_b).await);
 
         let (mut client_c, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))
                 .await
                 .unwrap();
 
+        let c_uuid = get_peer_id(recv_peer_event(&mut client_c).await);
+
         let (mut client_d, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_2?next=2"))
                 .await
                 .unwrap();
 
-        _ = client_a
-            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
-        _ = client_c
-            .send(Message::Text(r#"{"Uuid": "uuid-c"}"#.to_string()))
-            .await;
-        _ = client_b
-            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
-        _ = client_d
-            .send(Message::Text(r#"{"Uuid": "uuid-d"}"#.to_string()))
-            .await;
+        let d_uuid = get_peer_id(recv_peer_event(&mut client_d).await);
 
         // Clients should be matched in pairs as they arrive, i.e. a + c and b + d
         let new_peer_c = recv_peer_event(&mut client_a).await;
         let new_peer_d = recv_peer_event(&mut client_b).await;
 
-        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
+        assert_eq!(new_peer_c, PeerEvent::NewPeer(c_uuid));
+        assert_eq!(new_peer_d, PeerEvent::NewPeer(d_uuid));
 
         let timeout = time::sleep(Duration::from_millis(100));
         pin_mut!(timeout);
@@ -610,53 +612,47 @@ mod tests {
                 .await
                 .unwrap();
 
+        let _a_uuid = get_peer_id(recv_peer_event(&mut client_a).await);
+
         let (mut client_b, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=3"))
                 .await
                 .unwrap();
+
+        let _b_uuid = get_peer_id(recv_peer_event(&mut client_b).await);
 
         let (mut client_c, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))
                 .await
                 .unwrap();
 
+        let c_uuid = get_peer_id(recv_peer_event(&mut client_c).await);
+
         let (mut client_d, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=3"))
                 .await
                 .unwrap();
+
+        let d_uuid = get_peer_id(recv_peer_event(&mut client_d).await);
 
         let (mut client_e, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=3"))
                 .await
                 .unwrap();
 
-        _ = client_a
-            .send(Message::Text(r#"{"Uuid": "uuid-a"}"#.to_string()))
-            .await;
-        _ = client_c
-            .send(Message::Text(r#"{"Uuid": "uuid-c"}"#.to_string()))
-            .await;
-        _ = client_b
-            .send(Message::Text(r#"{"Uuid": "uuid-b"}"#.to_string()))
-            .await;
-        _ = client_d
-            .send(Message::Text(r#"{"Uuid": "uuid-d"}"#.to_string()))
-            .await;
-        _ = client_e
-            .send(Message::Text(r#"{"Uuid": "uuid-e"}"#.to_string()))
-            .await;
+        let e_uuid = get_peer_id(recv_peer_event(&mut client_e).await);
 
         // Clients should be matched in pairs as they arrive, i.e. a + c and (b + d ; b + e ; d + e)
         let new_peer_c = recv_peer_event(&mut client_a).await;
         let new_peer_d = recv_peer_event(&mut client_b).await;
         let new_peer_e = recv_peer_event(&mut client_b).await;
-        assert_eq!(new_peer_e, PeerEvent::NewPeer("uuid-e".to_string()));
+        assert_eq!(new_peer_e, PeerEvent::NewPeer(e_uuid.clone()));
         let new_peer_e = recv_peer_event(&mut client_d).await;
 
-        assert_eq!(new_peer_c, PeerEvent::NewPeer("uuid-c".to_string()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer("uuid-d".to_string()));
-        assert_eq!(new_peer_e, PeerEvent::NewPeer("uuid-e".to_string()));
+        assert_eq!(new_peer_c, PeerEvent::NewPeer(c_uuid));
+        assert_eq!(new_peer_d, PeerEvent::NewPeer(d_uuid.clone()));
+        assert_eq!(new_peer_d, PeerEvent::NewPeer(d_uuid));
+        assert_eq!(new_peer_e, PeerEvent::NewPeer(e_uuid));
 
         let timeout = time::sleep(Duration::from_millis(100));
         pin_mut!(timeout);

@@ -9,7 +9,6 @@ use futures::{future::Fuse, select, stream::FusedStream, Future, FutureExt, Stre
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use std::pin::Pin;
-use uuid::Uuid;
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
@@ -110,7 +109,6 @@ pub struct WebRtcSocket {
     disconnected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
     peer_messages_out: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peers: Vec<PeerId>,
-    id: PeerId,
 }
 
 impl WebRtcSocket {
@@ -158,12 +156,8 @@ impl WebRtcSocket {
         let (disconnected_peers_tx, disconnected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
 
-        // Would perhaps be smarter to let signalling server decide this...
-        let id = Uuid::new_v4().to_string();
-
         (
             Self {
-                id: id.clone(),
                 messages_from_peers,
                 peer_messages_out: peer_messages_out_tx,
                 new_connected_peers,
@@ -172,7 +166,6 @@ impl WebRtcSocket {
             },
             Box::pin(run_socket(
                 config,
-                id,
                 peer_messages_out_rx,
                 new_connected_peers_tx,
                 disconnected_peers_tx,
@@ -303,11 +296,6 @@ impl WebRtcSocket {
                 .expect("send_to failed");
         }
     }
-
-    /// Returns the id of this peer
-    pub fn id(&self) -> &PeerId {
-        &self.id
-    }
 }
 
 pub(crate) fn new_senders_and_receivers<T>(
@@ -351,7 +339,6 @@ pub struct MessageLoopChannels {
 
 async fn run_socket(
     config: WebRtcSocketConfig,
-    id: PeerId,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
@@ -377,7 +364,7 @@ async fn run_socket(
         disconnected_peers_tx,
         messages_from_peers_tx,
     };
-    let message_loop_fut = message_loop::<UseMessenger>(id, config, channels);
+    let message_loop_fut = message_loop::<UseMessenger>(config, channels);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());

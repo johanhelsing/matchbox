@@ -6,11 +6,19 @@ impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     #[must_use]
     pub fn players(&self) -> Vec<PlayerType<String>> {
+        let client_id = self.get_id().unwrap().expect("Client has no ID.");
         // needs to be consistent order across all peers
-        self.connected_peers()
-            .iter()
-            .map(|id| PlayerType::Remote(id.clone()))
-            .chain([PlayerType::Local].into_iter())
+        let mut ids = self.connected_peers();
+        ids.push(client_id.to_owned());
+        ids.sort();
+        ids.iter()
+            .map(|id| {
+                if *id == client_id {
+                    PlayerType::Local
+                } else {
+                    PlayerType::Remote(id.to_owned())
+                }
+            })
             .collect()
     }
 }

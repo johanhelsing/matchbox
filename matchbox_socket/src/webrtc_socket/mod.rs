@@ -1,19 +1,19 @@
+pub(crate) mod error;
 mod messages;
 mod signal_peer;
 mod socket;
-
-pub(crate) mod error;
-use std::pin::Pin;
 
 use crate::Error;
 use async_trait::async_trait;
 use cfg_if::cfg_if;
 use futures::{Future, FutureExt, StreamExt};
+use futures_util::lock::Mutex;
 use futures_util::select;
 use log::{debug, warn};
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
 pub use socket::{ChannelConfig, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};
+use std::{pin::Pin, sync::Arc};
 
 use self::error::SignallingError;
 
@@ -86,9 +86,17 @@ type Packet = Box<[u8]>;
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 trait Messenger {
-    async fn message_loop(config: WebRtcSocketConfig, channels: MessageLoopChannels);
+    async fn message_loop(
+        id: Arc<Mutex<Option<PeerId>>>,
+        config: WebRtcSocketConfig,
+        channels: MessageLoopChannels,
+    );
 }
 
-async fn message_loop<M: Messenger>(config: WebRtcSocketConfig, channels: MessageLoopChannels) {
-    M::message_loop(config, channels).await
+async fn message_loop<M: Messenger>(
+    id: Arc<Mutex<Option<PeerId>>>,
+    config: WebRtcSocketConfig,
+    channels: MessageLoopChannels,
+) {
+    M::message_loop(id, config, channels).await
 }

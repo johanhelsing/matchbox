@@ -21,7 +21,7 @@ cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm;
         use wasm::message_loop::message_loop;
-        type UseSignaller =wasm::WasmSignaller ;
+        type UseSignaller = wasm::WasmSignaller;
         type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
     } else {
         mod native;

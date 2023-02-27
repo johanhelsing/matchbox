@@ -9,7 +9,7 @@ pub enum SignallingError {
     Undeliverable(#[from] TrySendError<PeerEvent>),
     #[error("The stream is exhausted")]
     StreamExhausted,
-    #[error("Message recieved in unknown format")]
+    #[error("Message received in unknown format")]
     UnknownFormat,
 
     // Native

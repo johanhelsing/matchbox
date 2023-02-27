@@ -7,8 +7,10 @@ use crate::webrtc_socket::{
     ChannelConfig, MessageLoopChannels, Messenger, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
 use async_trait::async_trait;
-use futures::{stream::Fuse, SinkExt, StreamExt};
-use futures::{stream::FuturesUnordered, FutureExt};
+use futures::{
+    stream::{Fuse, FuturesUnordered},
+    FutureExt, SinkExt, StreamExt,
+};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;

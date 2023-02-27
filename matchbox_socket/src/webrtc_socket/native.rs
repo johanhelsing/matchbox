@@ -96,8 +96,7 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
         .unbounded_send(PeerRequest::Uuid(id))
         .expect("failed to send uuid");
 
-    let mut peer_loops_a = FuturesUnordered::new();
-    let mut peer_loops_b = FuturesUnordered::new();
+    let mut peer_loops = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
     let mut connected_peers = HashMap::new();
 
@@ -117,10 +116,7 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
                 timeout.reset(Duration::from_millis(KEEP_ALIVE_INTERVAL));
             }
 
-            _ = peer_loops_a.select_next_some() => {
-                debug!("peer finished");
-            },
-            _ = peer_loops_b.select_next_some() => {
+            _ = peer_loops.select_next_some() => {
                 debug!("peer finished");
             },
 
@@ -136,7 +132,7 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
                             let (to_peer_data_tx, to_peer_data_rx) = new_senders_and_receivers(config);
 
                             connected_peers.insert(peer_uuid, to_peer_data_tx);
-                            peer_loops_a.push(peer_loop(handshake_fut, to_peer_data_rx));
+                            peer_loops.push(peer_loop(handshake_fut, to_peer_data_rx).boxed());
                         }
                         PeerEvent::PeerLeft(peer_uuid) => {
                             disconnected_peers_tx.unbounded_send(peer_uuid).expect("fail to send disconnected peer");
@@ -150,7 +146,7 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
                                 let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), config);
                                 connected_peers.insert(sender, to_peer_data_tx);
                                 let peer_loop_fut = peer_loop(handshake_fut, to_peer_data_rx);
-                                peer_loops_b.push(peer_loop_fut);
+                                peer_loops.push(peer_loop_fut.boxed());
                                 from_peer_sender
                             });
                             from_peer_sender.unbounded_send(data)

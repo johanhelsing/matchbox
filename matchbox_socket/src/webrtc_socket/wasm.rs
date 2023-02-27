@@ -78,8 +78,7 @@ impl Messenger for WasmMessenger {
             .unbounded_send(PeerRequest::Uuid(id))
             .expect("failed to send uuid");
 
-        let mut offer_handshakes = FuturesUnordered::new();
-        let mut accept_handshakes = FuturesUnordered::new();
+        let mut handshakes = FuturesUnordered::new();
         let mut handshake_signals = HashMap::new();
         let mut data_channels: HashMap<PeerId, Vec<RtcDataChannel>> = HashMap::new();
 
@@ -100,15 +99,7 @@ impl Messenger for WasmMessenger {
                     timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL)).fuse();
                 }
 
-                res = offer_handshakes.select_next_some() => {
-                    check(&res);
-                    let (peer, channels) = res.unwrap();
-                    data_channels.insert(peer.clone(), channels);
-                    debug!("Notifying about new peer");
-                    new_connected_peers_tx.unbounded_send(peer).expect("send failed");
-                },
-                res = accept_handshakes.select_next_some() => {
-                    // TODO: this could be de-duplicated
+                res = handshakes.select_next_some() => {
                     check(&res);
                     let (peer, channels) = res.unwrap();
                     data_channels.insert(peer.clone(), channels);
@@ -125,7 +116,7 @@ impl Messenger for WasmMessenger {
                                 let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                                 handshake_signals.insert(peer_uuid.clone(), signal_sender);
                                 let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                                offer_handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone(), &config));
+                                handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone(), &config).boxed_local());
                             }
                             PeerEvent::PeerLeft(peer_uuid) => {
                                 disconnected_peers_tx.unbounded_send(peer_uuid).expect("fail to send disconnected peer");
@@ -135,7 +126,7 @@ impl Messenger for WasmMessenger {
                                     let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
                                     let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                     // We didn't start signalling with this peer, assume we're the accepting part
-                                    accept_handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone(), &config));
+                                    handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone(), &config).boxed_local());
                                     from_peer_sender
                                 });
                                 if let Err(e) = from_peer_sender.unbounded_send(data) {

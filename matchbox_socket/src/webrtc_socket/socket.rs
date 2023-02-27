@@ -1,7 +1,7 @@
 use crate::{
     webrtc_socket::{
         message_loop, messages::PeerId, signalling_loop, MessageLoopFuture, Packet, PeerEvent,
-        PeerRequest, UseSignaller,
+        PeerRequest, UseMessenger, UseSignaller,
     },
     Error,
 };
@@ -369,7 +369,7 @@ async fn run_socket(
         disconnected_peers_tx,
         messages_from_peers_tx,
     };
-    let message_loop_fut = message_loop(id, config, channels);
+    let message_loop_fut = message_loop::<UseMessenger>(id, config, channels);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());

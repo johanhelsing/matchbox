@@ -4,7 +4,6 @@ use crate::{webrtc_socket::error::UnknownPeerId, WebRtcSocket};
 
 impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
-    #[must_use]
     pub fn players(&mut self) -> Result<Vec<PlayerType<String>>, UnknownPeerId> {
         let client_id = self.id().ok_or(UnknownPeerId)?;
         // needs to be consistent order across all peers

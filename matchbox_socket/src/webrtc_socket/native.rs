@@ -17,7 +17,7 @@ use bytes::Bytes;
 use futures::{
     future::FusedFuture, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt,
 };
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
@@ -84,11 +84,11 @@ pub(crate) struct NativeMessenger;
 #[async_trait]
 impl Messenger for NativeMessenger {
     async fn message_loop(
-        id: Arc<Mutex<Option<PeerId>>>,
+        id_tx: Sender<PeerId>,
         config: WebRtcSocketConfig,
         channels: MessageLoopChannels,
     ) {
-        message_loop_impl(id, &config, channels)
+        message_loop_impl(id_tx, &config, channels)
             // web-rtc is tokio-based so we use compat here to make it work with other async
             // run-times
             .compat()
@@ -97,7 +97,7 @@ impl Messenger for NativeMessenger {
 }
 
 async fn message_loop_impl(
-    id: Arc<Mutex<Option<PeerId>>>,
+    mut id_tx: Sender<PeerId>,
     config: &WebRtcSocketConfig,
     channels: MessageLoopChannels,
 ) {
@@ -140,8 +140,7 @@ async fn message_loop_impl(
                     debug!("{:?}", event);
                     match event {
                         PeerEvent::IdAssigned(peer_uuid) => {
-                            let mut id_mutex = id.lock().await;
-                            *id_mutex = Some(peer_uuid);
+                            id_tx.send(peer_uuid.to_owned()).await.unwrap();
                         }
                         PeerEvent::NewPeer(peer_uuid) => {
                             let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();

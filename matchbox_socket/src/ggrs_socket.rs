@@ -1,17 +1,18 @@
 use ggrs::{Message, PlayerType};
 
-use crate::WebRtcSocket;
+use crate::{webrtc_socket::error::UnknownPeerId, WebRtcSocket};
 
 impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     #[must_use]
-    pub fn players(&self) -> Vec<PlayerType<String>> {
-        let client_id = self.get_id().unwrap().expect("Client has no ID.");
+    pub fn players(&mut self) -> Result<Vec<PlayerType<String>>, UnknownPeerId> {
+        let client_id = self.id().ok_or(UnknownPeerId)?;
         // needs to be consistent order across all peers
         let mut ids = self.connected_peers();
         ids.push(client_id.to_owned());
         ids.sort();
-        ids.iter()
+        let players = ids
+            .iter()
             .map(|id| {
                 if *id == client_id {
                     PlayerType::Local
@@ -19,7 +20,8 @@ impl WebRtcSocket {
                     PlayerType::Remote(id.to_owned())
                 }
             })
-            .collect()
+            .collect();
+        Ok(players)
     }
 }
 

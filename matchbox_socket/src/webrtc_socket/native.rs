@@ -52,38 +52,3 @@ impl Signaller for NativeSignaller {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        webrtc_socket::error::SignallingError, ChannelConfig, Error, RtcIceServerConfig,
-        WebRtcSocket, WebRtcSocketConfig,
-    };
-    use futures::{pin_mut, select, FutureExt};
-    use std::time::Duration;
-    use tokio::time;
-
-    #[tokio::test]
-    async fn test_signalling_attempts_exhausted() {
-        let (_socket, loop_fut) = WebRtcSocket::new_with_config(WebRtcSocketConfig {
-            room_url: "wss://example.invalid/".to_string(),
-            attempts: Some(3),
-            ice_server: RtcIceServerConfig::default(),
-            channels: vec![ChannelConfig::unreliable()],
-        });
-
-        let timeout = time::sleep(Duration::from_millis(100)).fuse();
-        pin_mut!(timeout);
-
-        let loop_fut = loop_fut.fuse();
-        pin_mut!(loop_fut);
-
-        select! {
-            result = loop_fut => {
-                assert!(result.is_err());
-                assert!(matches!(result.err().unwrap(), Error::Signalling(SignallingError::NoMoreAttempts(_))))
-            },
-            _ = &mut timeout => panic!("should fail, not timeout")
-        }
-    }
-}

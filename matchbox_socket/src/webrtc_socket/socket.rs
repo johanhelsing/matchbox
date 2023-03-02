@@ -407,7 +407,10 @@ async fn run_socket(
 
 #[cfg(test)]
 mod test {
-    use crate::{Error, WebRtcSocket};
+    use crate::{
+        webrtc_socket::error::SignallingError, ChannelConfig, Error, RtcIceServerConfig,
+        WebRtcSocket, WebRtcSocketConfig,
+    };
 
     #[futures_test::test]
     async fn unreachable_server() {
@@ -417,5 +420,22 @@ mod test {
         let result = fut.await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::Signalling(_)));
+    }
+
+    #[futures_test::test]
+    async fn test_signalling_attempts() {
+        let (_socket, loop_fut) = WebRtcSocket::new_with_config(WebRtcSocketConfig {
+            room_url: "wss://example.invalid/".to_string(),
+            attempts: Some(3),
+            ice_server: RtcIceServerConfig::default(),
+            channels: vec![ChannelConfig::unreliable()],
+        });
+
+        let result = loop_fut.await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            Error::Signalling(SignallingError::ConnectionFailed(_))
+        ));
     }
 }

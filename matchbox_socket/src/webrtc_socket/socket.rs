@@ -6,10 +6,9 @@ use crate::{
     Error,
 };
 use futures::{future::Fuse, select, stream::FusedStream, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use std::pin::Pin;
-use uuid::Uuid;
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
@@ -105,12 +104,13 @@ pub struct WebRtcSocketConfig {
 /// Used to send and receive messages from other peers
 #[derive(Debug)]
 pub struct WebRtcSocket {
+    id: Option<PeerId>,
+    id_rx: Receiver<PeerId>,
     messages_from_peers: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
     disconnected_peers: futures_channel::mpsc::UnboundedReceiver<PeerId>,
     peer_messages_out: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peers: Vec<PeerId>,
-    id: PeerId,
 }
 
 impl WebRtcSocket {
@@ -158,12 +158,12 @@ impl WebRtcSocket {
         let (disconnected_peers_tx, disconnected_peers) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
 
-        // Would perhaps be smarter to let signalling server decide this...
-        let id = Uuid::new_v4().to_string();
+        let (id_tx, id_rx) = futures_channel::mpsc::channel(1);
 
         (
             Self {
-                id: id.clone(),
+                id: None,
+                id_rx,
                 messages_from_peers,
                 peer_messages_out: peer_messages_out_tx,
                 new_connected_peers,
@@ -171,8 +171,8 @@ impl WebRtcSocket {
                 peers: vec![],
             },
             Box::pin(run_socket(
+                id_tx,
                 config,
-                id,
                 peer_messages_out_rx,
                 new_connected_peers_tx,
                 disconnected_peers_tx,
@@ -304,9 +304,16 @@ impl WebRtcSocket {
         }
     }
 
-    /// Returns the id of this peer
-    pub fn id(&self) -> &PeerId {
-        &self.id
+    /// Returns the id of this peer, this may be None if a value has not yet been recieved from the server.
+    pub fn id(&mut self) -> Option<PeerId> {
+        if let Some(id) = self.id.to_owned() {
+            Some(id)
+        } else if let Ok(Some(id)) = self.id_rx.try_next() {
+            self.id = Some(id.to_owned());
+            Some(id)
+        } else {
+            None
+        }
     }
 }
 
@@ -350,8 +357,8 @@ pub struct MessageLoopChannels {
 }
 
 async fn run_socket(
+    id_tx: Sender<PeerId>,
     config: WebRtcSocketConfig,
-    id: PeerId,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     new_connected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
     disconnected_peers_tx: futures_channel::mpsc::UnboundedSender<PeerId>,
@@ -377,7 +384,7 @@ async fn run_socket(
         disconnected_peers_tx,
         messages_from_peers_tx,
     };
-    let message_loop_fut = message_loop::<UseMessenger>(id, config, channels);
+    let message_loop_fut = message_loop::<UseMessenger>(id_tx, config, channels);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());

@@ -170,10 +170,10 @@ fn lobby_system(
     info!("All peers have joined, going in-game");
 
     // consume the socket (currently required because ggrs takes ownership of its socket)
-    let socket = socket.0.take().unwrap();
+    let mut socket = socket.0.take().unwrap();
 
     // extract final player list
-    let players = socket.players();
+    let players = socket.players().unwrap();
 
     let max_prediction = 12;
 

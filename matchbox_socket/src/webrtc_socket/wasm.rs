@@ -11,7 +11,7 @@ use futures::{
     stream::{Fuse, FuturesUnordered},
     FutureExt, SinkExt, StreamExt,
 };
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
 use js_sys::{Function, Reflect};
@@ -77,7 +77,11 @@ pub(crate) struct WasmMessenger;
 
 #[async_trait(?Send)]
 impl Messenger for WasmMessenger {
-    async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: MessageLoopChannels) {
+    async fn message_loop(
+        mut id_tx: Sender<PeerId>,
+        config: WebRtcSocketConfig,
+        channels: MessageLoopChannels,
+    ) {
         let MessageLoopChannels {
             requests_sender,
             mut events_receiver,
@@ -87,10 +91,6 @@ impl Messenger for WasmMessenger {
             messages_from_peers_tx,
         } = channels;
         debug!("Entering WebRtcSocket message loop");
-
-        requests_sender
-            .unbounded_send(PeerRequest::Uuid(id))
-            .expect("failed to send uuid");
 
         let mut handshakes = FuturesUnordered::new();
         let mut handshake_signals = HashMap::new();
@@ -126,6 +126,9 @@ impl Messenger for WasmMessenger {
                         debug!("{:?}", event);
 
                         match event {
+                            PeerEvent::IdAssigned(peer_uuid) => {
+                                id_tx.try_send(peer_uuid.to_owned()).unwrap();
+                            }
                             PeerEvent::NewPeer(peer_uuid) => {
                                 let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                                 handshake_signals.insert(peer_uuid.clone(), signal_sender);

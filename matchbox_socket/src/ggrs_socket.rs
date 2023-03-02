@@ -2,23 +2,29 @@ use ggrs::{Message, PlayerType};
 
 use crate::WebRtcSocket;
 
+#[derive(Debug, thiserror::Error)]
+#[error("The client has not yet been given a Peer Id")]
+pub struct UnknownPeerId;
+
 impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
-    #[must_use]
-    pub fn players(&self) -> Vec<PlayerType<String>> {
+    pub fn players(&mut self) -> Result<Vec<PlayerType<String>>, UnknownPeerId> {
+        let client_id = self.id().ok_or(UnknownPeerId)?;
         // needs to be consistent order across all peers
         let mut ids = self.connected_peers();
-        ids.push(self.id().to_owned());
+        ids.push(client_id.to_owned());
         ids.sort();
-        ids.iter()
+        let players = ids
+            .iter()
             .map(|id| {
-                if id == self.id() {
+                if *id == client_id {
                     PlayerType::Local
                 } else {
                     PlayerType::Remote(id.to_owned())
                 }
             })
-            .collect()
+            .collect();
+        Ok(players)
     }
 }
 

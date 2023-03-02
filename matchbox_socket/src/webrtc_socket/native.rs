@@ -1,10 +1,10 @@
-use super::error::SignallingError;
-use crate::webrtc_socket::Signaller;
 use crate::webrtc_socket::{
+    error::SignallingError,
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
     socket::{create_data_channels_ready_fut, new_senders_and_receivers},
-    ChannelConfig, MessageLoopChannels, Messenger, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+    ChannelConfig, MessageLoopChannels, Messenger, Packet, Signaller, WebRtcSocketConfig,
+    KEEP_ALIVE_INTERVAL,
 };
 use async_compat::CompatExt;
 use async_trait::async_trait;
@@ -41,13 +41,25 @@ pub(crate) struct NativeSignaller {
 
 #[async_trait]
 impl Signaller for NativeSignaller {
-    async fn new(room_url: &str) -> Result<Self, SignallingError> {
-        Ok(Self {
-            websocket_stream: connect_async(room_url)
-                .await
-                .map_err(SignallingError::from)?
-                .0,
-        })
+    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignallingError> {
+        let websocket_stream = 'signalling: loop {
+            match connect_async(room_url).await.map_err(SignallingError::from) {
+                Ok((wss, _)) => break wss,
+                Err(e) => {
+                    if let Some(attempts) = attempts.as_mut() {
+                        if *attempts <= 1 {
+                            return Err(SignallingError::ConnectionFailed(Box::new(e)));
+                        } else {
+                            *attempts -= 1;
+                            warn!("connection to signalling server failed, {attempts} attempt(s) remain");
+                        }
+                    } else {
+                        continue 'signalling;
+                    }
+                }
+            };
+        };
+        Ok(Self { websocket_stream })
     }
 
     async fn send(&mut self, request: String) -> Result<(), SignallingError> {
@@ -73,7 +85,8 @@ pub(crate) struct NativeMessenger;
 impl Messenger for NativeMessenger {
     async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: MessageLoopChannels) {
         message_loop_impl(id, &config, channels)
-            // web-rtc is tokio-based so we use compat here to make it work with other async run-times
+            // web-rtc is tokio-based so we use compat here to make it work with other async
+            // run-times
             .compat()
             .await
     }

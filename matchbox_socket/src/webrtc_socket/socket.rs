@@ -96,6 +96,8 @@ pub struct WebRtcSocketConfig {
     pub ice_server: RtcIceServerConfig,
     /// Configuration for one or multiple reliable or unreliable data channels
     pub channels: Vec<ChannelConfig>,
+    /// The amount of attempts to initiate connection
+    pub attempts: Option<u16>,
 }
 
 /// Contains the interface end of a full-mesh web rtc connection
@@ -123,6 +125,7 @@ impl WebRtcSocket {
             room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::unreliable()],
+            attempts: Some(3),
         })
     }
 
@@ -137,6 +140,7 @@ impl WebRtcSocket {
             room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::reliable()],
+            attempts: Some(3),
         })
     }
 
@@ -358,8 +362,12 @@ async fn run_socket(
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
-    let signalling_loop_fut =
-        signalling_loop::<UseSignaller>(config.room_url.clone(), requests_receiver, events_sender);
+    let signalling_loop_fut = signalling_loop::<UseSignaller>(
+        config.attempts,
+        config.room_url.clone(),
+        requests_receiver,
+        events_sender,
+    );
 
     let channels = MessageLoopChannels {
         requests_sender,
@@ -399,7 +407,10 @@ async fn run_socket(
 
 #[cfg(test)]
 mod test {
-    use crate::{Error, WebRtcSocket};
+    use crate::{
+        webrtc_socket::error::SignallingError, ChannelConfig, Error, RtcIceServerConfig,
+        WebRtcSocket, WebRtcSocketConfig,
+    };
 
     #[futures_test::test]
     async fn unreachable_server() {
@@ -409,5 +420,22 @@ mod test {
         let result = fut.await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::Signalling(_)));
+    }
+
+    #[futures_test::test]
+    async fn test_signalling_attempts() {
+        let (_socket, loop_fut) = WebRtcSocket::new_with_config(WebRtcSocketConfig {
+            room_url: "wss://example.invalid/".to_string(),
+            attempts: Some(3),
+            ice_server: RtcIceServerConfig::default(),
+            channels: vec![ChannelConfig::unreliable()],
+        });
+
+        let result = loop_fut.await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            Error::Signalling(SignallingError::ConnectionFailed(_))
+        ));
     }
 }

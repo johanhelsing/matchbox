@@ -11,6 +11,8 @@ pub enum SignallingError {
     StreamExhausted,
     #[error("Message received in unknown format")]
     UnknownFormat,
+    #[error("failed to establish initial connection")]
+    ConnectionFailed(#[from] Box<SignallingError>),
 
     // Native
     #[cfg(not(target_arch = "wasm32"))]

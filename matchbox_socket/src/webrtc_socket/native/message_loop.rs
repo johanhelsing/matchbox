@@ -527,7 +527,9 @@ async fn peer_loop(
                 trace!("sending packet {:?}", message);
                 let message = message.clone();
                 let message = Bytes::from(message);
-                data_channel.send(&message).await.unwrap();
+                if let Err(e) = data_channel.send(&message).await {
+                    error!("error sending to data channel: {e:?}")
+                }
             }
         })
         .collect();

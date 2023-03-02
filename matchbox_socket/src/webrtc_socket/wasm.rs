@@ -20,7 +20,7 @@ impl Signaller for WasmSignaller {
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {
                         if *attempts <= 1 {
-                            return Err(SignallingError::NoMoreAttempts(Box::new(e)));
+                            return Err(SignallingError::ConnectionFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
                             warn!("connection to signalling server failed, {attempts} attempt(s) remain");

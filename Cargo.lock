@@ -3083,6 +3083,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "thiserror",
+ "tokio",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",

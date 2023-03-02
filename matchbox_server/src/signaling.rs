@@ -249,7 +249,10 @@ async fn handle_ws(
                     warn!("peer not found ({receiver}), ignoring signal");
                 }
             }
-            PeerRequest::KeepAlive => {}
+            PeerRequest::KeepAlive => {
+                // Do nothing. KeepAlive packets are used to protect against users' browsers
+                // disconnecting idle websocket connections.
+            }
         }
     }
 

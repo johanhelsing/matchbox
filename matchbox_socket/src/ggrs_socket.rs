@@ -1,6 +1,10 @@
 use ggrs::{Message, PlayerType};
 
-use crate::{webrtc_socket::error::UnknownPeerId, WebRtcSocket};
+use crate::WebRtcSocket;
+
+#[derive(Debug, thiserror::Error)]
+#[error("The client has not yet been given a Peer Id")]
+pub struct UnknownPeerId;
 
 impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]

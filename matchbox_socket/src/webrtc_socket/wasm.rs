@@ -1,14 +1,10 @@
-use super::error::SignallingError;
-use super::Signaller;
-use crate::{
-    webrtc_socket::{
-        messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-        signal_peer::SignalPeer,
-        socket::create_data_channels_ready_fut,
-        ChannelConfig, MessageLoopChannels, Messenger, Packet, WebRtcSocketConfig,
-        KEEP_ALIVE_INTERVAL,
-    },
-    PeerState,
+use crate::webrtc_socket::{
+    error::SignallingError,
+    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+    signal_peer::SignalPeer,
+    socket::create_data_channels_ready_fut,
+    ChannelConfig, MessageLoopChannels, Messenger, Packet, PeerState, Signaller,
+    WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
 };
 use async_trait::async_trait;
 use futures::{
@@ -37,14 +33,28 @@ pub(crate) struct WasmSignaller {
 
 #[async_trait(?Send)]
 impl Signaller for WasmSignaller {
-    async fn new(room_url: &str) -> Result<Self, SignallingError> {
-        Ok(Self {
-            websocket_stream: WsMeta::connect(room_url, None)
+    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignallingError> {
+        let websocket_stream = 'signalling: loop {
+            match WsMeta::connect(room_url, None)
                 .await
-                .map_err(SignallingError::from)?
-                .1
-                .fuse(),
-        })
+                .map_err(SignallingError::from)
+            {
+                Ok((_, wss)) => break wss.fuse(),
+                Err(e) => {
+                    if let Some(attempts) = attempts.as_mut() {
+                        if *attempts <= 1 {
+                            return Err(SignallingError::ConnectionFailed(Box::new(e)));
+                        } else {
+                            *attempts -= 1;
+                            warn!("connection to signalling server failed, {attempts} attempt(s) remain");
+                        }
+                    } else {
+                        continue 'signalling;
+                    }
+                }
+            };
+        };
+        Ok(Self { websocket_stream })
     }
 
     async fn send(&mut self, request: String) -> Result<(), SignallingError> {

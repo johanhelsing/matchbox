@@ -38,7 +38,7 @@ const KEEP_ALIVE_INTERVAL: u64 = 10_000;
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 trait Signaller: Sized {
-    async fn new(room_url: &str) -> Result<Self, SignallingError>;
+    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignallingError>;
 
     async fn send(&mut self, request: String) -> Result<(), SignallingError>;
 
@@ -46,11 +46,12 @@ trait Signaller: Sized {
 }
 
 async fn signalling_loop<S: Signaller>(
+    attempts: Option<u16>,
     room_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
 ) -> Result<(), SignallingError> {
-    let mut signaller = S::new(&room_url).await?;
+    let mut signaller = S::new(attempts, &room_url).await?;
 
     loop {
         select! {

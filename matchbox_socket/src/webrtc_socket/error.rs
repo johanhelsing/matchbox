@@ -9,6 +9,8 @@ pub enum SignallingError {
     Undeliverable(#[from] TrySendError<PeerEvent>),
     #[error("The stream is exhausted")]
     StreamExhausted,
+    #[error("Message received in unknown format")]
+    UnknownFormat,
 
     // Native
     #[cfg(not(target_arch = "wasm32"))]

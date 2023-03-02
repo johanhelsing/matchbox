@@ -20,12 +20,12 @@ use self::error::SignallingError;
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm;
-        use wasm::message_loop::message_loop;
+        type UseMessenger = wasm::WasmMessenger;
         type UseSignaller = wasm::WasmSignaller;
         type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
     } else {
         mod native;
-        use native::message_loop::message_loop;
+        type UseMessenger = native::NativeMessenger;
         type UseSignaller = native::NativeSignaller;
         type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
     }
@@ -82,3 +82,17 @@ async fn signalling_loop<S: Signaller>(
 
 /// The raw format of data being sent and received.
 type Packet = Box<[u8]>;
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+trait Messenger {
+    async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: MessageLoopChannels);
+}
+
+async fn message_loop<M: Messenger>(
+    id: PeerId,
+    config: WebRtcSocketConfig,
+    channels: MessageLoopChannels,
+) {
+    M::message_loop(id, config, channels).await
+}

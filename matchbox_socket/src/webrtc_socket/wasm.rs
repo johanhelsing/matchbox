@@ -127,7 +127,7 @@ impl Messenger for WasmMessenger {
 
                         match event {
                             PeerEvent::IdAssigned(peer_uuid) => {
-                                id_tx.send(peer_uuid.to_owned()).await.unwrap();
+                                id_tx.try_send(peer_uuid.to_owned()).unwrap();
                             }
                             PeerEvent::NewPeer(peer_uuid) => {
                                 let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();

@@ -119,7 +119,7 @@ impl Messenger for WasmMessenger {
                                 let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                                 handshake_signals.insert(peer_uuid.clone(), signal_sender);
                                 let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                                handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone(), &config).boxed_local());
+                                handshakes.push(handshake_offer(signal_peer, signal_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), &config).boxed_local());
                             }
                             PeerEvent::PeerLeft(peer_uuid) => {
                                 peer_state_change_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to send disconnected peer");
@@ -129,7 +129,7 @@ impl Messenger for WasmMessenger {
                                     let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
                                     let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                     // We didn't start signalling with this peer, assume we're the accepting part
-                                    handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone(), &config).boxed_local());
+                                    handshakes.push(handshake_accept(signal_peer, from_peer_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), &config).boxed_local());
                                     from_peer_sender
                                 });
                                 if let Err(e) = from_peer_sender.unbounded_send(data) {
@@ -189,6 +189,7 @@ impl Messenger for WasmMessenger {
 async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
+    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>> {
@@ -201,6 +202,7 @@ async fn handshake_offer(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
+        peer_state_tx,
         channel_ready_tx,
         &config.channels,
     );
@@ -350,6 +352,7 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
 async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
+    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>> {
@@ -361,6 +364,7 @@ async fn handshake_accept(
         conn.clone(),
         messages_from_peers_tx,
         signal_peer.id.clone(),
+        peer_state_tx,
         channel_ready_tx,
         &config.channels,
     );
@@ -560,6 +564,7 @@ fn create_data_channels(
     connection: RtcPeerConnection,
     mut incoming_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peer_id: PeerId,
+    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
     channel_config: &[ChannelConfig],
 ) -> Vec<RtcDataChannel> {
@@ -571,6 +576,7 @@ fn create_data_channels(
                 connection.clone(),
                 incoming_tx.get_mut(i).unwrap().clone(),
                 peer_id.clone(),
+                peer_state_tx.clone(),
                 channel_ready.pop().unwrap(),
                 channel,
                 i,
@@ -583,6 +589,7 @@ fn create_data_channel(
     connection: RtcPeerConnection,
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
+    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     mut channel_open: futures_channel::mpsc::Sender<u8>,
     channel_config: &ChannelConfig,
     channel_id: usize,
@@ -607,6 +614,7 @@ fn create_data_channel(
         },
     );
 
+    let peer_id_1 = peer_id.clone();
     leaking_channel_event_handler(
         |f| channel.set_onmessage(f),
         move |event: MessageEvent| {
@@ -616,7 +624,7 @@ fn create_data_channel(
                 let body = uarray.to_vec();
 
                 incoming_tx
-                    .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
+                    .unbounded_send((peer_id_1.clone(), body.into_boxed_slice()))
                     .unwrap();
             }
         },
@@ -633,6 +641,11 @@ fn create_data_channel(
         |f| channel.set_onclose(f),
         move |event: Event| {
             warn!("Channel closed: {:?}", event);
+            if let Err(err) =
+                peer_state_tx.unbounded_send((peer_id.clone(), PeerState::Disconnected))
+            {
+                warn!("failed to notify about channel disconnecting: {err:?}");
+            }
         },
     );
 

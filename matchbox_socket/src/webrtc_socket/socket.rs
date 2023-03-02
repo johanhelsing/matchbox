@@ -216,6 +216,23 @@ impl WebRtcSocket {
             .collect()
     }
 
+    /// Returns a Vec of the ids of peers that are no longer connected.
+    ///
+    /// See also: [`WebRtcSocket::disconnected_peers`]
+    pub fn disconnected_peers(&self) -> Vec<PeerId> {
+        // TODO: could probably be an iterator or reference instead?
+        self.peers
+            .iter()
+            .filter_map(|(id, state)| {
+                if state == &PeerState::Disconnected {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Call this where you want to handle new received messages from the default channel (with
     /// index 0) which will be the only channel if you didn't configure any explicitly
     ///

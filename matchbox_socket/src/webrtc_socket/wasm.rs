@@ -1,25 +1,36 @@
-pub mod message_loop;
-
-use super::error::SignallingError;
-use super::Signaller;
+use crate::webrtc_socket::{error::SignallingError, Signaller};
 use async_trait::async_trait;
 use futures::{stream::Fuse, SinkExt, StreamExt};
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
-
+pub mod message_loop;
 pub(crate) struct WasmSignaller {
     websocket_stream: Fuse<WsStream>,
 }
 
 #[async_trait(?Send)]
 impl Signaller for WasmSignaller {
-    async fn new(room_url: &str) -> Result<Self, SignallingError> {
-        Ok(Self {
-            websocket_stream: WsMeta::connect(room_url, None)
+    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignallingError> {
+        let websocket_stream = 'signalling: loop {
+            match WsMeta::connect(room_url, None)
                 .await
-                .map_err(SignallingError::from)?
-                .1
-                .fuse(),
-        })
+                .map_err(SignallingError::from)
+            {
+                Ok((_, wss)) => break wss.fuse(),
+                Err(e) => {
+                    if let Some(attempts) = attempts.as_mut() {
+                        if *attempts <= 1 {
+                            return Err(SignallingError::NoMoreAttempts(Box::new(e)));
+                        } else {
+                            *attempts -= 1;
+                            warn!("connection to signalling server failed, {attempts} attempt(s) remain");
+                        }
+                    } else {
+                        continue 'signalling;
+                    }
+                }
+            };
+        };
+        Ok(Self { websocket_stream })
     }
 
     async fn send(&mut self, request: String) -> Result<(), SignallingError> {

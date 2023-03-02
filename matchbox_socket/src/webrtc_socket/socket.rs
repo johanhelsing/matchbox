@@ -96,6 +96,8 @@ pub struct WebRtcSocketConfig {
     pub ice_server: RtcIceServerConfig,
     /// Configuration for one or multiple reliable or unreliable data channels
     pub channels: Vec<ChannelConfig>,
+    /// The amount of attempts to initiate connection
+    pub attempts: Option<u16>,
 }
 
 /// Contains the interface end of a full-mesh web rtc connection
@@ -123,6 +125,7 @@ impl WebRtcSocket {
             room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::unreliable()],
+            attempts: Some(3),
         })
     }
 
@@ -137,6 +140,7 @@ impl WebRtcSocket {
             room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::reliable()],
+            attempts: Some(3),
         })
     }
 
@@ -358,8 +362,12 @@ async fn run_socket(
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
-    let signalling_loop_fut =
-        signalling_loop::<UseSignaller>(config.room_url.clone(), requests_receiver, events_sender);
+    let signalling_loop_fut = signalling_loop::<UseSignaller>(
+        config.attempts,
+        config.room_url.clone(),
+        requests_receiver,
+        events_sender,
+    );
 
     let channels = MessageLoopChannels {
         requests_sender,

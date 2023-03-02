@@ -2882,8 +2882,7 @@ checksum = "8eaf4bc02d17cbdd7ff4c7438cafcdf7fb9a4613313ad11b4f8fefe7d3fa0130"
 [[package]]
 name = "js-sys"
 version = "0.3.61"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "445dde2150c55e483f3d8416706b97ec8e8237c307e5b7b4b8dd15e6af2a0730"
+source = "git+https://github.com/johanhelsing/wasm-bindgen?branch=rtcpeerconnectionstate#0fe95a203d7423cf8672c56d5e554243f7d0629e"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -4933,8 +4932,7 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 [[package]]
 name = "wasm-bindgen"
 version = "0.2.84"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f8dcbc21f30d9b8f2ea926ecb58f6b91192c17e9d33594b3df58b2007ca53b"
+source = "git+https://github.com/johanhelsing/wasm-bindgen?branch=rtcpeerconnectionstate#0fe95a203d7423cf8672c56d5e554243f7d0629e"
 dependencies = [
  "cfg-if",
  "serde",
@@ -4945,8 +4943,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-backend"
 version = "0.2.84"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95ce90fd5bcc06af55a641a86428ee4229e44e07033963a2290a8e241607ccb9"
+source = "git+https://github.com/johanhelsing/wasm-bindgen?branch=rtcpeerconnectionstate#0fe95a203d7423cf8672c56d5e554243f7d0629e"
 dependencies = [
  "bumpalo",
  "log",
@@ -4972,8 +4969,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-macro"
 version = "0.2.84"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c21f77c0bedc37fd5dc21f897894a5ca01e7bb159884559461862ae90c0b4c5"
+source = "git+https://github.com/johanhelsing/wasm-bindgen?branch=rtcpeerconnectionstate#0fe95a203d7423cf8672c56d5e554243f7d0629e"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -4982,8 +4978,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-macro-support"
 version = "0.2.84"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2aff81306fcac3c7515ad4e177f521b5c9a15f2b08f4e32d823066102f35a5f6"
+source = "git+https://github.com/johanhelsing/wasm-bindgen?branch=rtcpeerconnectionstate#0fe95a203d7423cf8672c56d5e554243f7d0629e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4995,8 +4990,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-shared"
 version = "0.2.84"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0046fef7e28c3804e5e38bfa31ea2a0f73905319b677e57ebe37e49358989b5d"
+source = "git+https://github.com/johanhelsing/wasm-bindgen?branch=rtcpeerconnectionstate#0fe95a203d7423cf8672c56d5e554243f7d0629e"
 
 [[package]]
 name = "wayland-client"
@@ -5074,8 +5068,7 @@ dependencies = [
 [[package]]
 name = "web-sys"
 version = "0.3.61"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e33b99f4b23ba3eec1a53ac264e35a755f00e966e0065077d6027c0f575b0b97"
+source = "git+https://github.com/johanhelsing/wasm-bindgen?branch=rtcpeerconnectionstate#0fe95a203d7423cf8672c56d5e554243f7d0629e"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

@@ -1,10 +1,14 @@
 use super::error::SignallingError;
 use super::Signaller;
-use crate::webrtc_socket::{
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-    signal_peer::SignalPeer,
-    socket::create_data_channels_ready_fut,
-    ChannelConfig, MessageLoopChannels, Messenger, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+use crate::{
+    webrtc_socket::{
+        messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+        signal_peer::SignalPeer,
+        socket::create_data_channels_ready_fut,
+        ChannelConfig, MessageLoopChannels, Messenger, Packet, WebRtcSocketConfig,
+        KEEP_ALIVE_INTERVAL,
+    },
+    PeerState,
 };
 use async_trait::async_trait;
 use futures::{
@@ -22,8 +26,8 @@ use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
-    RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcPeerConnectionIceEvent,
-    RtcSdpType, RtcSessionDescriptionInit,
+    RtcIceCandidateInit, RtcIceGatheringState, RtcLocalSessionDescriptionInit, RtcPeerConnection,
+    RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit,
 };
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 
@@ -68,8 +72,7 @@ impl Messenger for WasmMessenger {
             requests_sender,
             mut events_receiver,
             mut peer_messages_out_rx,
-            new_connected_peers_tx,
-            disconnected_peers_tx,
+            peer_state_change_tx,
             messages_from_peers_tx,
         } = channels;
         debug!("Entering WebRtcSocket message loop");
@@ -104,7 +107,7 @@ impl Messenger for WasmMessenger {
                     let (peer, channels) = res.unwrap();
                     data_channels.insert(peer.clone(), channels);
                     debug!("Notifying about new peer");
-                    new_connected_peers_tx.unbounded_send(peer).expect("send failed");
+                    peer_state_change_tx.unbounded_send((peer, PeerState::Connected)).expect("send failed");
                 },
 
                 message = events_receiver.next() => {
@@ -116,17 +119,17 @@ impl Messenger for WasmMessenger {
                                 let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                                 handshake_signals.insert(peer_uuid.clone(), signal_sender);
                                 let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                                handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone(), &config).boxed_local());
+                                handshakes.push(handshake_offer(signal_peer, signal_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), &config).boxed_local());
                             }
                             PeerEvent::PeerLeft(peer_uuid) => {
-                                disconnected_peers_tx.unbounded_send(peer_uuid).expect("fail to send disconnected peer");
+                                peer_state_change_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to send disconnected peer");
                             }
                             PeerEvent::Signal { sender, data } => {
                                 let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
                                     let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
                                     let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                     // We didn't start signalling with this peer, assume we're the accepting part
-                                    handshakes.push(handshake_accept(signal_peer, from_peer_receiver, messages_from_peers_tx.clone(), &config).boxed_local());
+                                    handshakes.push(handshake_accept(signal_peer, from_peer_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), &config).boxed_local());
                                     from_peer_sender
                                 });
                                 if let Err(e) = from_peer_sender.unbounded_send(data) {
@@ -186,12 +189,13 @@ impl Messenger for WasmMessenger {
 async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
+    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>> {
     debug!("making offer");
 
-    let conn = create_rtc_peer_connection(config);
+    let conn = create_rtc_peer_connection(signal_peer.id.clone(), peer_state_tx, config);
     let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
 
     let data_channels = create_data_channels(
@@ -208,9 +212,9 @@ async fn handshake_offer(
         .efix()?
         .as_string()
         .ok_or("")?;
-    let mut rtc_session_desc_init_dict = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
-    let offer_description = rtc_session_desc_init_dict.sdp(&offer_sdp);
-    JsFuture::from(conn.set_local_description(offer_description))
+    let mut local_description_init = RtcLocalSessionDescriptionInit::new();
+    let offer_description = local_description_init.sdp(&offer_sdp);
+    JsFuture::from(conn.set_local_description_with_description(offer_description))
         .await
         .efix()?;
     debug!("created offer for new peer");
@@ -330,29 +334,29 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
         }
     };
 
-    let candidate_init = if parsed_candidate.is_null() {
+    if parsed_candidate.is_null() {
         debug!("Received null ice candidate, this means there are no further ice candidates");
-        None
+        JsFuture::from(connection.add_ice_candidate())
+            .await
+            .expect("failed to set end of candidates");
     } else {
-        Some(RtcIceCandidateInit::from(parsed_candidate))
-    };
-
-    JsFuture::from(
-        connection.add_ice_candidate_with_opt_rtc_ice_candidate_init(candidate_init.as_ref()),
-    )
-    .await
-    .expect("failed to add ice candidate");
+        let candidate_init = RtcIceCandidateInit::from(parsed_candidate);
+        JsFuture::from(connection.add_ice_candidate_with_candidate(candidate_init.as_ref()))
+            .await
+            .expect("failed to add ice candidate");
+    }
 }
 
 async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
+    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>> {
     debug!("handshake_accept");
 
-    let conn = create_rtc_peer_connection(config);
+    let conn = create_rtc_peer_connection(signal_peer.id.clone(), peer_state_tx, config);
     let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
     let data_channels = create_data_channels(
         conn.clone(),
@@ -402,7 +406,7 @@ async fn handshake_accept(
 
     debug!("created answer");
 
-    let mut session_desc_init = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+    let mut session_desc_init = RtcLocalSessionDescriptionInit::new();
 
     let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
         .efix()?
@@ -411,7 +415,7 @@ async fn handshake_accept(
 
     let answer_description = session_desc_init.sdp(&answer_sdp);
 
-    JsFuture::from(conn.set_local_description(answer_description))
+    JsFuture::from(conn.set_local_description_with_description(answer_description))
         .await
         .efix()?;
 
@@ -492,7 +496,11 @@ async fn handshake_accept(
     Ok((signal_peer.id, data_channels))
 }
 
-fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection {
+fn create_rtc_peer_connection(
+    peer_id: PeerId,
+    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
+    config: &WebRtcSocketConfig,
+) -> RtcPeerConnection {
     #[derive(Serialize)]
     struct IceServerConfig {
         urls: Vec<String>,
@@ -511,6 +519,30 @@ fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection 
     peer_config.ice_servers(&serde_wasm_bindgen::to_value(&ice_server_config_list).unwrap());
     let connection = RtcPeerConnection::new_with_configuration(&peer_config).unwrap();
 
+    let connection_2 = connection.clone();
+    let onconnectionstatechange: Box<dyn FnMut(_)> = Box::new(move |event: JsValue| {
+        let state = connection_2.connection_state();
+        warn!("onconnectionstatechange: {event:?}, {state:?}");
+        match state {
+            web_sys::RtcPeerConnectionState::New
+            | web_sys::RtcPeerConnectionState::Connecting
+            | web_sys::RtcPeerConnectionState::Connected => {}
+            web_sys::RtcPeerConnectionState::Closed
+            | web_sys::RtcPeerConnectionState::Failed
+            | web_sys::RtcPeerConnectionState::Disconnected => {
+                peer_state_tx
+                    .unbounded_send((peer_id.clone(), PeerState::Disconnected))
+                    .unwrap();
+            }
+            state => {
+                warn!("ignoring unknown connection state: {state:?}")
+            }
+        }
+        // todo: deregister callback when tearing down session
+    });
+
+    let onconnectionstatechange = Closure::wrap(onconnectionstatechange);
+    connection.set_onconnectionstatechange(Some(onconnectionstatechange.as_ref().unchecked_ref()));
     let connection_1 = connection.clone();
     let oniceconnectionstatechange: Box<dyn FnMut(_)> = Box::new(move |_event: JsValue| {
         debug!(

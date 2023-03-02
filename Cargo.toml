@@ -6,3 +6,8 @@ members = [
     "matchbox_simple_demo",
 ]
 resolver = "2"
+
+[patch.crates-io]
+wasm-bindgen = { git = "https://github.com/johanhelsing/wasm-bindgen", branch = "rtcpeerconnectionstate" }
+web-sys = { git = "https://github.com/johanhelsing/wasm-bindgen", branch = "rtcpeerconnectionstate" }
+js-sys = { git = "https://github.com/johanhelsing/wasm-bindgen", branch = "rtcpeerconnectionstate" }

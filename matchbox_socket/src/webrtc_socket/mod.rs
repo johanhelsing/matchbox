@@ -13,7 +13,7 @@ use futures_util::select;
 use log::{debug, warn};
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
-pub use socket::{ChannelConfig, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};
+pub use socket::{ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};
 
 use self::error::SignallingError;
 

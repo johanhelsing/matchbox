@@ -1,7 +1,7 @@
 use futures::{select, FutureExt};
 use futures_timer::Delay;
 use log::info;
-use matchbox_socket::WebRtcSocket;
+use matchbox_socket::{PeerState, WebRtcSocket};
 use std::time::Duration;
 
 #[cfg(target_arch = "wasm32")]
@@ -43,15 +43,17 @@ async fn async_main() {
 
     loop {
         // Handle any new peers
-        for peer in socket.accept_new_connections() {
+        for (peer, state) in socket.handle_peer_changes() {
             info!("Peer joined: {:?}", peer);
-            let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
-            socket.send(packet, peer);
-        }
-
-        // Handle any disconnected peers
-        for peer in socket.disconnected_peers() {
-            info!("Peer left: {peer:?}");
+            match state {
+                PeerState::Connected => {
+                    let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
+                    socket.send(packet, peer);
+                }
+                PeerState::Disconnected => {
+                    info!("Peer left: {peer:?}");
+                }
+            }
         }
 
         // Accept any messages incoming

@@ -159,7 +159,7 @@ fn lobby_system(
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {
-    socket.0.as_mut().unwrap().accept_new_connections();
+    socket.0.as_mut().unwrap().handle_peer_changes();
     let connected_peers = socket.0.as_ref().unwrap().connected_peers().len();
     let remaining = args.players - (connected_peers + 1);
     query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);

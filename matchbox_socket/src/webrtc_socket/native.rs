@@ -1,4 +1,5 @@
 use super::error::SignallingError;
+use crate::webrtc_socket::socket::PeerState;
 use crate::webrtc_socket::Signaller;
 use crate::webrtc_socket::{
     messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
@@ -22,6 +23,7 @@ use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::{
     api::APIBuilder,
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
@@ -84,8 +86,7 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
         requests_sender,
         mut events_receiver,
         mut peer_messages_out_rx,
-        new_connected_peers_tx,
-        disconnected_peers_tx,
+        peer_state_change_tx,
         messages_from_peers_tx,
     } = channels;
     debug!("Entering native WebRtcSocket message loop");
@@ -128,14 +129,15 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
                             let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid.clone(), signal_sender);
                             let signal_peer = SignalPeer::new(peer_uuid.clone(), requests_sender.clone());
-                            let handshake_fut = handshake_offer(signal_peer, signal_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), config);
+                            let handshake_fut = handshake_offer(signal_peer, signal_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), config);
                             let (to_peer_data_tx, to_peer_data_rx) = new_senders_and_receivers(config);
 
                             connected_peers.insert(peer_uuid, to_peer_data_tx);
                             peer_loops.push(peer_loop(handshake_fut, to_peer_data_rx).boxed());
                         }
                         PeerEvent::PeerLeft(peer_uuid) => {
-                            disconnected_peers_tx.unbounded_send(peer_uuid).expect("fail to send disconnected peer");
+                            peer_state_change_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
+                                .expect("fail to report peer as disconnected");
                         }
                         PeerEvent::Signal { sender, data } => {
                             let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
@@ -143,7 +145,7 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
                                 let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                 let (to_peer_data_tx, to_peer_data_rx) = new_senders_and_receivers(config);
                                 // We didn't start signalling with this peer, assume we're the accepting part
-                                let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, new_connected_peers_tx.clone(), messages_from_peers_tx.clone(), config);
+                                let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), config);
                                 connected_peers.insert(sender, to_peer_data_tx);
                                 let peer_loop_fut = peer_loop(handshake_fut, to_peer_data_rx);
                                 peer_loops.push(peer_loop_fut.boxed());
@@ -266,7 +268,7 @@ impl CandidateTrickle {
 async fn handshake_offer(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    mut new_peer_tx: UnboundedSender<PeerId>,
+    mut peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<
@@ -278,7 +280,8 @@ async fn handshake_offer(
     Box<dyn std::error::Error>,
 > {
     debug!("making offer");
-    let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
+    let (connection, trickle) =
+        create_rtc_peer_connection(signal_peer.clone(), peer_state_tx.clone(), config).await?;
 
     let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
     let data_channels = create_data_channels(
@@ -336,7 +339,10 @@ async fn handshake_offer(
         };
     }
 
-    new_peer_tx.send(signal_peer.id.clone()).await.unwrap();
+    peer_state_tx
+        .send((signal_peer.id.clone(), PeerState::Connected))
+        .await
+        .unwrap();
 
     Ok((signal_peer.id, data_channels, trickle_fut))
 }
@@ -344,7 +350,7 @@ async fn handshake_offer(
 async fn handshake_accept(
     signal_peer: SignalPeer,
     mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    mut new_peer_tx: UnboundedSender<PeerId>,
+    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     config: &WebRtcSocketConfig,
 ) -> Result<
@@ -356,7 +362,8 @@ async fn handshake_accept(
     Box<dyn std::error::Error>,
 > {
     debug!("handshake_accept");
-    let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config).await?;
+    let (connection, trickle) =
+        create_rtc_peer_connection(signal_peer.clone(), peer_state_tx.clone(), config).await?;
 
     let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
     let data_channels = create_data_channels(
@@ -405,13 +412,16 @@ async fn handshake_accept(
         };
     }
 
-    new_peer_tx.send(signal_peer.id.clone()).await.unwrap();
+    peer_state_tx
+        .unbounded_send((signal_peer.id.clone(), PeerState::Connected))
+        .unwrap();
 
     Ok((signal_peer.id, data_channels, trickle_fut))
 }
 
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
+    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     config: &WebRtcSocketConfig,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
@@ -430,6 +440,7 @@ async fn create_rtc_peer_connection(
     let connection = api.new_peer_connection(config).await?;
     let connection = Arc::new(connection);
 
+    let peer_id = signal_peer.id.clone();
     let trickle = Arc::new(CandidateTrickle::new(signal_peer));
 
     let connection2 = Arc::downgrade(&connection);
@@ -448,8 +459,23 @@ async fn create_rtc_peer_connection(
         })
     }));
 
-    connection.on_peer_connection_state_change(Box::new(move |s| {
-        debug!("Peer Connection State has changed: {}", s);
+    connection.on_peer_connection_state_change(Box::new(move |state| {
+        debug!("Peer Connection State has changed: {state}");
+        match state {
+            // todo: double check meaning of all these states
+            RTCPeerConnectionState::Unspecified
+            | RTCPeerConnectionState::New
+            | RTCPeerConnectionState::Connecting
+            | RTCPeerConnectionState::Connected => {}
+
+            RTCPeerConnectionState::Disconnected
+            | RTCPeerConnectionState::Failed
+            | RTCPeerConnectionState::Closed => {
+                peer_state_tx
+                    .unbounded_send((peer_id.clone(), PeerState::Disconnected))
+                    .unwrap();
+            }
+        }
         Box::pin(async {})
     }));
 

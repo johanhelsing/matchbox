@@ -1,10 +1,14 @@
 use super::error::SignallingError;
 use super::Signaller;
-use crate::webrtc_socket::{
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
-    signal_peer::SignalPeer,
-    socket::create_data_channels_ready_fut,
-    ChannelConfig, MessageLoopChannels, Messenger, Packet, WebRtcSocketConfig, KEEP_ALIVE_INTERVAL,
+use crate::{
+    webrtc_socket::{
+        messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+        signal_peer::SignalPeer,
+        socket::create_data_channels_ready_fut,
+        ChannelConfig, MessageLoopChannels, Messenger, Packet, WebRtcSocketConfig,
+        KEEP_ALIVE_INTERVAL,
+    },
+    PeerState,
 };
 use async_trait::async_trait;
 use futures::{
@@ -68,8 +72,7 @@ impl Messenger for WasmMessenger {
             requests_sender,
             mut events_receiver,
             mut peer_messages_out_rx,
-            new_connected_peers_tx,
-            disconnected_peers_tx,
+            peer_state_change_tx,
             messages_from_peers_tx,
         } = channels;
         debug!("Entering WebRtcSocket message loop");
@@ -104,7 +107,7 @@ impl Messenger for WasmMessenger {
                     let (peer, channels) = res.unwrap();
                     data_channels.insert(peer.clone(), channels);
                     debug!("Notifying about new peer");
-                    new_connected_peers_tx.unbounded_send(peer).expect("send failed");
+                    peer_state_change_tx.unbounded_send((peer, PeerState::Connected)).expect("send failed");
                 },
 
                 message = events_receiver.next() => {
@@ -119,7 +122,7 @@ impl Messenger for WasmMessenger {
                                 handshakes.push(handshake_offer(signal_peer, signal_receiver, messages_from_peers_tx.clone(), &config).boxed_local());
                             }
                             PeerEvent::PeerLeft(peer_uuid) => {
-                                disconnected_peers_tx.unbounded_send(peer_uuid).expect("fail to send disconnected peer");
+                                peer_state_change_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to send disconnected peer");
                             }
                             PeerEvent::Signal { sender, data } => {
                                 let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {

@@ -8,4 +8,6 @@ mod ggrs_socket;
 mod webrtc_socket;
 
 pub use error::Error;
-pub use webrtc_socket::{ChannelConfig, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};
+pub use webrtc_socket::{
+    ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig,
+};

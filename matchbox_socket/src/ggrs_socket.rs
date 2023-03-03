@@ -9,18 +9,23 @@ pub struct UnknownPeerId;
 impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     pub fn players(&mut self) -> Result<Vec<PlayerType<String>>, UnknownPeerId> {
-        let client_id = self.id().ok_or(UnknownPeerId)?;
-        // needs to be consistent order across all peers
-        let mut ids = self.connected_peers();
-        ids.push(client_id.to_owned());
+        let our_id = self.id().ok_or(UnknownPeerId)?;
+
+        // player order needs to be consistent order across all peers
+        let mut ids: Vec<_> = self
+            .connected_peers()
+            .chain(std::iter::once(&our_id))
+            .cloned()
+            .collect();
         ids.sort();
+
         let players = ids
-            .iter()
+            .into_iter()
             .map(|id| {
-                if *id == client_id {
+                if id == our_id {
                     PlayerType::Local
                 } else {
-                    PlayerType::Remote(id.to_owned())
+                    PlayerType::Remote(id)
                 }
             })
             .collect();

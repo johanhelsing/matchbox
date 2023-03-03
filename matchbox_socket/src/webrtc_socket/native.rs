@@ -17,7 +17,7 @@ use bytes::Bytes;
 use futures::{
     future::FusedFuture, stream::FuturesUnordered, Future, FutureExt, SinkExt, StreamExt,
 };
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
@@ -84,8 +84,12 @@ pub(crate) struct NativeMessenger;
 
 #[async_trait]
 impl Messenger for NativeMessenger {
-    async fn message_loop(id: PeerId, config: WebRtcSocketConfig, channels: MessageLoopChannels) {
-        message_loop_impl(id, &config, channels)
+    async fn message_loop(
+        id_tx: Sender<PeerId>,
+        config: WebRtcSocketConfig,
+        channels: MessageLoopChannels,
+    ) {
+        message_loop_impl(id_tx, &config, channels)
             // web-rtc is tokio-based so we use compat here to make it work with other async
             // run-times
             .compat()
@@ -93,7 +97,11 @@ impl Messenger for NativeMessenger {
     }
 }
 
-async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: MessageLoopChannels) {
+async fn message_loop_impl(
+    mut id_tx: Sender<PeerId>,
+    config: &WebRtcSocketConfig,
+    channels: MessageLoopChannels,
+) {
     let MessageLoopChannels {
         requests_sender,
         mut events_receiver,
@@ -102,12 +110,6 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
         messages_from_peers_tx,
     } = channels;
     debug!("Entering native WebRtcSocket message loop");
-
-    debug!("I am {:?}", id);
-
-    requests_sender
-        .unbounded_send(PeerRequest::Uuid(id))
-        .expect("failed to send uuid");
 
     let mut peer_loops = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
@@ -137,6 +139,9 @@ async fn message_loop_impl(id: PeerId, config: &WebRtcSocketConfig, channels: Me
                 if let Some(event) = message {
                     debug!("{:?}", event);
                     match event {
+                        PeerEvent::IdAssigned(peer_uuid) => {
+                            id_tx.try_send(peer_uuid.to_owned()).unwrap();
+                        }
                         PeerEvent::NewPeer(peer_uuid) => {
                             let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid.clone(), signal_sender);

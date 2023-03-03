@@ -193,8 +193,10 @@ impl WebRtcSocket {
     pub fn handle_peer_changes(&mut self) -> Vec<(PeerId, PeerState)> {
         let mut changes = Vec::new();
         while let Ok(Some((id, state))) = self.peer_state_changes_rx.try_next() {
-            self.peers.insert(id.clone(), state);
-            changes.push((id, state));
+            let old = self.peers.insert(id.clone(), state);
+            if old != Some(state) {
+                changes.push((id, state));
+            }
         }
         changes
     }

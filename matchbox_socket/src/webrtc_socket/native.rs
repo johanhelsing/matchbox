@@ -479,18 +479,23 @@ async fn create_rtc_peer_connection(
     connection.on_peer_connection_state_change(Box::new(move |state| {
         debug!("Peer Connection State has changed: {state}");
         match state {
-            // todo: double check meaning of all these states
+            // These events are not currently available in web-sys (wasm)
+            // so instead, we implement our own criteria for when a peer is
+            // considered to be "Connected". See PeerState::Connected.
             RTCPeerConnectionState::Unspecified
             | RTCPeerConnectionState::New
             | RTCPeerConnectionState::Connecting
             | RTCPeerConnectionState::Connected => {}
-
+            // ...in other words, we currently only care about when *something*
+            // has definitely failed:
             RTCPeerConnectionState::Disconnected
             | RTCPeerConnectionState::Failed
             | RTCPeerConnectionState::Closed => {
-                peer_state_tx
-                    .unbounded_send((peer_id.clone(), PeerState::Disconnected))
-                    .unwrap();
+                if let Err(err) =
+                    peer_state_tx.unbounded_send((peer_id.clone(), PeerState::Disconnected))
+                {
+                    error!("Failed to report peer state change, socket dropped? Error: {err:?}");
+                }
             }
         }
         Box::pin(async {})

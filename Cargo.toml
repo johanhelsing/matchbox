@@ -4,3 +4,4 @@ members = [
     "signalling_server",
     "examples/*",
 ]
+resolver = "2" # Necessary or WGPU has issues

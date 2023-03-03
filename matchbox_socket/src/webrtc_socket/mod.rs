@@ -66,7 +66,7 @@ async fn signalling_loop<S: Signaller>(
                     Ok(message) => {
                         debug!("Received {message}");
                         let event: PeerEvent = serde_json::from_str(&message)
-                            .unwrap_or_else(|err| panic!("couldn't parse peer event: {}.\nEvent: {}", err, message));
+                            .unwrap_or_else(|err| panic!("couldn't parse peer event: {err}.\nEvent: {message}"));
                         events_sender.unbounded_send(event).map_err(SignallingError::from)?;
                     }
                     Err(SignallingError::UnknownFormat) => warn!("ignoring unexpected non-text message from signalling server"),

@@ -49,7 +49,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
 serde-wasm-bindgen = { version = "0.4" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-async-tungstenite = { version = "0.19", default-features = false, features = [ "async-std-runtime", "async-tls" ] }
+async-tungstenite = { version = "0.20", default-features = false, features = [ "async-std-runtime", "async-tls" ] }
 webrtc = { version = "0.7", default-features = false }
 bytes = { version = "1.1", default-features = false }
 async-compat = { version = "0.2.1", default-features = false }

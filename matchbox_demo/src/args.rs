@@ -12,12 +12,13 @@ use std::ffi::OsString;
 )]
 pub struct Args {
     // #[clap(default_value = "wss://match.johanhelsing.studio")]
-    #[clap(default_value = "ws://127.0.0.1:3536")]
+    #[clap(long, default_value = "ws://127.0.0.1:3536")]
     pub matchbox: String,
 
+    #[clap(long)]
     pub room: Option<String>,
 
-    #[clap(default_value = "2")]
+    #[clap(long, short, default_value = "2")]
     pub players: usize,
 }
 

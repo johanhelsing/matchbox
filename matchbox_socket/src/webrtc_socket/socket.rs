@@ -203,6 +203,8 @@ impl WebRtcSocket {
 
     /// Returns an iterator of the ids of the connected peers.
     ///
+    /// Note: You have to call [`handle_peer_changes`] for this list to be accurate.
+    ///
     /// See also: [`WebRtcSocket::disconnected_peers`]
     pub fn connected_peers(&'_ self) -> impl std::iter::Iterator<Item = &PeerId> {
         self.peers.iter().filter_map(|(id, state)| {
@@ -215,6 +217,8 @@ impl WebRtcSocket {
     }
 
     /// Returns an iterator of the ids of peers that are no longer connected.
+    ///
+    /// Note: You have to call [`handle_peer_changes`] for this list to be accurate.
     ///
     /// See also: [`WebRtcSocket::connected_peers`]
     pub fn disconnected_peers(&self) -> impl std::iter::Iterator<Item = &PeerId> {

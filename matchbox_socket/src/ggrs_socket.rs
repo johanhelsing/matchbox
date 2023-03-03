@@ -7,7 +7,7 @@ impl WebRtcSocket {
     #[must_use]
     pub fn players(&self) -> Vec<PlayerType<String>> {
         // needs to be consistent order across all peers
-        let mut ids = self.connected_peers();
+        let mut ids: Vec<_> = self.connected_peers().cloned().collect();
         ids.push(self.id().to_owned());
         ids.sort();
         ids.iter()

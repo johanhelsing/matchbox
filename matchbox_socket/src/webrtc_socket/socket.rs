@@ -201,38 +201,30 @@ impl WebRtcSocket {
         changes
     }
 
-    /// Returns a Vec of the ids of the connected peers.
+    /// Returns an iterator of the ids of the connected peers.
     ///
     /// See also: [`WebRtcSocket::disconnected_peers`]
-    pub fn connected_peers(&self) -> Vec<PeerId> {
-        // TODO: could probably be an iterator or reference instead?
-        self.peers
-            .iter()
-            .filter_map(|(id, state)| {
-                if state == &PeerState::Connected {
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
+    pub fn connected_peers(&'_ self) -> impl std::iter::Iterator<Item = &PeerId> {
+        self.peers.iter().filter_map(|(id, state)| {
+            if state == &PeerState::Connected {
+                Some(id)
+            } else {
+                None
+            }
+        })
     }
 
-    /// Returns a Vec of the ids of peers that are no longer connected.
+    /// Returns an iterator of the ids of peers that are no longer connected.
     ///
-    /// See also: [`WebRtcSocket::disconnected_peers`]
-    pub fn disconnected_peers(&self) -> Vec<PeerId> {
-        // TODO: could probably be an iterator or reference instead?
-        self.peers
-            .iter()
-            .filter_map(|(id, state)| {
-                if state == &PeerState::Disconnected {
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
+    /// See also: [`WebRtcSocket::connected_peers`]
+    pub fn disconnected_peers(&self) -> impl std::iter::Iterator<Item = &PeerId> {
+        self.peers.iter().filter_map(|(id, state)| {
+            if state == &PeerState::Disconnected {
+                Some(id)
+            } else {
+                None
+            }
+        })
     }
 
     /// Call this where you want to handle new received messages from the default channel (with
@@ -302,7 +294,7 @@ impl WebRtcSocket {
 
         for peer_id in self.connected_peers() {
             sender
-                .unbounded_send((peer_id, packet.clone()))
+                .unbounded_send((peer_id.clone(), packet.clone()))
                 .expect("send_to failed");
         }
     }

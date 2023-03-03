@@ -122,7 +122,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Generate Image Name
-        run: echo IMAGE_REPOSITORY=ghcr.io/$(tr '[:upper:]' '[:lower:]' <<< "${{ github.repository }}")/matchbox_server >> $GITHUB_ENV
+        run: echo IMAGE_REPOSITORY=ghcr.io/$(tr '[:upper:]' '[:lower:]' <<< "${{ github.repository }}")/signalling_server >> $GITHUB_ENV
 
       - name: Log in to GitHub Docker Registry
         if: github.event_name != 'pull_request'
@@ -147,7 +147,7 @@ jobs:
       - name: Build Image
         uses: docker/build-push-action@v3
         with:
-          context: "{{defaultContext}}:matchbox_server"
+          context: "{{defaultContext}}:signalling_server"
           push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') }}
           load: ${{ ! (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) }}
           tags: ${{ steps.meta.outputs.tags }}

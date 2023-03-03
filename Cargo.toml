@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "matchbox_server",
     "matchbox_socket",
-    "matchbox_demo",
-    "matchbox_simple_demo",
+    "signalling_server",
+
+    "examples/*",
 ]
 resolver = "2"

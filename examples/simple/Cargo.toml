@@ -1,12 +1,12 @@
 [package]
-name = "matchbox_simple_demo"
+name = "simple"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+matchbox_socket = { path = "../../matchbox_socket" }
 futures-timer = { version = "3", features = ["wasm-bindgen"] }
 log = { version = "0.4", default-features = false }
-matchbox_socket = { path = "../matchbox_socket" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"

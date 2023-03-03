@@ -24,7 +24,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "matchbox_server=info,tower_http=debug".into()),
+                .unwrap_or_else(|_| "signalling_server=info,tower_http=debug".into()),
         )
         .with(
             tracing_subscriber::fmt::layer()
@@ -41,6 +41,7 @@ async fn main() {
     let server_state = Arc::new(futures::lock::Mutex::new(ServerState::default()));
     let app = Router::new()
         .route("/health", get(health_handler))
+        .route("/", get(ws_handler))
         .route("/:room_id", get(ws_handler))
         .layer(
             // Allow requests from anywhere - Not ideal for production!

@@ -1,5 +1,5 @@
 [package]
-name = "matchbox_demo"
+name = "bevy_ggrs"
 version = "0.5.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "A demo game where two web browser can connect and move boxes around"
@@ -22,12 +22,12 @@ web-sys = { version = "0.3.22", features = [
 ] }
 console_error_panic_hook = "0.1"
 console_log = "0.2"
-serde_qs = "0.11"
+serde_qs = "0.12.0"
 wasm-bindgen = "0.2"
 ggrs = { version = "0.9.3", features = ["wasm-bindgen"] }
 
 [dependencies]
-matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
+matchbox_socket = { path = "../../matchbox_socket", features = ["ggrs-socket"] }
 bevy = { version = "0.9", default-features = false }
 ggrs = "0.9.3"
 bevy_ggrs = "0.11"

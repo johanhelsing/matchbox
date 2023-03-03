@@ -21,7 +21,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "matchbox_simple_demo=info,matchbox_socket=info".into()),
+                .unwrap_or_else(|_| "simple=info,matchbox_socket=info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -31,7 +31,7 @@ async fn main() {
 
 async fn async_main() {
     info!("Connecting to matchbox");
-    let (mut socket, loop_fut) = WebRtcSocket::new_unreliable("ws://localhost:3536/example_room");
+    let (mut socket, loop_fut) = WebRtcSocket::new_unreliable("ws://localhost:3536/");
 
     let loop_fut = loop_fut.fuse();
     futures::pin_mut!(loop_fut);

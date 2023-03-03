@@ -2,7 +2,5 @@
 members = [
     "matchbox_socket",
     "signalling_server",
-
     "examples/*",
 ]
-resolver = "2"

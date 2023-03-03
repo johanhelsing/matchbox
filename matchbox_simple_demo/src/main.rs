@@ -44,9 +44,9 @@ async fn async_main() {
     loop {
         // Handle any new peers
         for (peer, state) in socket.handle_peer_changes() {
-            info!("Peer joined: {:?}", peer);
             match state {
                 PeerState::Connected => {
+                    info!("Peer joined: {:?}", peer);
                     let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
                     socket.send(packet, peer);
                 }

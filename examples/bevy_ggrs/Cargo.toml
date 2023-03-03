@@ -34,5 +34,5 @@ bevy_ggrs = "0.11"
 bytemuck = { version = "1.7", features=["derive"]}
 clap = { version = "4.0", features = ["derive"] }
 serde = "1.0"
-winit = "0.28"
+winit = "0.27"
 log = "0.4"

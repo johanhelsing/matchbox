@@ -20,12 +20,12 @@ impl WebRtcSocket {
         ids.sort();
 
         let players = ids
-            .iter()
+            .into_iter()
             .map(|id| {
-                if *id == our_id {
+                if id == our_id {
                     PlayerType::Local
                 } else {
-                    PlayerType::Remote(id.to_owned())
+                    PlayerType::Remote(id)
                 }
             })
             .collect();

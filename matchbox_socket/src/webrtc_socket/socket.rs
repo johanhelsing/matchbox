@@ -196,7 +196,15 @@ impl WebRtcSocket {
         )
     }
 
-    /// Check if new peers have connected and if so add them as peers
+    /// Handle peers connecting or disconnecting
+    ///
+    /// Update the set of peers used by [`connected_peers`],
+    /// [`disconnected_peers`], and [`broadcast_on_channel`].
+    ///
+    /// Returns the peers that connected or disconnected since the last time
+    /// this method was called.
+    ///
+    /// See also: [`PeerSate`]
     pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
         let mut changes = Vec::new();
         while let Ok(Some((id, state))) = self.peer_state_rx.try_next() {

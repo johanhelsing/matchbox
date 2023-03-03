@@ -106,7 +106,7 @@ async fn message_loop_impl(
         requests_sender,
         mut events_receiver,
         mut peer_messages_out_rx,
-        peer_state_change_tx,
+        peer_state_tx,
         messages_from_peers_tx,
     } = channels;
     debug!("Entering native WebRtcSocket message loop");
@@ -146,14 +146,14 @@ async fn message_loop_impl(
                             let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid.clone(), signal_sender);
                             let signal_peer = SignalPeer::new(peer_uuid.clone(), requests_sender.clone());
-                            let handshake_fut = handshake_offer(signal_peer, signal_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), config);
+                            let handshake_fut = handshake_offer(signal_peer, signal_receiver, peer_state_tx.clone(), messages_from_peers_tx.clone(), config);
                             let (to_peer_data_tx, to_peer_data_rx) = new_senders_and_receivers(config);
 
                             connected_peers.insert(peer_uuid, to_peer_data_tx);
                             peer_loops.push(peer_loop(handshake_fut, to_peer_data_rx).boxed());
                         }
                         PeerEvent::PeerLeft(peer_uuid) => {
-                            peer_state_change_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
+                            peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
                                 .expect("fail to report peer as disconnected");
                         }
                         PeerEvent::Signal { sender, data } => {
@@ -162,7 +162,7 @@ async fn message_loop_impl(
                                 let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                 let (to_peer_data_tx, to_peer_data_rx) = new_senders_and_receivers(config);
                                 // We didn't start signalling with this peer, assume we're the accepting part
-                                let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), config);
+                                let handshake_fut = handshake_accept(signal_peer, from_peer_receiver, peer_state_tx.clone(), messages_from_peers_tx.clone(), config);
                                 connected_peers.insert(sender, to_peer_data_tx);
                                 let peer_loop_fut = peer_loop(handshake_fut, to_peer_data_rx);
                                 peer_loops.push(peer_loop_fut.boxed());

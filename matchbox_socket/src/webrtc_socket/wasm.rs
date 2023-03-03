@@ -86,7 +86,7 @@ impl Messenger for WasmMessenger {
             requests_sender,
             mut events_receiver,
             mut peer_messages_out_rx,
-            peer_state_change_tx,
+            peer_state_tx,
             messages_from_peers_tx,
         } = channels;
         debug!("Entering WebRtcSocket message loop");
@@ -117,7 +117,7 @@ impl Messenger for WasmMessenger {
                     let (peer, channels) = res.unwrap();
                     data_channels.insert(peer.clone(), channels);
                     debug!("Notifying about new peer");
-                    peer_state_change_tx.unbounded_send((peer, PeerState::Connected)).expect("send failed");
+                    peer_state_tx.unbounded_send((peer, PeerState::Connected)).expect("send failed");
                 },
 
                 message = events_receiver.next() => {
@@ -132,17 +132,17 @@ impl Messenger for WasmMessenger {
                                 let (signal_sender, signal_receiver) = futures_channel::mpsc::unbounded();
                                 handshake_signals.insert(peer_uuid.clone(), signal_sender);
                                 let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                                handshakes.push(handshake_offer(signal_peer, signal_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), &config).boxed_local());
+                                handshakes.push(handshake_offer(signal_peer, signal_receiver, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config).boxed_local());
                             }
                             PeerEvent::PeerLeft(peer_uuid) => {
-                                peer_state_change_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to send disconnected peer");
+                                peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to send disconnected peer");
                             }
                             PeerEvent::Signal { sender, data } => {
                                 let from_peer_sender = handshake_signals.entry(sender.clone()).or_insert_with(|| {
                                     let (from_peer_sender, from_peer_receiver) = futures_channel::mpsc::unbounded();
                                     let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                     // We didn't start signalling with this peer, assume we're the accepting part
-                                    handshakes.push(handshake_accept(signal_peer, from_peer_receiver, peer_state_change_tx.clone(), messages_from_peers_tx.clone(), &config).boxed_local());
+                                    handshakes.push(handshake_accept(signal_peer, from_peer_receiver, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config).boxed_local());
                                     from_peer_sender
                                 });
                                 if let Err(e) = from_peer_sender.unbounded_send(data) {

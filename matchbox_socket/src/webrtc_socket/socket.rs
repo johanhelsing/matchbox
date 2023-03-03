@@ -197,8 +197,7 @@ impl WebRtcSocket {
     }
 
     /// Check if new peers have connected and if so add them as peers
-    // todo: think about name?
-    pub fn handle_peer_changes(&mut self) -> Vec<(PeerId, PeerState)> {
+    pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
         let mut changes = Vec::new();
         while let Ok(Some((id, state))) = self.peer_state_rx.try_next() {
             let old = self.peers.insert(id.clone(), state);
@@ -211,7 +210,7 @@ impl WebRtcSocket {
 
     /// Returns an iterator of the ids of the connected peers.
     ///
-    /// Note: You have to call [`handle_peer_changes`] for this list to be accurate.
+    /// Note: You have to call [`update_peers`] for this list to be accurate.
     ///
     /// See also: [`WebRtcSocket::disconnected_peers`]
     pub fn connected_peers(&'_ self) -> impl std::iter::Iterator<Item = &PeerId> {
@@ -226,7 +225,7 @@ impl WebRtcSocket {
 
     /// Returns an iterator of the ids of peers that are no longer connected.
     ///
-    /// Note: You have to call [`handle_peer_changes`] for this list to be accurate.
+    /// Note: You have to call [`update_peers`] for this list to be accurate.
     ///
     /// See also: [`WebRtcSocket::connected_peers`]
     pub fn disconnected_peers(&self) -> impl std::iter::Iterator<Item = &PeerId> {

@@ -41,7 +41,7 @@ async fn async_main() {
 
     loop {
         // Handle any new peers
-        for (peer, state) in socket.handle_peer_changes() {
+        for (peer, state) in socket.update_peers() {
             match state {
                 PeerState::Connected => {
                     info!("Peer joined: {:?}", peer);

@@ -10,10 +10,15 @@ impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     pub fn players(&mut self) -> Result<Vec<PlayerType<String>>, UnknownPeerId> {
         let our_id = self.id().ok_or(UnknownPeerId)?;
-        // needs to be consistent order across all peers
-        let mut ids: Vec<_> = self.connected_peers().cloned().collect();
-        ids.push(our_id.clone());
+
+        // player order needs to be consistent order across all peers
+        let mut ids: Vec<_> = self
+            .connected_peers()
+            .chain(std::iter::once(&our_id))
+            .cloned()
+            .collect();
         ids.sort();
+
         let players = ids
             .iter()
             .map(|id| {

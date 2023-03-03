@@ -305,6 +305,7 @@ async fn handshake_offer(
         &connection,
         channel_ready_tx,
         signal_peer.id.clone(),
+        peer_state_tx.clone(),
         from_peer_message_tx,
         &config.channels,
     )
@@ -387,6 +388,7 @@ async fn handshake_accept(
         &connection,
         channel_ready_tx,
         signal_peer.id.clone(),
+        peer_state_tx.clone(),
         from_peer_message_tx,
         &config.channels,
     )
@@ -509,6 +511,7 @@ async fn create_data_channels(
     connection: &RTCPeerConnection,
     mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
     peer_id: PeerId,
+    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     channel_configs: &[ChannelConfig],
 ) -> Vec<Arc<RTCDataChannel>> {
@@ -518,6 +521,7 @@ async fn create_data_channels(
             connection,
             channel_ready.pop().unwrap(),
             peer_id.clone(),
+            peer_state_tx.clone(),
             from_peer_message_tx.get(i).unwrap().clone(),
             channel_config,
             i,
@@ -534,6 +538,7 @@ async fn create_data_channel(
     connection: &RTCPeerConnection,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
     peer_id: PeerId,
+    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
     channel_config: &ChannelConfig,
     channel_index: usize,
@@ -557,29 +562,35 @@ async fn create_data_channel(
         })
     }));
 
-    setup_data_channel(&channel, peer_id, from_peer_message_tx).await;
+    {
+        let peer_id = peer_id.clone();
+        let peer_state_tx = peer_state_tx.clone();
+        channel.on_close(Box::new(move || {
+            debug!("Data channel closed");
+            if let Err(err) =
+                peer_state_tx.unbounded_send((peer_id.clone(), PeerState::Disconnected))
+            {
+                // should only happen if the socket is dropped, or we are out of memory
+                warn!("failed to notify about data channel closing: {err:?}");
+            }
+            Box::pin(async move {})
+        }));
+    }
 
-    channel
-}
-
-async fn setup_data_channel(
-    data_channel: &RTCDataChannel,
-    peer_id: PeerId,
-    from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
-) {
-    data_channel.on_close(Box::new(move || {
+    channel.on_close(Box::new(move || {
         // TODO: handle this somehow
         debug!("Data channel closed");
+
         Box::pin(async move {})
     }));
 
-    data_channel.on_error(Box::new(move |e| {
+    channel.on_error(Box::new(move |e| {
         // TODO: handle this somehow
         warn!("Data channel error {:?}", e);
         Box::pin(async move {})
     }));
 
-    data_channel.on_message(Box::new(move |message| {
+    channel.on_message(Box::new(move |message| {
         let packet = (*message.data).into();
         debug!("rx {:?}", packet);
         from_peer_message_tx
@@ -587,6 +598,8 @@ async fn setup_data_channel(
             .unwrap();
         Box::pin(async move {})
     }));
+
+    channel
 }
 
 async fn peer_loop(

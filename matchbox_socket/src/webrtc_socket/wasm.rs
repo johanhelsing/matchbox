@@ -658,7 +658,7 @@ fn create_data_channel(
                 peer_state_tx.unbounded_send((peer_id.clone(), PeerState::Disconnected))
             {
                 // should only happen if the socket is dropped, or we are out of memory
-                warn!("failed to notify about channel disconnecting: {err:?}");
+                warn!("failed to notify about data channel closing: {err:?}");
             }
         },
     );

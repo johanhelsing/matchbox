@@ -494,7 +494,8 @@ async fn create_rtc_peer_connection(
                 if let Err(err) =
                     peer_state_tx.unbounded_send((peer_id.clone(), PeerState::Disconnected))
                 {
-                    error!("Failed to report peer state change, socket dropped? Error: {err:?}");
+                    // should only happen if the socket is dropped, or we are out of memory
+                    warn!("failed to report peer state change: {err:?}");
                 }
             }
         }

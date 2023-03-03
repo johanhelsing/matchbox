@@ -15,7 +15,7 @@ you can move around using the `WASD` keys.
 You can open the browser console to get some rough idea about what's happening
 (or not happening if that's the unfortunate case).
 
-# Instructions
+## Instructions
 - Run the matchbox-provided [`signalling_server`](../../signalling_server/) ([help](../../signalling_server/README.md)), or run your own on `ws://localhost:3536/`.
 - Run the demo (enough clients must connect before the game stats)
   - [on Native](#run-on-native)
@@ -42,5 +42,6 @@ cargo install wasm-server-runner
 cargo run --target wasm32-unknown-unknown
 ```
 ### Run
+
 - Use a web browser and navigate to <http://127.0.0.1:1334/?players=2>
 - Open the console to see execution logs

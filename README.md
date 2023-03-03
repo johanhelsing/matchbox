@@ -20,6 +20,7 @@ The Matchbox project contains both:
 - A tiny signalling server, [signalling_server](https://github.com/johanhelsing/matchbox/tree/main/signalling_server). Written in rust, uses only a couple of megabytes of memory. Also available as a docker image.
 
 ## Examples
+
 - [simple](examples/simple/README.md): A simple communication loop using matchbox_socket
 - [bevy_ggrs](examples/bevy_ggrs/README.md): An example browser game, using `bevy` and `bevy_ggrs`
   - Live 2-player demo: <https://helsing.studio/box_game/>
@@ -36,6 +37,7 @@ When a client wants to join a p2p (mesh) network, it connects to the signalling 
 Peers then negotiate a connection through the signalling server. The initiator sends an "offer" and the recipient responds with an "answer." Once peers have enough information relayed, a WebRTCPeerConnection is established for each peer, which comes with a data channel.
 
 All of this, however, is hidden from rust application code. All you will need to do on the client side, is:
+
 - Create a new socket, and give it a signalling server url
 - `.await` the message loop future that processes new messages.
   - If you are using Bevy, it can be spawned as a Bevy io task (see the [`bevy_ggrs`](examples/bevy_ggrs/) example).

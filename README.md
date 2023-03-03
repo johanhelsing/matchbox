@@ -14,6 +14,7 @@ p2p connections in web browsers to facilitate low-latency multiplayer games.
 - [Tutorial for usage with Bevy and GGRS](https://johanhelsing.studio/posts/extreme-bevy)
 
 The Matchbox project contains both:
+
 - A socket abstraction, [matchbox_socket](https://github.com/johanhelsing/matchbox/tree/main/matchbox_socket)
   - With a feature, `ggrs-socket` for providing a [ggrs](https://github.com/gschup/ggrs) compatible socket.
 - A tiny signalling server, [signalling_server](https://github.com/johanhelsing/matchbox/tree/main/signalling_server). Written in rust, uses only a couple of megabytes of memory. Also available as a docker image.

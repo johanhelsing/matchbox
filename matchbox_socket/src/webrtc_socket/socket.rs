@@ -102,11 +102,19 @@ pub struct WebRtcSocketConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// The state of a connection to a peer
 pub enum PeerState {
-    // todo: add connecting state?
-    /// The peer is connected, and the requested data channels have been established
+    /// The peer is connected
+    ///
+    /// This means all of the following should be true:
+    ///
+    /// - The requested data channels have been established and are healthy
+    /// - The peer hasn't left the signalling server
     Connected,
-    // todo: add separate left/disconnected from signalling state?
-    /// The peer is disconnected, or some of the its data channels are
+    /// We no longer have a connection to this peer:
+    ///
+    /// This means either:
+    ///
+    /// - Some of the the data channels got disconnected/closed
+    /// - The peer left the signalling server
     Disconnected,
 }
 

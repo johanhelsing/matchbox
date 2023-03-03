@@ -311,7 +311,7 @@ impl WebRtcSocket {
         }
     }
 
-    /// Returns the id of this peer, this may be None if a value has not yet been recieved from the server.
+    /// Returns the id of this peer, this may be None if a value has not yet been received from the server.
     pub fn id(&mut self) -> Option<PeerId> {
         if let Some(id) = self.id.to_owned() {
             Some(id)

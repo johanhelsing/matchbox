@@ -665,7 +665,7 @@ fn create_data_channel(
     channel
 }
 
-/// Note that this fuction leaks some memory because the rust closure is dropped but still needs to
+/// Note that this function leaks some memory because the rust closure is dropped but still needs to
 /// be accessed by javascript of the browser
 ///
 /// See also: https://rustwasm.github.io/wasm-bindgen/api/wasm_bindgen/closure/struct.Closure.html#method.into_js_value

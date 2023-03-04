@@ -3,7 +3,7 @@
 Shows how to use `matchbox_socket` in a simple example.
 
 ## Instructions
-- Run the matchbox-provided [`signalling_server`](../../signalling_server/) ([help](../../signalling_server/README.md)), or run your own on `ws://localhost:3536/`.
+- Run the matchbox-provided [`matchbox_server`](../../matchbox_server/) ([help](../../matchbox_server/README.md)), or run your own on `ws://localhost:3536/`.
 - Run the demo
   - [on Native](#run-on-native)
   - [on WASM](#run-on-wasm)

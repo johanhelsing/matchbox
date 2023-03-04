@@ -4205,7 +4205,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "signalling_server"
+name = "matchbox_server"
 version = "0.5.0"
 dependencies = [
  "axum",

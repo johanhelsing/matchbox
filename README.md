@@ -17,7 +17,7 @@ The Matchbox project contains both:
 
 - A socket abstraction, [matchbox_socket](https://github.com/johanhelsing/matchbox/tree/main/matchbox_socket)
   - With a feature, `ggrs-socket` for providing a [ggrs](https://github.com/gschup/ggrs) compatible socket.
-- A tiny signalling server, [signalling_server](https://github.com/johanhelsing/matchbox/tree/main/signalling_server). Written in rust, uses only a couple of megabytes of memory. Also available as a docker image.
+- A tiny signalling server, [matchbox_server](https://github.com/johanhelsing/matchbox/tree/main/matchbox_server). Written in rust, uses only a couple of megabytes of memory. Also available as a docker image.
 
 ## Examples
 
@@ -28,7 +28,7 @@ The Matchbox project contains both:
 
 ## How it works
 
-WebRTC allows direct connections between peers, but in order to establish those connections, some kind of signalling service is needed. `signalling_server` is such a service. Once the connections are established, however, data will flow directly between peers, and no traffic will go through the signalling server.
+WebRTC allows direct connections between peers, but in order to establish those connections, some kind of signalling service is needed. `matchbox_server` is such a service. Once the connections are established, however, data will flow directly between peers, and no traffic will go through the signalling server.
 
 The signalling service needs to run somewhere all clients can reach it over http or https connections. In production, this usually means the public internet.
 

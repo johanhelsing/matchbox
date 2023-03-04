@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "matchbox_socket",
-    "signalling_server",
+    "matchbox_server",
     "examples/*",
 ]
 resolver = "2" # Necessary or WGPU has issues

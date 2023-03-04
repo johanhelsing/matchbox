@@ -24,7 +24,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "signalling_server=info,tower_http=debug".into()),
+                .unwrap_or_else(|_| "matchbox_server=info,tower_http=debug".into()),
         )
         .with(
             tracing_subscriber::fmt::layer()

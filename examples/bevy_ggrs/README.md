@@ -16,7 +16,7 @@ You can open the browser console to get some rough idea about what's happening
 (or not happening if that's the unfortunate case).
 
 ## Instructions
-- Run the matchbox-provided [`signalling_server`](../../signalling_server/) ([help](../../signalling_server/README.md)), or run your own on `ws://localhost:3536/`.
+- Run the matchbox-provided [`matchbox_server`](../../matchbox_server/) ([help](../../matchbox_server/README.md)), or run your own on `ws://localhost:3536/`.
 - Run the demo (enough clients must connect before the game stats)
   - [on Native](#run-on-native)
   - [on WASM](#run-on-wasm)

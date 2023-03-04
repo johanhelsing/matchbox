@@ -4,4 +4,4 @@ members = [
     "matchbox_server",
     "examples/*",
 ]
-resolver = "2" # Necessary or WGPU has issues
+resolver = "2" # Important! Bevy/WGPU needs this!

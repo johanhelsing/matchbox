@@ -62,7 +62,7 @@ PRs welcome!
 
 If you have questions or suggestions, feel free to make an [issue](https://github.com/johanhelsing/matchbox/issues). There's also a [Discord channel](https://discord.gg/Rzw8f9cY) if you want to get in touch.
 
-## Thanks!
+## Thanks
 
 - A huge thanks to Ernest Wong for his [Dango Tribute experiment](https://github.com/ErnWong/dango-tribute)! `matchbox_socket` is heavily inspired its wasm-bindgen server_socket and Matchbox would probably not exist without it.
 

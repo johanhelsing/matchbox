@@ -43,7 +43,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --target wasm32-unknown-unknown -p matchbox_socket -p matchbox_demo
+          args: --target wasm32-unknown-unknown -p matchbox_socket -p bevy_ggrs_example -p simple_example
 
   test:
     name: Test Suite
@@ -111,7 +111,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --target wasm32-unknown-unknown -p matchbox_socket -p matchbox_demo -- -D warnings
+          args: --target wasm32-unknown-unknown -p matchbox_socket -p bevy_ggrs_example -p simple_example -- -D warnings
 
   markdownlint:
     runs-on: ubuntu-latest

@@ -317,7 +317,7 @@ mod tests {
 
     fn get_peer_id(peer_event: PeerEvent) -> PeerId {
         if let PeerEvent::IdAssigned(id) = peer_event {
-            return id;
+            id
         } else {
             panic!("Peer_event was not IdAssigned: {peer_event:?}");
         }

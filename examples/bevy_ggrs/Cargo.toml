@@ -1,5 +1,5 @@
 [package]
-name = "matchbox_demo"
+name = "bevy_ggrs_example"
 version = "0.5.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "A demo game where two web browser can connect and move boxes around"
@@ -17,29 +17,22 @@ default = [
 ]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3.22", features = [
+web-sys = { version = "0.3", features = [
     "Document", "Location", # for getting args from query string
 ] }
 console_error_panic_hook = "0.1"
 console_log = "0.2"
-serde_qs = "0.11"
+serde_qs = "0.12"
 wasm-bindgen = "0.2"
-ggrs = { version = "0.9.3", features = ["wasm-bindgen"] }
+ggrs = { version = "0.9", features = ["wasm-bindgen"] }
 
 [dependencies]
-matchbox_socket = { path = "../matchbox_socket", features = ["ggrs-socket"] }
+matchbox_socket = { path = "../../matchbox_socket", features = ["ggrs-socket"] }
 bevy = { version = "0.9", default-features = false }
-ggrs = "0.9.3"
+ggrs = "0.9"
 bevy_ggrs = "0.11"
 bytemuck = { version = "1.7", features=["derive"]}
-clap = { version = "4.0.28", features = ["derive"] }
+clap = { version = "4.0", features = ["derive"] }
 serde = "1.0"
 winit = "0.27"
 log = "0.4"
-
-# [profile.dev]
-# opt-level = 1
-
-# [profile.release]
-# lto = true
-# opt-level = 's'

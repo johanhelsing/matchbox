@@ -12,7 +12,7 @@ use std::{collections::HashMap, pin::Pin};
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RtcIceServerConfig {
     /// An ICE server instance can have several URLs
     pub urls: Vec<String>,
@@ -28,7 +28,7 @@ pub struct RtcIceServerConfig {
 
 /// Configuration options for a data channel
 /// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChannelConfig {
     /// Whether messages sent on the channel are guaranteed to arrive in order
     /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/ordered>
@@ -74,7 +74,7 @@ impl Default for RtcIceServerConfig {
 /// General configuration options for a WebRtc connection.
 ///
 /// See [`WebRtcSocket::new_with_config`]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebRtcSocketConfig {
     /// The url for the room to connect to
     ///
@@ -315,7 +315,8 @@ impl WebRtcSocket {
         }
     }
 
-    /// Returns the id of this peer, this may be None if a value has not yet been received from the server.
+    /// Returns the id of this peer, this may be None if a value has not yet been received from the
+    /// server.
     pub fn id(&mut self) -> Option<PeerId> {
         if let Some(id) = self.id.to_owned() {
             Some(id)

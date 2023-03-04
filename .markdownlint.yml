@@ -1,0 +1,4 @@
+{
+    "MD026": false, # Trailing punctuation in heading
+    "MD013": false, # Line length
+}

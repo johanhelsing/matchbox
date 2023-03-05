@@ -2,7 +2,7 @@
 name = "matchbox_common"
 version = "0.1.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>", "Spencer C. Imbleau <spencer@imbleau.com>"]
-description = "Painless WebRTC peer-to-peer full-mesh networking socket"
+description = "Common interfaces between matchbox_socket and matchbox_server"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]

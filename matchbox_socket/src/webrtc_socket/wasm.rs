@@ -16,7 +16,7 @@ use futures_timer::Delay;
 use futures_util::select;
 use js_sys::{Function, Reflect};
 use log::{debug, error, warn};
-use matchbox_common::PeerId;
+use matchbox_protocol::PeerId;
 use serde::Serialize;
 use std::{collections::HashMap, time::Duration};
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};

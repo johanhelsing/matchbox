@@ -21,7 +21,7 @@ use futures_channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
-use matchbox_common::PeerId;
+use matchbox_protocol::PeerId;
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use webrtc::{
     api::APIBuilder,

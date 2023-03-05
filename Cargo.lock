@@ -2986,7 +2986,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox_common"
+name = "matchbox_protocol"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
@@ -3001,7 +3001,7 @@ dependencies = [
  "axum",
  "clap",
  "futures",
- "matchbox_common",
+ "matchbox_protocol",
  "serde",
  "serde_json",
  "thiserror",
@@ -3032,7 +3032,7 @@ dependencies = [
  "ggrs",
  "js-sys",
  "log",
- "matchbox_common",
+ "matchbox_protocol",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

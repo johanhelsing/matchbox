@@ -9,7 +9,7 @@ use axum::{
     Error,
 };
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
-use matchbox_common::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
+use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -262,7 +262,7 @@ mod tests {
     use crate::{ws_handler, PeerId, ServerState};
     use axum::{routing::get, Router};
     use futures::{lock::Mutex, pin_mut, SinkExt, StreamExt};
-    use matchbox_common::JsonPeerEvent;
+    use matchbox_protocol::JsonPeerEvent;
     use std::{
         net::{Ipv4Addr, SocketAddr},
         str::FromStr,

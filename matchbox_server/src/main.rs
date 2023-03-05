@@ -15,7 +15,7 @@ use tracing::{info, Level};
 use tracing_subscriber::prelude::*;
 
 pub use args::Args;
-pub use matchbox_common::PeerId;
+pub use matchbox_protocol::PeerId;
 
 #[tokio::main]
 async fn main() {

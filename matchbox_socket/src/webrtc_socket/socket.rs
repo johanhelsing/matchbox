@@ -8,7 +8,7 @@ use crate::{
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
-use matchbox_common::PeerId;
+use matchbox_protocol::PeerId;
 use std::{collections::HashMap, pin::Pin};
 
 /// Configuration options for an ICE server connection.

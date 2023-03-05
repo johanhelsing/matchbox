@@ -1,5 +1,5 @@
 [package]
-name = "matchbox_common"
+name = "matchbox_protocol"
 version = "0.1.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>", "Spencer C. Imbleau <spencer@imbleau.com>"]
 description = "Common interfaces between matchbox_socket and matchbox_server"

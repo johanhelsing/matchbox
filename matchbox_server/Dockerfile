@@ -1,8 +1,8 @@
 # Signalling server as a docker image
 FROM rust:1.66 as builder
 
-COPY matchbox_protocol /usr/src/matchbox_protocol/
-COPY matchbox_server /usr/src/matchbox_server/
+COPY ../matchbox_protocol /usr/src/matchbox_protocol/
+COPY . /usr/src/matchbox_server/
 
 WORKDIR /usr/src/matchbox_server/
 RUN cargo build --release

@@ -99,7 +99,7 @@ trait Messenger {
     type DataChannel: DataChannel;
     type PeerLoopArgs: Send;
 
-    async fn handle_new_peer(
+    async fn offer_handshake(
         signal_peer: SignalPeer,
         signal_rx: UnboundedReceiver<PeerSignal>,
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
@@ -107,7 +107,7 @@ trait Messenger {
         config: &WebRtcSocketConfig,
     ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs);
 
-    async fn handle_peer_signal(
+    async fn accept_handshake(
         signal_peer: SignalPeer,
         from_peer_rx: UnboundedReceiver<PeerSignal>,
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
@@ -164,7 +164,7 @@ async fn message_loop<M: Messenger>(
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid.clone(), signal_tx);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                            handshakes.push(M::handle_new_peer(signal_peer, signal_rx, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config))
+                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config))
                             // TODO: Finish implementing specializations of handle_new_peer
                             // TODO: Figure out where / how to push to connected_peers
                             // TOIO: Figure out why packets aren't sent
@@ -174,7 +174,7 @@ async fn message_loop<M: Messenger>(
                             handshake_signals.entry(sender.clone()).or_insert_with(|| {
                                 let (from_peer_tx, from_peer_rx) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
-                                handshakes.push(M::handle_peer_signal(signal_peer, from_peer_rx, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config));
+                                handshakes.push(M::accept_handshake(signal_peer, from_peer_rx, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config));
                                 // TODO: Implement specializations of handle_peer_signal
                                 from_peer_tx
                             }).unbounded_send(data).expect("failed to forward signal to handshaker");

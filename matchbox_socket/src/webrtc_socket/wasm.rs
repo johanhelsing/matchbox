@@ -82,187 +82,304 @@ impl Messenger for WasmMessenger {
     type DataChannel = RtcDataChannel;
     type PeerLoopArgs = ();
 
-    async fn handle_new_peer(
+    async fn offer_handshake(
         signal_peer: SignalPeer,
-        signal_rx: UnboundedReceiver<PeerSignal>,
+        mut signal_rx: UnboundedReceiver<PeerSignal>,
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs) {
-        let handshake_result = handshake_offer(
-            signal_peer.clone(),
-            signal_rx,
-            peer_state_tx,
+        debug!("making offer");
+
+        let conn = create_rtc_peer_connection(config);
+        let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
+
+        let data_channels = create_data_channels(
+            conn.clone(),
             messages_from_peers_tx,
-            config,
-        )
-        .await
-        .expect("handshake failed");
-        (signal_peer.id, handshake_result.1, ())
+            signal_peer.id.clone(),
+            peer_state_tx,
+            channel_ready_tx,
+            &config.channels,
+        );
+
+        // Create offer
+        let offer = JsFuture::from(conn.create_offer()).await.efix().unwrap();
+        let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
+            .efix()
+            .unwrap()
+            .as_string()
+            .expect("");
+        let mut rtc_session_desc_init_dict = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+        let offer_description = rtc_session_desc_init_dict.sdp(&offer_sdp);
+        JsFuture::from(conn.set_local_description(offer_description))
+            .await
+            .efix()
+            .unwrap();
+        debug!("created offer for new peer");
+
+        // todo: the point of implementing ice trickle is to avoid this wait...
+        // however, for some reason removing this wait causes problems with NAT
+        // punching in practice.
+        // We should figure out why this is happening.
+        wait_for_ice_gathering_complete(conn.clone()).await;
+
+        signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
+
+        let mut received_candidates = vec![];
+
+        // Wait for answer
+        let sdp = loop {
+            let signal = signal_rx
+                .next()
+                .await
+                .expect("Signal server connection lost in the middle of a handshake");
+
+            match signal {
+                PeerSignal::Answer(answer) => break answer,
+                PeerSignal::IceCandidate(candidate) => {
+                    debug!(
+                    "offerer: received an ice candidate while waiting for answer: {candidate:?}"
+                );
+                    received_candidates.push(candidate);
+                }
+                _ => {
+                    warn!("ignoring unexpected signal: {signal:?}");
+                }
+            };
+        };
+
+        // Set remote description
+        let mut remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+        remote_description.sdp(&sdp);
+        debug!("setting remote description");
+        JsFuture::from(conn.set_remote_description(&remote_description))
+            .await
+            .efix()
+            .unwrap();
+
+        // send ICE candidates to remote peer
+        let signal_peer_ice = signal_peer.clone();
+        let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
+            move |event: RtcPeerConnectionIceEvent| {
+                let candidate_json = match event.candidate() {
+                    Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
+                        .expect("failed to serialize candidate")
+                        .as_string()
+                        .unwrap(),
+                    None => {
+                        debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+                        "null".to_string()
+                    }
+                };
+
+                debug!("sending IceCandidate signal: {candidate_json:?}");
+                signal_peer_ice.send(PeerSignal::IceCandidate(candidate_json));
+            },
+        );
+        let onicecandidate = Closure::wrap(onicecandidate);
+        conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+        // note: we can let rust keep ownership of this closure, since we replace
+        // the event handler later in this method when ice is finished
+
+        // handle pending ICE candidates
+        for candidate in received_candidates {
+            debug!("offerer: adding ice candidate {candidate:?}");
+            try_add_rtc_ice_candidate(&conn, &candidate).await;
+        }
+
+        // select for channel ready or ice candidates
+        debug!("waiting for data channels to open");
+        loop {
+            select! {
+                _ = wait_for_channels => {
+                    debug!("channel ready");
+                    break;
+                }
+                msg = signal_rx.next() => {
+                    if let Some(PeerSignal::IceCandidate(candidate)) = msg {
+                        debug!("offerer: received ice candidate {candidate:?}");
+                        try_add_rtc_ice_candidate(&conn, &candidate).await;
+                    }
+                }
+            };
+        }
+
+        // stop listening for ICE candidates
+        // TODO: we should support getting new ICE candidates even after connecting,
+        //       since it's possible to return to the ice gathering state
+        // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
+        let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
+            Box::new(move |_event: RtcPeerConnectionIceEvent| {
+                warn!("received ice candidate event after handshake completed");
+            });
+        let onicecandidate = Closure::wrap(onicecandidate);
+        conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+        onicecandidate.forget();
+
+        debug!(
+            "handshake_offer completed, ice gathering state: {:?}",
+            conn.ice_gathering_state()
+        );
+
+        (signal_peer.id, data_channels, ())
     }
 
-    async fn handle_peer_signal(
+    async fn accept_handshake(
         signal_peer: SignalPeer,
-        from_peer_rx: UnboundedReceiver<PeerSignal>,
+        mut from_peer_rx: UnboundedReceiver<PeerSignal>,
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs) {
-        let handshake_result = handshake_accept(
-            signal_peer.clone(),
-            from_peer_rx,
-            peer_state_tx,
+        debug!("handshake_accept");
+
+        let conn = create_rtc_peer_connection(config);
+        let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
+        let data_channels = create_data_channels(
+            conn.clone(),
             messages_from_peers_tx,
-            config,
-        )
-        .await
-        .expect("handshake failed");
-        (signal_peer.id, handshake_result.1, ())
+            signal_peer.id.clone(),
+            peer_state_tx,
+            channel_ready_tx,
+            &config.channels,
+        );
+
+        let mut received_candidates = vec![];
+
+        let offer = loop {
+            let signal = from_peer_rx
+                .next()
+                .await
+                .expect("Signal server connection lost in the middle of a handshake");
+
+            match signal {
+                PeerSignal::Offer(o) => {
+                    break o;
+                }
+                PeerSignal::IceCandidate(candidate) => {
+                    debug!("got an IceCandidate signal! {}", candidate);
+                    received_candidates.push(candidate);
+                }
+                _ => {
+                    warn!("ignoring unexpected signal: {signal:?}");
+                }
+            }
+        };
+        debug!("received offer");
+
+        // Set remote description
+        {
+            let mut remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+            let sdp = offer;
+            remote_description.sdp(&sdp);
+            JsFuture::from(conn.set_remote_description(&remote_description))
+                .await
+                .expect("failed to set remote description");
+            debug!("set remote_description from offer");
+        }
+
+        let answer = JsFuture::from(conn.create_answer())
+            .await
+            .expect("error creating answer");
+
+        debug!("created answer");
+
+        let mut session_desc_init = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+
+        let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
+            .efix()
+            .unwrap()
+            .as_string()
+            .expect("");
+
+        let answer_description = session_desc_init.sdp(&answer_sdp);
+
+        JsFuture::from(conn.set_local_description(answer_description))
+            .await
+            .efix()
+            .unwrap();
+
+        // todo: the point of implementing ice trickle is to avoid this wait...
+        // however, for some reason removing this wait causes problems with NAT
+        // punching in practice.
+        // We should figure out why this is happening.
+        wait_for_ice_gathering_complete(conn.clone()).await;
+
+        let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
+        signal_peer.send(answer);
+
+        // send ICE candidates to remote peer
+        let signal_peer_ice = signal_peer.clone();
+        // todo: exactly the same as offer, dedup?
+        let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
+            move |event: RtcPeerConnectionIceEvent| {
+                let candidate_json = match event.candidate() {
+                    Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
+                        .expect("failed to serialize candidate")
+                        .as_string()
+                        .unwrap(),
+                    None => {
+                        debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+                        "null".to_string()
+                    }
+                };
+
+                debug!("sending IceCandidate signal: {candidate_json:?}");
+                signal_peer_ice.send(PeerSignal::IceCandidate(candidate_json));
+            },
+        );
+        let onicecandidate = Closure::wrap(onicecandidate);
+        conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+        // note: we can let rust keep ownership of this closure, since we replace
+        // the event handler later in this method when ice is finished
+
+        // handle pending ICE candidates
+        for candidate in received_candidates {
+            debug!("accepter: adding ice candidate {candidate:?}");
+            try_add_rtc_ice_candidate(&conn, &candidate).await;
+        }
+
+        // select for channel ready or ice candidates
+        debug!("waiting for data channel to open");
+        loop {
+            select! {
+                _ = wait_for_channels => {
+                    debug!("channel ready");
+                    break;
+                }
+                msg = from_peer_rx.next() => {
+                    if let Some(PeerSignal::IceCandidate(candidate)) = msg {
+                        debug!("accepter: received ice candidate: {candidate:?}");
+                        try_add_rtc_ice_candidate(&conn, &candidate).await;
+                    }
+                }
+            };
+        }
+
+        // stop listening for ICE candidates
+        // TODO: we should support getting new ICE candidates even after connecting,
+        //       since it's possible to return to the ice gathering state
+        // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
+        let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
+            Box::new(move |_event: RtcPeerConnectionIceEvent| {
+                warn!("received ice candidate event after handshake completed");
+            });
+        let onicecandidate = Closure::wrap(onicecandidate);
+        conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+        onicecandidate.forget();
+
+        debug!(
+            "handshake_accept completed, ice gathering state: {:?}",
+            conn.ice_gathering_state()
+        );
+
+        (signal_peer.id, data_channels, ())
     }
 
     async fn peer_loop(peer_uuid: PeerId, _handshake_result: Self::PeerLoopArgs) -> PeerId {
         peer_uuid
     }
-}
-
-async fn handshake_offer(
-    signal_peer: SignalPeer,
-    mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
-    messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
-    config: &WebRtcSocketConfig,
-) -> Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>> {
-    debug!("making offer");
-
-    let conn = create_rtc_peer_connection(config);
-    let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
-
-    let data_channels = create_data_channels(
-        conn.clone(),
-        messages_from_peers_tx,
-        signal_peer.id.clone(),
-        peer_state_tx,
-        channel_ready_tx,
-        &config.channels,
-    );
-
-    // Create offer
-    let offer = JsFuture::from(conn.create_offer()).await.efix()?;
-    let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
-        .efix()?
-        .as_string()
-        .ok_or("")?;
-    let mut rtc_session_desc_init_dict = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
-    let offer_description = rtc_session_desc_init_dict.sdp(&offer_sdp);
-    JsFuture::from(conn.set_local_description(offer_description))
-        .await
-        .efix()?;
-    debug!("created offer for new peer");
-
-    // todo: the point of implementing ice trickle is to avoid this wait...
-    // however, for some reason removing this wait causes problems with NAT
-    // punching in practice.
-    // We should figure out why this is happening.
-    wait_for_ice_gathering_complete(conn.clone()).await;
-
-    signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
-
-    let mut received_candidates = vec![];
-
-    // Wait for answer
-    let sdp = loop {
-        let signal = signal_receiver
-            .next()
-            .await
-            .ok_or("Signal server connection lost in the middle of a handshake")?;
-
-        match signal {
-            PeerSignal::Answer(answer) => break answer,
-            PeerSignal::IceCandidate(candidate) => {
-                debug!(
-                    "offerer: received an ice candidate while waiting for answer: {candidate:?}"
-                );
-                received_candidates.push(candidate);
-            }
-            _ => {
-                warn!("ignoring unexpected signal: {signal:?}");
-            }
-        };
-    };
-
-    // Set remote description
-    let mut remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
-    remote_description.sdp(&sdp);
-    debug!("setting remote description");
-    JsFuture::from(conn.set_remote_description(&remote_description))
-        .await
-        .efix()?;
-
-    // send ICE candidates to remote peer
-    let signal_peer_ice = signal_peer.clone();
-    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
-        move |event: RtcPeerConnectionIceEvent| {
-            let candidate_json = match event.candidate() {
-                Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
-                    .expect("failed to serialize candidate")
-                    .as_string()
-                    .unwrap(),
-                None => {
-                    debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
-                    "null".to_string()
-                }
-            };
-
-            debug!("sending IceCandidate signal: {candidate_json:?}");
-            signal_peer_ice.send(PeerSignal::IceCandidate(candidate_json));
-        },
-    );
-    let onicecandidate = Closure::wrap(onicecandidate);
-    conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
-    // note: we can let rust keep ownership of this closure, since we replace
-    // the event handler later in this method when ice is finished
-
-    // handle pending ICE candidates
-    for candidate in received_candidates {
-        debug!("offerer: adding ice candidate {candidate:?}");
-        try_add_rtc_ice_candidate(&conn, &candidate).await;
-    }
-
-    // select for channel ready or ice candidates
-    debug!("waiting for data channels to open");
-    loop {
-        select! {
-            _ = wait_for_channels => {
-                debug!("channel ready");
-                break;
-            }
-            msg = signal_receiver.next() => {
-                if let Some(PeerSignal::IceCandidate(candidate)) = msg {
-                    debug!("offerer: received ice candidate {candidate:?}");
-                    try_add_rtc_ice_candidate(&conn, &candidate).await;
-                }
-            }
-        };
-    }
-
-    // stop listening for ICE candidates
-    // TODO: we should support getting new ICE candidates even after connecting,
-    //       since it's possible to return to the ice gathering state
-    // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
-    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
-        Box::new(move |_event: RtcPeerConnectionIceEvent| {
-            warn!("received ice candidate event after handshake completed");
-        });
-    let onicecandidate = Closure::wrap(onicecandidate);
-    conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
-    onicecandidate.forget();
-
-    debug!(
-        "handshake_offer completed, ice gathering state: {:?}",
-        conn.ice_gathering_state()
-    );
-
-    Ok((signal_peer.id, data_channels))
 }
 
 async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_string: &str) {
@@ -286,156 +403,6 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
     )
     .await
     .expect("failed to add ice candidate");
-}
-
-async fn handshake_accept(
-    signal_peer: SignalPeer,
-    mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
-    messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
-    config: &WebRtcSocketConfig,
-) -> Result<(PeerId, Vec<RtcDataChannel>), Box<dyn std::error::Error>> {
-    debug!("handshake_accept");
-
-    let conn = create_rtc_peer_connection(config);
-    let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
-    let data_channels = create_data_channels(
-        conn.clone(),
-        messages_from_peers_tx,
-        signal_peer.id.clone(),
-        peer_state_tx,
-        channel_ready_tx,
-        &config.channels,
-    );
-
-    let mut received_candidates = vec![];
-
-    let offer = loop {
-        let signal = signal_receiver
-            .next()
-            .await
-            .ok_or("Signal server connection lost in the middle of a handshake")?;
-
-        match signal {
-            PeerSignal::Offer(o) => {
-                break o;
-            }
-            PeerSignal::IceCandidate(candidate) => {
-                debug!("got an IceCandidate signal! {}", candidate);
-                received_candidates.push(candidate);
-            }
-            _ => {
-                warn!("ignoring unexpected signal: {signal:?}");
-            }
-        }
-    };
-    debug!("received offer");
-
-    // Set remote description
-    {
-        let mut remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
-        let sdp = offer;
-        remote_description.sdp(&sdp);
-        JsFuture::from(conn.set_remote_description(&remote_description))
-            .await
-            .expect("failed to set remote description");
-        debug!("set remote_description from offer");
-    }
-
-    let answer = JsFuture::from(conn.create_answer())
-        .await
-        .expect("error creating answer");
-
-    debug!("created answer");
-
-    let mut session_desc_init = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
-
-    let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
-        .efix()?
-        .as_string()
-        .ok_or("")?;
-
-    let answer_description = session_desc_init.sdp(&answer_sdp);
-
-    JsFuture::from(conn.set_local_description(answer_description))
-        .await
-        .efix()?;
-
-    // todo: the point of implementing ice trickle is to avoid this wait...
-    // however, for some reason removing this wait causes problems with NAT
-    // punching in practice.
-    // We should figure out why this is happening.
-    wait_for_ice_gathering_complete(conn.clone()).await;
-
-    let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
-    signal_peer.send(answer);
-
-    // send ICE candidates to remote peer
-    let signal_peer_ice = signal_peer.clone();
-    // todo: exactly the same as offer, dedup?
-    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
-        move |event: RtcPeerConnectionIceEvent| {
-            let candidate_json = match event.candidate() {
-                Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
-                    .expect("failed to serialize candidate")
-                    .as_string()
-                    .unwrap(),
-                None => {
-                    debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
-                    "null".to_string()
-                }
-            };
-
-            debug!("sending IceCandidate signal: {candidate_json:?}");
-            signal_peer_ice.send(PeerSignal::IceCandidate(candidate_json));
-        },
-    );
-    let onicecandidate = Closure::wrap(onicecandidate);
-    conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
-    // note: we can let rust keep ownership of this closure, since we replace
-    // the event handler later in this method when ice is finished
-
-    // handle pending ICE candidates
-    for candidate in received_candidates {
-        debug!("accepter: adding ice candidate {candidate:?}");
-        try_add_rtc_ice_candidate(&conn, &candidate).await;
-    }
-
-    // select for channel ready or ice candidates
-    debug!("waiting for data channel to open");
-    loop {
-        select! {
-            _ = wait_for_channels => {
-                debug!("channel ready");
-                break;
-            }
-            msg = signal_receiver.next() => {
-                if let Some(PeerSignal::IceCandidate(candidate)) = msg {
-                    debug!("accepter: received ice candidate: {candidate:?}");
-                    try_add_rtc_ice_candidate(&conn, &candidate).await;
-                }
-            }
-        };
-    }
-
-    // stop listening for ICE candidates
-    // TODO: we should support getting new ICE candidates even after connecting,
-    //       since it's possible to return to the ice gathering state
-    // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
-    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
-        Box::new(move |_event: RtcPeerConnectionIceEvent| {
-            warn!("received ice candidate event after handshake completed");
-        });
-    let onicecandidate = Closure::wrap(onicecandidate);
-    conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
-    onicecandidate.forget();
-
-    debug!(
-        "handshake_accept completed, ice gathering state: {:?}",
-        conn.ice_gathering_state()
-    );
-
-    Ok((signal_peer.id, data_channels))
 }
 
 fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection {

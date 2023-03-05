@@ -163,7 +163,7 @@ jobs:
       - name: Build Image
         uses: docker/build-push-action@v3
         with:
-          context: "{{defaultContext}}:matchbox_server"
+          context: "."
           push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') }}
           load: ${{ ! (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) }}
           tags: ${{ steps.meta.outputs.tags }}

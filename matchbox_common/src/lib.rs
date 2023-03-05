@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use cfg_if::cfg_if;
 use serde::{Deserialize, Serialize};
 
@@ -32,7 +30,7 @@ cfg_if! {
                 serde_json::to_string(self).expect("error serializing message")
             }
         }
-        impl FromStr for JsonPeerRequest {
+        impl std::str::FromStr for JsonPeerRequest {
             type Err = serde_json::Error;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -45,7 +43,7 @@ cfg_if! {
                 serde_json::to_string(self).expect("error serializing message")
             }
         }
-        impl FromStr for JsonPeerEvent {
+        impl std::str::FromStr for JsonPeerEvent {
             type Err = serde_json::Error;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {

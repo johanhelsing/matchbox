@@ -24,3 +24,12 @@ pub enum SignallingError {
     #[error("socket failure communicating with signalling server")]
     Socket(#[from] ws_stream_wasm::WsErr),
 }
+
+/// An error that can occur with WebRTC messaging.
+
+#[derive(Debug, thiserror::Error)]
+pub enum MessagingError {
+    // Common
+    #[error("failed to send message to peer")]
+    SendError(Option<String>),
+}

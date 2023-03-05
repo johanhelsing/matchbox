@@ -9,6 +9,7 @@ use axum::{
     Error,
 };
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
+use matchbox_common::{JsonPeerEvent, JsonPeerRequest, PeerEvent, PeerId, PeerRequest};
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -18,32 +19,6 @@ use std::{
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};
-
-pub mod matchbox {
-    use serde::{Deserialize, Serialize};
-
-    pub type PeerId = String;
-
-    /// Requests go from peer to signalling server
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-    pub enum PeerRequest<S> {
-        Signal { receiver: PeerId, data: S },
-        KeepAlive,
-    }
-
-    /// Events go from signalling server to peer
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-    pub enum PeerEvent<S> {
-        IdAssigned(PeerId),
-        NewPeer(PeerId),
-        PeerLeft(PeerId),
-        Signal { sender: PeerId, data: S },
-    }
-}
-use matchbox::*;
-
-type PeerRequest = matchbox::PeerRequest<serde_json::Value>;
-type PeerEvent = matchbox::PeerEvent<serde_json::Value>;
 
 #[derive(Debug, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RoomId(String);
@@ -146,10 +121,10 @@ pub(crate) async fn ws_handler(
     ws.on_upgrade(move |websocket| handle_ws(websocket, state, RequestedRoom { id: room_id, next }))
 }
 
-fn parse_request(request: Result<Message, Error>) -> Result<PeerRequest, ClientRequestError> {
+fn parse_request(request: Result<Message, Error>) -> Result<JsonPeerRequest, ClientRequestError> {
     let request = request?;
 
-    let request: PeerRequest = match request {
+    let request = match request {
         Message::Text(text) => serde_json::from_str(&text)?,
         Message::Close(_) => return Err(ClientRequestError::Close),
         _ => return Err(ClientRequestError::UnsupportedType),
@@ -186,7 +161,7 @@ async fn handle_ws(
             room: requested_room.clone(),
         });
 
-        let event_text = serde_json::to_string(&PeerEvent::IdAssigned(peer_uuid.clone()))
+        let event_text = serde_json::to_string(&JsonPeerEvent::IdAssigned(peer_uuid.clone()))
             .expect("error serializing message");
         let event = Message::Text(event_text.clone());
 
@@ -196,7 +171,7 @@ async fn handle_ws(
             info!("{:?} -> {:?}", peer_uuid, event_text);
         };
 
-        let event_text = serde_json::to_string(&PeerEvent::NewPeer(peer_uuid.clone()))
+        let event_text = serde_json::to_string(&JsonPeerEvent::NewPeer(peer_uuid.clone()))
             .expect("error serializing message");
         let event = Message::Text(event_text.clone());
 
@@ -274,7 +249,7 @@ async fn handle_ws(
             .unwrap_or_default();
         // Tell each connected peer about the disconnected peer.
         let event = Message::Text(
-            serde_json::to_string(&PeerEvent::PeerLeft(removed_peer.uuid))
+            serde_json::to_string(&JsonPeerEvent::PeerLeft(removed_peer.uuid))
                 .expect("error serializing message"),
         );
         for peer_id in peers {
@@ -291,6 +266,7 @@ mod tests {
     use crate::{signaling::PeerEvent, ws_handler, PeerId, ServerState};
     use axum::{routing::get, Router};
     use futures::{lock::Mutex, pin_mut, SinkExt, StreamExt};
+    use matchbox_common::JsonPeerEvent;
     use std::{
         net::{Ipv4Addr, SocketAddr},
         sync::Arc,
@@ -306,7 +282,9 @@ mod tests {
     }
 
     // Helper to take the next PeerEvent from a stream
-    async fn recv_peer_event(client: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> PeerEvent {
+    async fn recv_peer_event(
+        client: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
+    ) -> JsonPeerEvent {
         let message: Message = client
             .next()
             .await
@@ -315,7 +293,7 @@ mod tests {
         serde_json::from_str(&message.to_string()).expect("json peer event")
     }
 
-    fn get_peer_id(peer_event: PeerEvent) -> PeerId {
+    fn get_peer_id(peer_event: JsonPeerEvent) -> PeerId {
         if let PeerEvent::IdAssigned(id) = peer_event {
             id
         } else {

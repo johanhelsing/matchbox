@@ -1,0 +1,22 @@
+[package]
+name = "matchbox_common"
+version = "0.1.0"
+authors = ["Johan Helsing <johanhelsing@gmail.com>", "Spencer C. Imbleau <spencer@imbleau.com>"]
+description = "Painless WebRTC peer-to-peer full-mesh networking socket"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
+repository = "https://github.com/johanhelsing/matchbox"
+homepage = "https://github.com/johanhelsing/matchbox"
+readme = "../README.md"
+
+[features]
+json = ["serde_json"]
+
+[dependencies]
+cfg-if = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+
+# JSON feature
+serde_json = { version = "1.0", default-features = false, optional = true }

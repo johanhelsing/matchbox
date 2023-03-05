@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "matchbox_common",
     "matchbox_socket",
     "matchbox_server",
     "examples/*",

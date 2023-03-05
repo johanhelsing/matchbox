@@ -10,6 +10,7 @@ use futures::{Future, FutureExt, StreamExt};
 use futures_channel::mpsc::Sender;
 use futures_util::select;
 use log::{debug, warn};
+use matchbox_common::PeerId;
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
 pub use socket::{ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};

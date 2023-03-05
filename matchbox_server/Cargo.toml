@@ -12,6 +12,7 @@ homepage = "https://github.com/johanhelsing/matchbox"
 readme = "../README.md"
 
 [dependencies]
+matchbox_common = { path = "../matchbox_common", features = ["json"] }
 axum = { version = "0.6", features = ["ws"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

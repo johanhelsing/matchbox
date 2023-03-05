@@ -1,3 +1,8 @@
+mod args;
+mod error;
+mod signaling;
+
+use crate::signaling::{ws_handler, ServerState};
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use clap::Parser;
 use std::{net::SocketAddr, sync::Arc};
@@ -10,13 +15,7 @@ use tracing::{info, Level};
 use tracing_subscriber::prelude::*;
 
 pub use args::Args;
-pub use signaling::matchbox::PeerId;
-
-use crate::signaling::{ws_handler, ServerState};
-
-mod args;
-mod error;
-mod signaling;
+pub use matchbox_common::PeerId;
 
 #[tokio::main]
 async fn main() {

@@ -1,13 +1,14 @@
 use crate::{
     webrtc_socket::{
-        message_loop, messages::PeerId, signalling_loop, MessageLoopFuture, Packet, PeerEvent,
-        PeerRequest, UseMessenger, UseSignaller,
+        message_loop, signalling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
+        UseMessenger, UseSignaller,
     },
     Error,
 };
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
+use matchbox_common::PeerId;
 use std::{collections::HashMap, pin::Pin};
 
 /// Configuration options for an ICE server connection.

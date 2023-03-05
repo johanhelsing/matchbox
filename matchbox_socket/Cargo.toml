@@ -13,6 +13,7 @@ repository = "https://github.com/johanhelsing/matchbox"
 ggrs-socket = ["bincode", "ggrs"]
 
 [dependencies]
+matchbox_common = { path = "../matchbox_common", default-features = false }
 futures-channel = { version = "0.3", features = ["sink"], default-features = false }
 futures = { version = "0.3", default-features = false }
 futures-timer = { version = "3.0", default-features = false }

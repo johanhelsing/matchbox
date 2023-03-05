@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-pub(crate) type PeerId = String;
+/// The format for a peer signature given by the signalling server
+pub type PeerId = String;
 
 /// Events go from signalling server to peer
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

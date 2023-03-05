@@ -1,10 +1,12 @@
+use std::pin::Pin;
+
 use crate::webrtc_socket::{
     error::SignallingError, messages::PeerSignal, signal_peer::SignalPeer,
     socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, PeerState, Signaller,
     WebRtcSocketConfig,
 };
 use async_trait::async_trait;
-use futures::{stream::Fuse, SinkExt, StreamExt};
+use futures::{future::Fuse as FuseFut, stream::Fuse as FuseStr, Future, SinkExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use js_sys::{Function, Reflect};
@@ -23,7 +25,7 @@ use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 use super::{error::MessagingError, DataChannel};
 
 pub(crate) struct WasmSignaller {
-    websocket_stream: Fuse<WsStream>,
+    websocket_stream: FuseStr<WsStream>,
 }
 
 #[async_trait(?Send)]
@@ -84,7 +86,7 @@ impl Messenger for WasmMessenger {
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
-        mut signal_rx: UnboundedReceiver<PeerSignal>,
+        mut from_peer_rx: UnboundedReceiver<PeerSignal>,
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
@@ -92,8 +94,7 @@ impl Messenger for WasmMessenger {
         debug!("making offer");
 
         let conn = create_rtc_peer_connection(config);
-        let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
-
+        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
         let data_channels = create_data_channels(
             conn.clone(),
             messages_from_peers_tx,
@@ -130,7 +131,7 @@ impl Messenger for WasmMessenger {
 
         // Wait for answer
         let sdp = loop {
-            let signal = signal_rx
+            let signal = from_peer_rx
                 .next()
                 .await
                 .expect("Signal server connection lost in the middle of a handshake");
@@ -158,69 +159,14 @@ impl Messenger for WasmMessenger {
             .efix()
             .unwrap();
 
-        // send ICE candidates to remote peer
-        let signal_peer_ice = signal_peer.clone();
-        let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
-            move |event: RtcPeerConnectionIceEvent| {
-                let candidate_json = match event.candidate() {
-                    Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
-                        .expect("failed to serialize candidate")
-                        .as_string()
-                        .unwrap(),
-                    None => {
-                        debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
-                        "null".to_string()
-                    }
-                };
-
-                debug!("sending IceCandidate signal: {candidate_json:?}");
-                signal_peer_ice.send(PeerSignal::IceCandidate(candidate_json));
-            },
-        );
-        let onicecandidate = Closure::wrap(onicecandidate);
-        conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
-        // note: we can let rust keep ownership of this closure, since we replace
-        // the event handler later in this method when ice is finished
-
-        // handle pending ICE candidates
-        for candidate in received_candidates {
-            debug!("offerer: adding ice candidate {candidate:?}");
-            try_add_rtc_ice_candidate(&conn, &candidate).await;
-        }
-
-        // select for channel ready or ice candidates
-        debug!("waiting for data channels to open");
-        loop {
-            select! {
-                _ = wait_for_channels => {
-                    debug!("channel ready");
-                    break;
-                }
-                msg = signal_rx.next() => {
-                    if let Some(PeerSignal::IceCandidate(candidate)) = msg {
-                        debug!("offerer: received ice candidate {candidate:?}");
-                        try_add_rtc_ice_candidate(&conn, &candidate).await;
-                    }
-                }
-            };
-        }
-
-        // stop listening for ICE candidates
-        // TODO: we should support getting new ICE candidates even after connecting,
-        //       since it's possible to return to the ice gathering state
-        // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
-        let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
-            Box::new(move |_event: RtcPeerConnectionIceEvent| {
-                warn!("received ice candidate event after handshake completed");
-            });
-        let onicecandidate = Closure::wrap(onicecandidate);
-        conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
-        onicecandidate.forget();
-
-        debug!(
-            "handshake_offer completed, ice gathering state: {:?}",
-            conn.ice_gathering_state()
-        );
+        complete_handshake(
+            signal_peer.clone(),
+            conn,
+            received_candidates,
+            wait_for_channels,
+            from_peer_rx,
+        )
+        .await;
 
         (signal_peer.id, data_channels, ())
     }
@@ -235,7 +181,7 @@ impl Messenger for WasmMessenger {
         debug!("handshake_accept");
 
         let conn = create_rtc_peer_connection(config);
-        let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
+        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
         let data_channels = create_data_channels(
             conn.clone(),
             messages_from_peers_tx,
@@ -309,70 +255,14 @@ impl Messenger for WasmMessenger {
         let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
         signal_peer.send(answer);
 
-        // send ICE candidates to remote peer
-        let signal_peer_ice = signal_peer.clone();
-        // todo: exactly the same as offer, dedup?
-        let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
-            move |event: RtcPeerConnectionIceEvent| {
-                let candidate_json = match event.candidate() {
-                    Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
-                        .expect("failed to serialize candidate")
-                        .as_string()
-                        .unwrap(),
-                    None => {
-                        debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
-                        "null".to_string()
-                    }
-                };
-
-                debug!("sending IceCandidate signal: {candidate_json:?}");
-                signal_peer_ice.send(PeerSignal::IceCandidate(candidate_json));
-            },
-        );
-        let onicecandidate = Closure::wrap(onicecandidate);
-        conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
-        // note: we can let rust keep ownership of this closure, since we replace
-        // the event handler later in this method when ice is finished
-
-        // handle pending ICE candidates
-        for candidate in received_candidates {
-            debug!("accepter: adding ice candidate {candidate:?}");
-            try_add_rtc_ice_candidate(&conn, &candidate).await;
-        }
-
-        // select for channel ready or ice candidates
-        debug!("waiting for data channel to open");
-        loop {
-            select! {
-                _ = wait_for_channels => {
-                    debug!("channel ready");
-                    break;
-                }
-                msg = from_peer_rx.next() => {
-                    if let Some(PeerSignal::IceCandidate(candidate)) = msg {
-                        debug!("accepter: received ice candidate: {candidate:?}");
-                        try_add_rtc_ice_candidate(&conn, &candidate).await;
-                    }
-                }
-            };
-        }
-
-        // stop listening for ICE candidates
-        // TODO: we should support getting new ICE candidates even after connecting,
-        //       since it's possible to return to the ice gathering state
-        // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
-        let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
-            Box::new(move |_event: RtcPeerConnectionIceEvent| {
-                warn!("received ice candidate event after handshake completed");
-            });
-        let onicecandidate = Closure::wrap(onicecandidate);
-        conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
-        onicecandidate.forget();
-
-        debug!(
-            "handshake_accept completed, ice gathering state: {:?}",
-            conn.ice_gathering_state()
-        );
+        complete_handshake(
+            signal_peer.clone(),
+            conn,
+            received_candidates,
+            wait_for_channels,
+            from_peer_rx,
+        )
+        .await;
 
         (signal_peer.id, data_channels, ())
     }
@@ -380,6 +270,76 @@ impl Messenger for WasmMessenger {
     async fn peer_loop(peer_uuid: PeerId, _handshake_result: Self::PeerLoopArgs) -> PeerId {
         peer_uuid
     }
+}
+
+async fn complete_handshake(
+    signal_peer: SignalPeer,
+    conn: RtcPeerConnection,
+    received_candidates: Vec<PeerId>,
+    mut wait_for_channels: Pin<Box<FuseFut<impl Future<Output = ()>>>>,
+    mut from_peer_rx: UnboundedReceiver<PeerSignal>,
+) {
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
+        move |event: RtcPeerConnectionIceEvent| {
+            let candidate_json = match event.candidate() {
+                Some(candidate) => js_sys::JSON::stringify(&candidate.to_json())
+                    .expect("failed to serialize candidate")
+                    .as_string()
+                    .unwrap(),
+                None => {
+                    debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+                    "null".to_string()
+                }
+            };
+
+            debug!("sending IceCandidate signal: {candidate_json:?}");
+            signal_peer.send(PeerSignal::IceCandidate(candidate_json));
+        },
+    );
+    let onicecandidate = Closure::wrap(onicecandidate);
+    conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+    // note: we can let rust keep ownership of this closure, since we replace
+    // the event handler later in this method when ice is finished
+
+    // handle pending ICE candidates
+    for candidate in received_candidates {
+        debug!("adding ice candidate {candidate:?}");
+        try_add_rtc_ice_candidate(&conn, &candidate).await;
+    }
+
+    // select for channel ready or ice candidates
+    debug!("waiting for data channels to open");
+    loop {
+        select! {
+            _ = wait_for_channels => {
+                debug!("channel ready");
+                break;
+            }
+            msg = from_peer_rx.next() => {
+                if let Some(PeerSignal::IceCandidate(candidate)) = msg {
+                    debug!("received ice candidate: {candidate:?}");
+                    try_add_rtc_ice_candidate(&conn, &candidate).await;
+                }
+            }
+        };
+    }
+
+    // stop listening for ICE candidates
+    // TODO: we should support getting new ICE candidates even after connecting,
+    //       since it's possible to return to the ice gathering state
+    // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
+    let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
+        Box::new(move |_event: RtcPeerConnectionIceEvent| {
+            warn!("received ice candidate event after handshake completed");
+        });
+    let onicecandidate = Closure::wrap(onicecandidate);
+    conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
+    onicecandidate.forget();
+
+    debug!(
+        "handshake completed, ice gathering state: {:?}",
+        conn.ice_gathering_state()
+    );
 }
 
 async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_string: &str) {

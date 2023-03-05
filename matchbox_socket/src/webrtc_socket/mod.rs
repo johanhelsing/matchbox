@@ -101,7 +101,7 @@ trait Messenger {
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
-        signal_rx: UnboundedReceiver<PeerSignal>,
+        from_peer_rx: UnboundedReceiver<PeerSignal>,
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,

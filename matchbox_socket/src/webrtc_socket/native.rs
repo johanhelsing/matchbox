@@ -1,3 +1,4 @@
+use super::{error::MessagingError, DataChannel};
 use crate::webrtc_socket::{
     error::SignallingError,
     messages::PeerSignal,
@@ -5,7 +6,7 @@ use crate::webrtc_socket::{
     socket::{create_data_channels_ready_fut, new_senders_and_receivers, PeerState},
     ChannelConfig, Messenger, Packet, Signaller, WebRtcSocketConfig,
 };
-use async_compat::CompatExt;
+use async_compat::{Compat, CompatExt};
 use async_trait::async_trait;
 use async_tungstenite::{
     async_std::{connect_async, ConnectStream},
@@ -13,7 +14,11 @@ use async_tungstenite::{
     WebSocketStream,
 };
 use bytes::Bytes;
-use futures::{future::FusedFuture, stream::FuturesUnordered, FutureExt, SinkExt, StreamExt};
+use futures::{
+    future::{Fuse, FusedFuture},
+    stream::FuturesUnordered,
+    Future, FutureExt, SinkExt, StreamExt,
+};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
@@ -31,8 +36,6 @@ use webrtc::{
         sdp::session_description::RTCSessionDescription, RTCPeerConnection,
     },
 };
-
-use super::{error::MessagingError, DataChannel};
 
 pub(crate) struct NativeSignaller {
     websocket_stream: WebSocketStream<ConnectStream>,
@@ -100,7 +103,7 @@ impl Messenger for NativeMessenger {
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
-        mut signal_rx: UnboundedReceiver<PeerSignal>,
+        mut from_peer_rx: UnboundedReceiver<PeerSignal>,
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
@@ -114,7 +117,7 @@ impl Messenger for NativeMessenger {
                 .await
                 .unwrap();
 
-        let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
+        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
         let data_channels = create_data_channels(
             &connection,
             channel_ready_tx,
@@ -136,7 +139,7 @@ impl Messenger for NativeMessenger {
         signal_peer.send(PeerSignal::Offer(sdp));
 
         let answer = loop {
-            let signal = signal_rx
+            let signal = from_peer_rx
                 .next()
                 .await
                 .expect("Signal server connection lost in the middle of a handshake");
@@ -160,23 +163,8 @@ impl Messenger for NativeMessenger {
             .await
             .unwrap();
 
-        trickle.send_pending_candidates().await;
-        let mut trickle_fut = Box::pin(
-            CandidateTrickle::listen_for_remote_candidates(connection, signal_rx)
-                .compat()
-                .fuse(),
-        );
-
-        loop {
-            select! {
-                _ = wait_for_channels => {
-                    break;
-                },
-                // TODO: this means that the signalling is down, should return an
-                // error
-                _ = trickle_fut => continue,
-            };
-        }
+        let trickle_fut =
+            complete_handshake(trickle, &connection, from_peer_rx, wait_for_channels).await;
 
         (
             signal_peer.id,
@@ -201,7 +189,7 @@ impl Messenger for NativeMessenger {
                 .await
                 .unwrap();
 
-        let (channel_ready_tx, mut wait_for_channels) = create_data_channels_ready_fut(config);
+        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
         let data_channels = create_data_channels(
             &connection,
             channel_ready_tx,
@@ -236,24 +224,9 @@ impl Messenger for NativeMessenger {
             .compat()
             .await
             .unwrap();
-        // Can only send candidates after sending the local description.
-        trickle.send_pending_candidates().await;
-        let mut trickle_fut = Box::pin(
-            CandidateTrickle::listen_for_remote_candidates(Arc::clone(&connection), from_peer_rx)
-                .compat()
-                .fuse(),
-        );
 
-        loop {
-            select! {
-                _ = wait_for_channels => {
-                    break;
-                },
-                // TODO: this means that the signalling is down, should return an
-                // error
-                _ = trickle_fut => continue,
-            };
-        }
+        let trickle_fut =
+            complete_handshake(trickle, &connection, from_peer_rx, wait_for_channels).await;
 
         (
             signal_peer.id,
@@ -297,6 +270,33 @@ impl Messenger for NativeMessenger {
 
         peer_uuid
     }
+}
+
+async fn complete_handshake(
+    trickle: Arc<CandidateTrickle>,
+    connection: &Arc<RTCPeerConnection>,
+    from_peer_rx: UnboundedReceiver<PeerSignal>,
+    mut wait_for_channels: Pin<Box<Fuse<impl Future<Output = ()>>>>,
+) -> Pin<Box<Fuse<Compat<impl Future<Output = Result<(), Box<dyn Error>>>>>>> {
+    trickle.send_pending_candidates().await;
+    let mut trickle_fut = Box::pin(
+        CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), from_peer_rx)
+            .compat()
+            .fuse(),
+    );
+
+    loop {
+        select! {
+            _ = wait_for_channels => {
+                break;
+            },
+            // TODO: this means that the signalling is down, should return an
+            // error
+            _ = trickle_fut => continue,
+        };
+    }
+
+    trickle_fut
 }
 
 struct CandidateTrickle {

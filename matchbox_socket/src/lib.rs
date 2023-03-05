@@ -9,5 +9,6 @@ mod webrtc_socket;
 
 pub use error::Error;
 pub use webrtc_socket::{
-    ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig,
+    ChannelConfig, MessageLoopFuture, Packet, PeerState, RtcIceServerConfig, WebRtcSocket,
+    WebRtcSocketConfig,
 };

@@ -3,7 +3,7 @@ mod messages;
 mod signal_peer;
 mod socket;
 
-use crate::Error;
+use crate::{webrtc_socket::error::SignallingError, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
 use futures::{Future, FutureExt, StreamExt};
@@ -15,21 +15,26 @@ pub(crate) use socket::MessageLoopChannels;
 pub use socket::{ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};
 use std::pin::Pin;
 
-use self::error::SignallingError;
-
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm;
         type UseMessenger = wasm::WasmMessenger;
         type UseSignaller = wasm::WasmSignaller;
-        type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
+        /// A future which runs the message loop for the socket and completes
+        /// when the socket closes or disconnects
+        pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
     } else {
         mod native;
         type UseMessenger = native::NativeMessenger;
         type UseSignaller = native::NativeSignaller;
-        type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+        /// A future which runs the message loop for the socket and completes
+        /// when the socket closes or disconnects
+        pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
     }
 }
+
+/// The raw format of data being sent and received.
+pub type Packet = Box<[u8]>;
 
 // TODO: Should be a WebRtcConfig field
 /// The duration, in milliseconds, to send "Keep Alive" requests
@@ -79,9 +84,6 @@ async fn signalling_loop<S: Signaller>(
         }
     }
 }
-
-/// The raw format of data being sent and received.
-type Packet = Box<[u8]>;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

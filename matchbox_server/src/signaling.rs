@@ -9,11 +9,12 @@ use axum::{
     Error,
 };
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
-use matchbox_common::{JsonPeerEvent, JsonPeerRequest, PeerEvent, PeerId, PeerRequest};
+use matchbox_common::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
+    str::FromStr,
     sync::Arc,
 };
 use tokio::sync::mpsc;
@@ -125,7 +126,7 @@ fn parse_request(request: Result<Message, Error>) -> Result<JsonPeerRequest, Cli
     let request = request?;
 
     let request = match request {
-        Message::Text(text) => serde_json::from_str(&text)?,
+        Message::Text(text) => JsonPeerRequest::from_str(&text)?,
         Message::Close(_) => return Err(ClientRequestError::Close),
         _ => return Err(ClientRequestError::UnsupportedType),
     };
@@ -161,8 +162,7 @@ async fn handle_ws(
             room: requested_room.clone(),
         });
 
-        let event_text = serde_json::to_string(&JsonPeerEvent::IdAssigned(peer_uuid.clone()))
-            .expect("error serializing message");
+        let event_text = JsonPeerEvent::IdAssigned(peer_uuid.clone()).to_string();
         let event = Message::Text(event_text.clone());
 
         if let Err(e) = add_peer_state.try_send(&peer_uuid, event) {
@@ -171,8 +171,7 @@ async fn handle_ws(
             info!("{:?} -> {:?}", peer_uuid, event_text);
         };
 
-        let event_text = serde_json::to_string(&JsonPeerEvent::NewPeer(peer_uuid.clone()))
-            .expect("error serializing message");
+        let event_text = JsonPeerEvent::NewPeer(peer_uuid.clone()).to_string();
         let event = Message::Text(event_text.clone());
 
         for peer_id in peers {
@@ -210,11 +209,11 @@ async fn handle_ws(
         match request {
             PeerRequest::Signal { receiver, data } => {
                 let event = Message::Text(
-                    serde_json::to_string(&PeerEvent::Signal {
+                    JsonPeerEvent::Signal {
                         sender: peer_uuid.clone(),
                         data,
-                    })
-                    .expect("error serializing message"),
+                    }
+                    .to_string(),
                 );
                 let state = state.lock().await;
                 if let Some(peer) = state.clients.get(&receiver) {
@@ -248,10 +247,7 @@ async fn handle_ws(
             })
             .unwrap_or_default();
         // Tell each connected peer about the disconnected peer.
-        let event = Message::Text(
-            serde_json::to_string(&JsonPeerEvent::PeerLeft(removed_peer.uuid))
-                .expect("error serializing message"),
-        );
+        let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer.uuid).to_string());
         for peer_id in peers {
             match state.try_send(peer_id, event.clone()) {
                 Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
@@ -263,12 +259,13 @@ async fn handle_ws(
 
 #[cfg(test)]
 mod tests {
-    use crate::{signaling::PeerEvent, ws_handler, PeerId, ServerState};
+    use crate::{ws_handler, PeerId, ServerState};
     use axum::{routing::get, Router};
     use futures::{lock::Mutex, pin_mut, SinkExt, StreamExt};
     use matchbox_common::JsonPeerEvent;
     use std::{
         net::{Ipv4Addr, SocketAddr},
+        str::FromStr,
         sync::Arc,
         time::Duration,
     };
@@ -290,11 +287,11 @@ mod tests {
             .await
             .expect("some message")
             .expect("socket message");
-        serde_json::from_str(&message.to_string()).expect("json peer event")
+        JsonPeerEvent::from_str(&message.to_string()).expect("json peer event")
     }
 
     fn get_peer_id(peer_event: JsonPeerEvent) -> PeerId {
-        if let PeerEvent::IdAssigned(id) = peer_event {
+        if let JsonPeerEvent::IdAssigned(id) = peer_event {
             id
         } else {
             panic!("Peer_event was not IdAssigned: {peer_event:?}");
@@ -327,7 +324,7 @@ mod tests {
 
         let id_assigned_event = recv_peer_event(&mut client).await;
 
-        assert!(matches!(id_assigned_event, PeerEvent::IdAssigned(..)));
+        assert!(matches!(id_assigned_event, JsonPeerEvent::IdAssigned(..)));
     }
 
     #[tokio::test]
@@ -353,7 +350,7 @@ mod tests {
 
         let new_peer_event = recv_peer_event(&mut client_a).await;
 
-        assert_eq!(new_peer_event, PeerEvent::NewPeer(b_uuid));
+        assert_eq!(new_peer_event, JsonPeerEvent::NewPeer(b_uuid));
     }
 
     #[tokio::test]
@@ -379,13 +376,13 @@ mod tests {
 
         // Ensure Peer B was received
         let new_peer_event = recv_peer_event(&mut client_a).await;
-        assert_eq!(new_peer_event, PeerEvent::NewPeer(b_uuid.clone()));
+        assert_eq!(new_peer_event, JsonPeerEvent::NewPeer(b_uuid.clone()));
 
         // Disconnect Peer B
         _ = client_b.close(None).await;
         let peer_left_event = recv_peer_event(&mut client_a).await;
 
-        assert_eq!(peer_left_event, PeerEvent::PeerLeft(b_uuid));
+        assert_eq!(peer_left_event, JsonPeerEvent::PeerLeft(b_uuid));
     }
 
     #[tokio::test]
@@ -411,7 +408,7 @@ mod tests {
 
         let new_peer_event = recv_peer_event(&mut client_a).await;
         let peer_uuid = match new_peer_event {
-            PeerEvent::NewPeer(peer) => peer,
+            JsonPeerEvent::NewPeer(peer) => peer,
             _ => panic!("unexpected event"),
         };
 
@@ -424,7 +421,7 @@ mod tests {
         let signal_event = recv_peer_event(&mut client_b).await;
         assert_eq!(
             signal_event,
-            PeerEvent::Signal {
+            JsonPeerEvent::Signal {
                 data: serde_json::Value::String("123".to_string()),
                 sender: a_uuid,
             }
@@ -470,8 +467,8 @@ mod tests {
         let new_peer_b = recv_peer_event(&mut client_a).await;
         let new_peer_d = recv_peer_event(&mut client_c).await;
 
-        assert_eq!(new_peer_b, PeerEvent::NewPeer(b_uuid));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer(d_uuid));
+        assert_eq!(new_peer_b, JsonPeerEvent::NewPeer(b_uuid));
+        assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid));
 
         let timeout = time::sleep(Duration::from_millis(100));
         pin_mut!(timeout);
@@ -514,7 +511,7 @@ mod tests {
         // Clients should be matched in pairs as they arrive, i.e. a + b and c + d
         let new_peer_c = recv_peer_event(&mut client_a).await;
 
-        assert_eq!(new_peer_c, PeerEvent::NewPeer(c_uuid));
+        assert_eq!(new_peer_c, JsonPeerEvent::NewPeer(c_uuid));
 
         let timeout = time::sleep(Duration::from_millis(100));
         pin_mut!(timeout);
@@ -565,8 +562,8 @@ mod tests {
         let new_peer_c = recv_peer_event(&mut client_a).await;
         let new_peer_d = recv_peer_event(&mut client_b).await;
 
-        assert_eq!(new_peer_c, PeerEvent::NewPeer(c_uuid));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer(d_uuid));
+        assert_eq!(new_peer_c, JsonPeerEvent::NewPeer(c_uuid));
+        assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid));
 
         let timeout = time::sleep(Duration::from_millis(100));
         pin_mut!(timeout);
@@ -624,13 +621,13 @@ mod tests {
         let new_peer_c = recv_peer_event(&mut client_a).await;
         let new_peer_d = recv_peer_event(&mut client_b).await;
         let new_peer_e = recv_peer_event(&mut client_b).await;
-        assert_eq!(new_peer_e, PeerEvent::NewPeer(e_uuid.clone()));
+        assert_eq!(new_peer_e, JsonPeerEvent::NewPeer(e_uuid.clone()));
         let new_peer_e = recv_peer_event(&mut client_d).await;
 
-        assert_eq!(new_peer_c, PeerEvent::NewPeer(c_uuid));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer(d_uuid.clone()));
-        assert_eq!(new_peer_d, PeerEvent::NewPeer(d_uuid));
-        assert_eq!(new_peer_e, PeerEvent::NewPeer(e_uuid));
+        assert_eq!(new_peer_c, JsonPeerEvent::NewPeer(c_uuid));
+        assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid.clone()));
+        assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid));
+        assert_eq!(new_peer_e, JsonPeerEvent::NewPeer(e_uuid));
 
         let timeout = time::sleep(Duration::from_millis(100));
         pin_mut!(timeout);

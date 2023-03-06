@@ -1,5 +1,9 @@
 use std::pin::Pin;
 
+use super::{
+    error::{JsErrorExt, MessagingError},
+    DataChannel, HandshakeResult,
+};
 use crate::webrtc_socket::{
     error::SignallingError, messages::PeerSignal, signal_peer::SignalPeer,
     socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, PeerState, Signaller,
@@ -21,7 +25,6 @@ use web_sys::{
     RtcSdpType, RtcSessionDescriptionInit,
 };
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
-use super::{error::{MessagingError, JsErrorExt}, DataChannel};
 
 pub(crate) struct WasmSignaller {
     websocket_stream: FuseStr<WsStream>,
@@ -90,7 +93,7 @@ impl Messenger for WasmMessenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta) {
+    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         debug!("making offer");
 
         let conn = create_rtc_peer_connection(config);
@@ -168,7 +171,11 @@ impl Messenger for WasmMessenger {
         )
         .await;
 
-        (signal_peer.id, data_channels, ())
+        HandshakeResult {
+            peer_id: signal_peer.id,
+            data_channels,
+            metadata: (),
+        }
     }
 
     async fn accept_handshake(
@@ -177,7 +184,7 @@ impl Messenger for WasmMessenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta) {
+    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         debug!("handshake_accept");
 
         let conn = create_rtc_peer_connection(config);
@@ -264,10 +271,14 @@ impl Messenger for WasmMessenger {
         )
         .await;
 
-        (signal_peer.id, data_channels, ())
+        HandshakeResult {
+            peer_id: signal_peer.id,
+            data_channels,
+            metadata: (),
+        }
     }
 
-    async fn peer_loop(peer_uuid: PeerId, _handshake_result: Self::HandshakeMeta) -> PeerId {
+    async fn peer_loop(peer_uuid: PeerId, _handshake_meta: Self::HandshakeMeta) -> PeerId {
         peer_uuid
     }
 }

@@ -1,4 +1,4 @@
-use super::{error::MessagingError, DataChannel};
+use super::{error::MessagingError, DataChannel, HandshakeResult};
 use crate::webrtc_socket::{
     error::SignallingError,
     messages::PeerSignal,
@@ -106,7 +106,7 @@ impl Messenger for NativeMessenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta) {
+    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
 
         debug!("making offer");
@@ -165,11 +165,11 @@ impl Messenger for NativeMessenger {
         let trickle_fut =
             complete_handshake(trickle, &connection, from_peer_rx, wait_for_channels).await;
 
-        (
-            signal_peer.id,
-            to_peer_message_tx,
-            (to_peer_message_rx, (data_channels, trickle_fut)),
-        )
+        HandshakeResult {
+            peer_id: signal_peer.id,
+            data_channels: to_peer_message_tx,
+            metadata: (to_peer_message_rx, (data_channels, trickle_fut)),
+        }
     }
 
     async fn accept_handshake(
@@ -178,7 +178,7 @@ impl Messenger for NativeMessenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta) {
+    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
 
         debug!("handshake_accept");
@@ -227,15 +227,15 @@ impl Messenger for NativeMessenger {
         let trickle_fut =
             complete_handshake(trickle, &connection, from_peer_rx, wait_for_channels).await;
 
-        (
-            signal_peer.id,
-            to_peer_message_tx,
-            (to_peer_message_rx, (data_channels, trickle_fut)),
-        )
+        HandshakeResult {
+            peer_id: signal_peer.id,
+            data_channels: to_peer_message_tx,
+            metadata: (to_peer_message_rx, (data_channels, trickle_fut)),
+        }
     }
 
-    async fn peer_loop(peer_uuid: PeerId, peer_loop_args: Self::HandshakeMeta) -> PeerId {
-        let (mut to_peer_message_rx, (data_channels, mut trickle_fut)) = peer_loop_args;
+    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
+        let (mut to_peer_message_rx, (data_channels, mut trickle_fut)) = handshake_meta;
 
         assert_eq!(
             data_channels.len(),

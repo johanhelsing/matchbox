@@ -93,6 +93,12 @@ trait DataChannel {
     fn send(&mut self, packet: Packet) -> Result<(), MessagingError>;
 }
 
+struct HandshakeResult<D: DataChannel, M> {
+    peer_id: PeerId,
+    data_channels: Vec<D>,
+    metadata: M,
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 trait Messenger {
@@ -105,7 +111,7 @@ trait Messenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta);
+    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
@@ -113,9 +119,9 @@ trait Messenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta);
+    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
-    async fn peer_loop(peer_uuid: PeerId, peer_loop_args: Self::HandshakeMeta) -> PeerId;
+    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
 }
 
 async fn message_loop<M: Messenger>(
@@ -180,10 +186,9 @@ async fn message_loop<M: Messenger>(
             }
 
             handshake_result = handshakes.select_next_some() => {
-                let (peer_uuid, new_data_channels, handshake_result) = handshake_result;
-                data_channels.insert(peer_uuid.clone(), new_data_channels);
-                peer_state_tx.unbounded_send((peer_uuid.clone(), PeerState::Connected)).expect("failed to report peer as connected");
-                peer_loops.push(M::peer_loop(peer_uuid, handshake_result));
+                data_channels.insert(handshake_result.peer_id.clone(), handshake_result.data_channels);
+                peer_state_tx.unbounded_send((handshake_result.peer_id.clone(), PeerState::Connected)).expect("failed to report peer as connected");
+                peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
 
             peer_uuid = peer_loops.select_next_some() => {

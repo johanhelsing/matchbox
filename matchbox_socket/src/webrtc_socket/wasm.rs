@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use super::{
     error::{JsErrorExt, MessagingError},
-    DataChannel, HandshakeResult,
+    HandshakeResult, PeerDataSender,
 };
 use crate::webrtc_socket::{
     error::SignallingError, messages::PeerSignal, signal_peer::SignalPeer,
@@ -72,7 +72,7 @@ impl Signaller for WasmSignaller {
     }
 }
 
-impl DataChannel for RtcDataChannel {
+impl PeerDataSender for RtcDataChannel {
     fn send(&mut self, packet: Packet) -> Result<(), MessagingError> {
         self.send_with_u8_array(&packet)
             .efix()

@@ -89,11 +89,11 @@ async fn signalling_loop<S: Signaller>(
 /// The raw format of data being sent and received.
 pub type Packet = Box<[u8]>;
 
-trait DataChannel {
+trait PeerDataSender {
     fn send(&mut self, packet: Packet) -> Result<(), MessagingError>;
 }
 
-struct HandshakeResult<D: DataChannel, M> {
+struct HandshakeResult<D: PeerDataSender, M> {
     peer_id: PeerId,
     data_channels: Vec<D>,
     metadata: M,
@@ -102,7 +102,7 @@ struct HandshakeResult<D: DataChannel, M> {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 trait Messenger {
-    type DataChannel: DataChannel;
+    type DataChannel: PeerDataSender;
     type HandshakeMeta: Send;
 
     async fn offer_handshake(

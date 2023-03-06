@@ -82,7 +82,7 @@ pub(crate) struct WasmMessenger;
 #[async_trait(?Send)]
 impl Messenger for WasmMessenger {
     type DataChannel = RtcDataChannel;
-    type PeerLoopArgs = ();
+    type HandshakeMeta = ();
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
@@ -90,7 +90,7 @@ impl Messenger for WasmMessenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs) {
+    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta) {
         debug!("making offer");
 
         let conn = create_rtc_peer_connection(config);
@@ -177,7 +177,7 @@ impl Messenger for WasmMessenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs) {
+    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta) {
         debug!("handshake_accept");
 
         let conn = create_rtc_peer_connection(config);
@@ -267,7 +267,7 @@ impl Messenger for WasmMessenger {
         (signal_peer.id, data_channels, ())
     }
 
-    async fn peer_loop(peer_uuid: PeerId, _handshake_result: Self::PeerLoopArgs) -> PeerId {
+    async fn peer_loop(peer_uuid: PeerId, _handshake_result: Self::HandshakeMeta) -> PeerId {
         peer_uuid
     }
 }

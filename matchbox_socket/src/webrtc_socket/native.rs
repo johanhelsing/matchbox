@@ -92,7 +92,7 @@ impl DataChannel for UnboundedSender<Packet> {
 #[async_trait]
 impl Messenger for NativeMessenger {
     type DataChannel = UnboundedSender<Packet>;
-    type PeerLoopArgs = (
+    type HandshakeMeta = (
         Vec<UnboundedReceiver<Packet>>,
         (
             Vec<Arc<RTCDataChannel>>,
@@ -106,7 +106,7 @@ impl Messenger for NativeMessenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs) {
+    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta) {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
 
         debug!("making offer");
@@ -178,7 +178,7 @@ impl Messenger for NativeMessenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs) {
+    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta) {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
 
         debug!("handshake_accept");
@@ -234,7 +234,7 @@ impl Messenger for NativeMessenger {
         )
     }
 
-    async fn peer_loop(peer_uuid: PeerId, peer_loop_args: Self::PeerLoopArgs) -> PeerId {
+    async fn peer_loop(peer_uuid: PeerId, peer_loop_args: Self::HandshakeMeta) -> PeerId {
         let (mut to_peer_message_rx, (data_channels, mut trickle_fut)) = peer_loop_args;
 
         assert_eq!(

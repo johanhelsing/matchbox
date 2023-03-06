@@ -97,7 +97,7 @@ trait DataChannel {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 trait Messenger {
     type DataChannel: DataChannel;
-    type PeerLoopArgs: Send;
+    type HandshakeMeta: Send;
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
@@ -105,7 +105,7 @@ trait Messenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs);
+    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta);
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
@@ -113,9 +113,9 @@ trait Messenger {
         peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> (PeerId, Vec<Self::DataChannel>, Self::PeerLoopArgs);
+    ) -> (PeerId, Vec<Self::DataChannel>, Self::HandshakeMeta);
 
-    async fn peer_loop(peer_uuid: PeerId, peer_loop_args: Self::PeerLoopArgs) -> PeerId;
+    async fn peer_loop(peer_uuid: PeerId, peer_loop_args: Self::HandshakeMeta) -> PeerId;
 }
 
 async fn message_loop<M: Messenger>(

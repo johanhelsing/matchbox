@@ -498,7 +498,6 @@ fn create_data_channel(
         },
     );
 
-    let peer_id_1 = peer_id.clone();
     leaking_channel_event_handler(
         |f| channel.set_onmessage(f),
         move |event: MessageEvent| {
@@ -508,7 +507,7 @@ fn create_data_channel(
                 let body = uarray.to_vec();
 
                 incoming_tx
-                    .unbounded_send((peer_id_1.clone(), body.into_boxed_slice()))
+                    .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
                     .unwrap();
             }
         },

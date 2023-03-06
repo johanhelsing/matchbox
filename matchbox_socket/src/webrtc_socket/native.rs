@@ -516,13 +516,6 @@ async fn create_data_channel(
         }));
     }
 
-    channel.on_close(Box::new(move || {
-        // TODO: handle this somehow
-        debug!("Data channel closed");
-
-        Box::pin(async move {})
-    }));
-
     channel.on_error(Box::new(move |e| {
         // TODO: handle this somehow
         warn!("Data channel error {:?}", e);

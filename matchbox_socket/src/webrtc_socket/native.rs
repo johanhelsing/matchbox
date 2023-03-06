@@ -85,8 +85,7 @@ pub(crate) struct NativeMessenger;
 
 impl DataChannel for UnboundedSender<Packet> {
     fn send(&mut self, packet: Packet) -> Result<(), super::error::MessagingError> {
-        self.unbounded_send(packet)
-            .map_err(|err| MessagingError::SendError(Some(err.to_string())))
+        self.unbounded_send(packet).map_err(MessagingError::from)
     }
 }
 

@@ -21,8 +21,7 @@ use web_sys::{
     RtcSdpType, RtcSessionDescriptionInit,
 };
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
-
-use super::{error::MessagingError, DataChannel};
+use super::{error::{MessagingError, JsErrorExt}, DataChannel};
 
 pub(crate) struct WasmSignaller {
     websocket_stream: FuseStr<WsStream>,
@@ -73,7 +72,8 @@ impl Signaller for WasmSignaller {
 impl DataChannel for RtcDataChannel {
     fn send(&mut self, packet: Packet) -> Result<(), MessagingError> {
         self.send_with_u8_array(&packet)
-            .map_err(|err| MessagingError::SendError(err.as_string()))
+            .efix()
+            .map_err(MessagingError::from)
     }
 }
 
@@ -545,27 +545,4 @@ fn data_channel_config(channel_config: &ChannelConfig) -> RtcDataChannelInit {
     }
 
     data_channel_config
-}
-
-// The below is just to wrap Result<JsValue, JsValue> into something sensible-ish
-
-trait JsErrorExt<T> {
-    fn efix(self) -> Result<T, JsError>;
-}
-
-impl<T> JsErrorExt<T> for Result<T, JsValue> {
-    fn efix(self) -> Result<T, JsError> {
-        self.map_err(JsError)
-    }
-}
-
-#[derive(Debug)]
-struct JsError(JsValue);
-
-impl std::error::Error for JsError {}
-
-impl std::fmt::Display for JsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
 }

@@ -108,7 +108,6 @@ trait Messenger {
     async fn offer_handshake(
         signal_peer: SignalPeer,
         from_peer_rx: UnboundedReceiver<PeerSignal>,
-        peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
@@ -116,7 +115,6 @@ trait Messenger {
     async fn accept_handshake(
         signal_peer: SignalPeer,
         from_peer_rx: UnboundedReceiver<PeerSignal>,
-        peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
@@ -170,14 +168,14 @@ async fn message_loop<M: Messenger>(
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid.clone(), signal_tx);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config))
+                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), &config))
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to report peer as disconnected");},
                         PeerEvent::Signal { sender, data } => {
                             handshake_signals.entry(sender.clone()).or_insert_with(|| {
                                 let (from_peer_tx, from_peer_rx) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
-                                handshakes.push(M::accept_handshake(signal_peer, from_peer_rx, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config));
+                                handshakes.push(M::accept_handshake(signal_peer, from_peer_rx, messages_from_peers_tx.clone(), &config));
                                 from_peer_tx
                             }).unbounded_send(data).expect("failed to forward signal to handshaker");
                         },

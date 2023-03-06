@@ -3,7 +3,7 @@ use crate::webrtc_socket::{
     error::SignallingError,
     messages::PeerSignal,
     signal_peer::SignalPeer,
-    socket::{create_data_channels_ready_fut, new_senders_and_receivers, PeerState},
+    socket::{create_data_channels_ready_fut, new_senders_and_receivers},
     ChannelConfig, Messenger, Packet, Signaller, WebRtcSocketConfig,
 };
 use async_compat::{Compat, CompatExt};
@@ -102,7 +102,6 @@ impl Messenger for NativeMessenger {
     async fn offer_handshake(
         signal_peer: SignalPeer,
         mut from_peer_rx: UnboundedReceiver<PeerSignal>,
-        _peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
@@ -180,7 +179,6 @@ impl Messenger for NativeMessenger {
     async fn accept_handshake(
         signal_peer: SignalPeer,
         mut from_peer_rx: UnboundedReceiver<PeerSignal>,
-        _peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {

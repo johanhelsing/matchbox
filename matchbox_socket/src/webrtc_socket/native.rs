@@ -19,7 +19,7 @@ use futures::{
     stream::FuturesUnordered,
     Future, FutureExt, SinkExt, StreamExt,
 };
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
 use matchbox_protocol::PeerId;
@@ -94,24 +94,24 @@ impl Messenger for NativeMessenger {
     type DataChannel = UnboundedSender<Packet>;
     type HandshakeMeta = (
         Vec<UnboundedReceiver<Packet>>,
-        (
-            Vec<Arc<RTCDataChannel>>,
-            Pin<Box<dyn FusedFuture<Output = Result<(), Box<dyn Error>>> + Send>>,
-        ),
+        Vec<Arc<RTCDataChannel>>,
+        Pin<Box<dyn FusedFuture<Output = Result<(), Box<dyn Error>>> + Send>>,
+        Receiver<()>,
     );
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
         mut from_peer_rx: UnboundedReceiver<PeerSignal>,
-        peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
+        _peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
+        let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         debug!("making offer");
         let (connection, trickle) =
-            create_rtc_peer_connection(signal_peer.clone(), peer_state_tx.clone(), config)
+            create_rtc_peer_connection(signal_peer.clone(), peer_disconnected_tx.clone(), config)
                 .compat()
                 .await
                 .unwrap();
@@ -121,7 +121,7 @@ impl Messenger for NativeMessenger {
             &connection,
             channel_ready_tx,
             signal_peer.id.clone(),
-            peer_state_tx.clone(),
+            peer_disconnected_tx,
             messages_from_peers_tx,
             &config.channels,
         )
@@ -168,22 +168,28 @@ impl Messenger for NativeMessenger {
         HandshakeResult {
             peer_id: signal_peer.id,
             data_channels: to_peer_message_tx,
-            metadata: (to_peer_message_rx, (data_channels, trickle_fut)),
+            metadata: (
+                to_peer_message_rx,
+                data_channels,
+                trickle_fut,
+                peer_disconnected_rx,
+            ),
         }
     }
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
         mut from_peer_rx: UnboundedReceiver<PeerSignal>,
-        peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
+        _peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
+        let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         debug!("handshake_accept");
         let (connection, trickle) =
-            create_rtc_peer_connection(signal_peer.clone(), peer_state_tx.clone(), config)
+            create_rtc_peer_connection(signal_peer.clone(), peer_disconnected_tx.clone(), config)
                 .compat()
                 .await
                 .unwrap();
@@ -193,7 +199,7 @@ impl Messenger for NativeMessenger {
             &connection,
             channel_ready_tx,
             signal_peer.id.clone(),
-            peer_state_tx.clone(),
+            peer_disconnected_tx.clone(),
             messages_from_peers_tx,
             &config.channels,
         )
@@ -230,12 +236,18 @@ impl Messenger for NativeMessenger {
         HandshakeResult {
             peer_id: signal_peer.id,
             data_channels: to_peer_message_tx,
-            metadata: (to_peer_message_rx, (data_channels, trickle_fut)),
+            metadata: (
+                to_peer_message_rx,
+                data_channels,
+                trickle_fut,
+                peer_disconnected_rx,
+            ),
         }
     }
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
-        let (mut to_peer_message_rx, (data_channels, mut trickle_fut)) = handshake_meta;
+        let (mut to_peer_message_rx, data_channels, mut trickle_fut, mut peer_disconnected) =
+            handshake_meta;
 
         assert_eq!(
             data_channels.len(),
@@ -260,6 +272,8 @@ impl Messenger for NativeMessenger {
 
         loop {
             select! {
+                _ = peer_disconnected.next() => break,
+
                 _ = message_loop_futs.next() => break,
                 // TODO: this means that the signalling is down, should return an
                 // error
@@ -379,7 +393,7 @@ impl CandidateTrickle {
 
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
-    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
+    mut peer_loop_finished_tx: futures_channel::mpsc::Sender<()>,
     config: &WebRtcSocketConfig,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
@@ -398,7 +412,6 @@ async fn create_rtc_peer_connection(
     let connection = api.new_peer_connection(config).await?;
     let connection = Arc::new(connection);
 
-    let peer_id = signal_peer.id.clone();
     let trickle = Arc::new(CandidateTrickle::new(signal_peer));
 
     let connection2 = Arc::downgrade(&connection);
@@ -432,9 +445,7 @@ async fn create_rtc_peer_connection(
             RTCPeerConnectionState::Disconnected
             | RTCPeerConnectionState::Failed
             | RTCPeerConnectionState::Closed => {
-                if let Err(err) =
-                    peer_state_tx.unbounded_send((peer_id.clone(), PeerState::Disconnected))
-                {
+                if let Err(err) = peer_loop_finished_tx.try_send(()) {
                     // should only happen if the socket is dropped, or we are out of memory
                     warn!("failed to report peer state change: {err:?}");
                 }
@@ -450,7 +461,7 @@ async fn create_data_channels(
     connection: &RTCPeerConnection,
     mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
     peer_id: PeerId,
-    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
+    peer_loop_finished_tx: Sender<()>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     channel_configs: &[ChannelConfig],
 ) -> Vec<Arc<RTCDataChannel>> {
@@ -460,7 +471,7 @@ async fn create_data_channels(
             connection,
             channel_ready.pop().unwrap(),
             peer_id.clone(),
-            peer_state_tx.clone(),
+            peer_loop_finished_tx.clone(),
             from_peer_message_tx.get(i).unwrap().clone(),
             channel_config,
             i,
@@ -477,7 +488,7 @@ async fn create_data_channel(
     connection: &RTCPeerConnection,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
     peer_id: PeerId,
-    peer_state_tx: UnboundedSender<(PeerId, PeerState)>,
+    mut peer_loop_finished_tx: Sender<()>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
     channel_config: &ChannelConfig,
     channel_index: usize,
@@ -502,13 +513,9 @@ async fn create_data_channel(
     }));
 
     {
-        let peer_id = peer_id.clone();
-        let peer_state_tx = peer_state_tx.clone();
         channel.on_close(Box::new(move || {
             debug!("Data channel closed");
-            if let Err(err) =
-                peer_state_tx.unbounded_send((peer_id.clone(), PeerState::Disconnected))
-            {
+            if let Err(err) = peer_loop_finished_tx.try_send(()) {
                 // should only happen if the socket is dropped, or we are out of memory
                 warn!("failed to notify about data channel closing: {err:?}");
             }

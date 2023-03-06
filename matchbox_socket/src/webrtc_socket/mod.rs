@@ -165,9 +165,6 @@ async fn message_loop<M: Messenger>(
                             handshake_signals.insert(peer_uuid.clone(), signal_tx);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
                             handshakes.push(M::offer_handshake(signal_peer, signal_rx, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config))
-                            // TODO: Finish implementing specializations of handle_new_peer
-                            // TODO: Figure out where / how to push to connected_peers
-                            // TOIO: Figure out why packets aren't sent
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to report peer as disconnected");},
                         PeerEvent::Signal { sender, data } => {
@@ -175,7 +172,6 @@ async fn message_loop<M: Messenger>(
                                 let (from_peer_tx, from_peer_rx) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
                                 handshakes.push(M::accept_handshake(signal_peer, from_peer_rx, peer_state_tx.clone(), messages_from_peers_tx.clone(), &config));
-                                // TODO: Implement specializations of handle_peer_signal
                                 from_peer_tx
                             }).unbounded_send(data).expect("failed to forward signal to handshaker");
                         },

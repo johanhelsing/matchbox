@@ -391,7 +391,7 @@ impl CandidateTrickle {
 
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
-    mut peer_loop_finished_tx: futures_channel::mpsc::Sender<()>,
+    mut peer_disconnected_tx: futures_channel::mpsc::Sender<()>,
     config: &WebRtcSocketConfig,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
@@ -443,7 +443,7 @@ async fn create_rtc_peer_connection(
             RTCPeerConnectionState::Disconnected
             | RTCPeerConnectionState::Failed
             | RTCPeerConnectionState::Closed => {
-                if let Err(err) = peer_loop_finished_tx.try_send(()) {
+                if let Err(err) = peer_disconnected_tx.try_send(()) {
                     // should only happen if the socket is dropped, or we are out of memory
                     warn!("failed to report peer state change: {err:?}");
                 }
@@ -459,7 +459,7 @@ async fn create_data_channels(
     connection: &RTCPeerConnection,
     mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
     peer_id: PeerId,
-    peer_loop_finished_tx: Sender<()>,
+    peer_disconnected_tx: Sender<()>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     channel_configs: &[ChannelConfig],
 ) -> Vec<Arc<RTCDataChannel>> {
@@ -469,7 +469,7 @@ async fn create_data_channels(
             connection,
             channel_ready.pop().unwrap(),
             peer_id.clone(),
-            peer_loop_finished_tx.clone(),
+            peer_disconnected_tx.clone(),
             from_peer_message_tx.get(i).unwrap().clone(),
             channel_config,
             i,
@@ -486,7 +486,7 @@ async fn create_data_channel(
     connection: &RTCPeerConnection,
     mut channel_ready: futures_channel::mpsc::Sender<u8>,
     peer_id: PeerId,
-    mut peer_loop_finished_tx: Sender<()>,
+    mut peer_disconnected_tx: Sender<()>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
     channel_config: &ChannelConfig,
     channel_index: usize,
@@ -513,7 +513,7 @@ async fn create_data_channel(
     {
         channel.on_close(Box::new(move || {
             debug!("Data channel closed");
-            if let Err(err) = peer_loop_finished_tx.try_send(()) {
+            if let Err(err) = peer_disconnected_tx.try_send(()) {
                 // should only happen if the socket is dropped, or we are out of memory
                 warn!("failed to notify about data channel closing: {err:?}");
             }

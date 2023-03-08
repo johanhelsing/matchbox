@@ -1,7 +1,7 @@
 use bevy::{log::LogPlugin, prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, Session};
 use ggrs::SessionBuilder;
-use matchbox_socket::WebRtcSocket;
+use matchbox_socket::{PeerState, WebRtcSocket};
 
 mod args;
 mod box_game;
@@ -159,7 +159,15 @@ fn lobby_system(
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {
-    socket.0.as_mut().unwrap().update_peers();
+    // regularly call update_peers to update the list of connected peers
+    for (peer, new_state) in socket.0.as_mut().unwrap().update_peers() {
+        // you can also handle the specific dis(connections) as they occur:
+        match new_state {
+            PeerState::Connected => info!("peer {peer:?} connected"),
+            PeerState::Disconnected => info!("peer {peer:?} disconnected"),
+        }
+    }
+
     let connected_peers = socket.0.as_ref().unwrap().connected_peers().count();
     let remaining = args.players - (connected_peers + 1);
     query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);

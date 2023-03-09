@@ -12,7 +12,6 @@ WORKDIR /usr/src/matchbox_server/
 COPY matchbox_server/Cargo.toml /usr/src/matchbox_server/Cargo.toml
 COPY matchbox_protocol /usr/src/matchbox_protocol
 RUN mkdir src \
-    && pwd \
     && echo "fn main() {}" > src/main.rs \
     && cargo build --release
 

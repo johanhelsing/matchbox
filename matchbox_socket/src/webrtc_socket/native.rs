@@ -1,6 +1,6 @@
 use crate::webrtc_socket::{
     error::SignallingError,
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+    messages::{PeerEvent, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
     socket::{create_data_channels_ready_fut, new_senders_and_receivers, PeerState},
     ChannelConfig, MessageLoopChannels, Messenger, Packet, Signaller, WebRtcSocketConfig,
@@ -21,8 +21,8 @@ use futures_channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
+use matchbox_protocol::PeerId;
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
-use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::{
     api::APIBuilder,
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
@@ -31,8 +31,8 @@ use webrtc::{
         ice_server::RTCIceServer,
     },
     peer_connection::{
-        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
-        RTCPeerConnection,
+        configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
+        sdp::session_description::RTCSessionDescription, RTCPeerConnection,
     },
 };
 

@@ -1,6 +1,6 @@
 use crate::webrtc_socket::{
     error::SignallingError,
-    messages::{PeerEvent, PeerId, PeerRequest, PeerSignal},
+    messages::{PeerEvent, PeerRequest, PeerSignal},
     signal_peer::SignalPeer,
     socket::create_data_channels_ready_fut,
     ChannelConfig, MessageLoopChannels, Messenger, Packet, PeerState, Signaller,
@@ -16,6 +16,7 @@ use futures_timer::Delay;
 use futures_util::select;
 use js_sys::{Function, Reflect};
 use log::{debug, error, warn};
+use matchbox_protocol::PeerId;
 use serde::Serialize;
 use std::{collections::HashMap, time::Duration};
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};

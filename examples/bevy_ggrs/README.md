@@ -26,7 +26,7 @@ You can open the browser console to get some rough idea about what's happening
 ## Run on Native
 
 ```sh
-cargo run [--matchbox ws://127.0.0.1:3536] [--players 2] [--room <name>]
+cargo run -- [--matchbox ws://127.0.0.1:3536] [--players 2] [--room <name>]
 ```
 
 ## Run on WASM

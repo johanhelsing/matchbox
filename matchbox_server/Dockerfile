@@ -1,10 +1,23 @@
 # Signalling server as a docker image
+#
+# to build, run `docker build -f matchbox_server/Dockerfile` from root of the
+# repository
+
 FROM rust:1.66 as builder
 
-COPY ../matchbox_protocol /usr/src/matchbox_protocol/
-COPY . /usr/src/matchbox_server/
-
 WORKDIR /usr/src/matchbox_server/
+
+# cache dependency compilation in a low layer to speed up subsequent builds and
+# save disk space on builders
+COPY matchbox_server/Cargo.toml /usr/src/matchbox_server/Cargo.toml
+COPY matchbox_protocol /usr/src/matchbox_protocol
+RUN mkdir src \
+    && pwd \
+    && echo "fn main() {}" > src/main.rs \
+    && cargo build --release
+
+COPY matchbox_server /usr/src/matchbox_server
+
 RUN cargo build --release
 
 FROM debian:buster-slim

@@ -28,7 +28,7 @@ pub enum SignallingError {
 
 /// An error that can occur with WebRTC messaging.
 #[derive(Debug, thiserror::Error)]
-pub enum MessagingError {
+pub(crate) enum MessagingError {
     // Native
     #[cfg(not(target_arch = "wasm32"))]
     #[error("failed to send message to peer")]

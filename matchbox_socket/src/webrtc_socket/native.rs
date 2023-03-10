@@ -6,7 +6,7 @@ use crate::webrtc_socket::{
     socket::{create_data_channels_ready_fut, new_senders_and_receivers},
     ChannelConfig, Messenger, Packet, Signaller, WebRtcSocketConfig,
 };
-use async_compat::{Compat, CompatExt};
+use async_compat::CompatExt;
 use async_trait::async_trait;
 use async_tungstenite::{
     async_std::{connect_async, ConnectStream},
@@ -288,7 +288,7 @@ async fn complete_handshake(
     connection: &Arc<RTCPeerConnection>,
     from_peer_rx: UnboundedReceiver<PeerSignal>,
     mut wait_for_channels: Pin<Box<Fuse<impl Future<Output = ()>>>>,
-) -> Pin<Box<Fuse<Compat<impl Future<Output = Result<(), webrtc::Error>>>>>> {
+) -> Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>>>>> {
     trickle.send_pending_candidates().await;
     let mut trickle_fut = Box::pin(
         CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), from_peer_rx)

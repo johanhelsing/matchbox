@@ -23,7 +23,7 @@ use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, trace, warn};
 use matchbox_protocol::PeerId;
-use std::{error::Error, pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc};
 use webrtc::{
     api::APIBuilder,
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
@@ -95,7 +95,7 @@ impl Messenger for NativeMessenger {
     type HandshakeMeta = (
         Vec<UnboundedReceiver<Packet>>,
         Vec<Arc<RTCDataChannel>>,
-        Pin<Box<dyn FusedFuture<Output = Result<(), Box<dyn Error>>> + Send>>,
+        Pin<Box<dyn FusedFuture<Output = Result<(), webrtc::Error>> + Send>>,
         Receiver<()>,
     );
 
@@ -288,7 +288,7 @@ async fn complete_handshake(
     connection: &Arc<RTCPeerConnection>,
     from_peer_rx: UnboundedReceiver<PeerSignal>,
     mut wait_for_channels: Pin<Box<Fuse<impl Future<Output = ()>>>>,
-) -> Pin<Box<Fuse<Compat<impl Future<Output = Result<(), Box<dyn Error>>>>>>> {
+) -> Pin<Box<Fuse<Compat<impl Future<Output = Result<(), webrtc::Error>>>>>> {
     trickle.send_pending_candidates().await;
     let mut trickle_fut = Box::pin(
         CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), from_peer_rx)
@@ -362,7 +362,7 @@ impl CandidateTrickle {
     async fn listen_for_remote_candidates(
         peer_connection: Arc<RTCPeerConnection>,
         mut signal_receiver: UnboundedReceiver<PeerSignal>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), webrtc::Error> {
         while let Some(signal) = signal_receiver.next().await {
             match signal {
                 PeerSignal::IceCandidate(candidate_json) => {

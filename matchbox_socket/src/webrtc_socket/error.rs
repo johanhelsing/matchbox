@@ -27,18 +27,15 @@ pub enum SignallingError {
 }
 
 /// An error that can occur with WebRTC messaging.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum MessagingError {
-    // Native
-    #[cfg(not(target_arch = "wasm32"))]
-    #[error("failed to send message to peer")]
-    SendError(#[from] futures_channel::mpsc::TrySendError<crate::Packet>),
+#[error("failed to send message to peer")]
+pub(crate) struct MessagingError(#[from] futures_channel::mpsc::TrySendError<crate::Packet>);
 
-    // WASM
-    #[cfg(target_arch = "wasm32")]
-    #[error("failed to send message to peer")]
-    SendError(#[from] JsError),
-}
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, thiserror::Error)]
+#[error("failed to send message to peer")]
+pub(crate) struct MessagingError(#[from] JsError);
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

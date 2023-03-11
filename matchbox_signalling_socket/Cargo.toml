@@ -1,0 +1,29 @@
+[package]
+name = "matchbox_signalling_socket"
+version = "0.5.0"
+authors = ["Johan Helsing <johanhelsing@gmail.com>", "Spencer C. Imbleau <spencer@imbleau.com>"]
+description = "Painless WebRTC peer-to-peer signalling socket"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
+categories = ["network-programming", "game-development", "wasm", "web-programming"]
+repository = "https://github.com/johanhelsing/matchbox"
+
+[dependencies]
+matchbox_protocol = { path = "../matchbox_protocol", features = ["json"] }
+axum = { version = "0.6", features = ["ws"] }
+hyper = { version = "0.14", features = ["server"] }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tower-http = { version = "0.4", features = ["cors", "trace"] }
+tokio = { version = "1.10", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
+uuid = { version = "1.0", features = ["serde", "v4"] }
+clap = { version = "4.0", features = ["derive", "env"] }
+thiserror = "1.0"
+tokio-stream = "0.1"
+
+[dev-dependencies]
+tokio-tungstenite = "0.18.0"

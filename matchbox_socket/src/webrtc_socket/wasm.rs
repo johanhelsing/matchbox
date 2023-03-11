@@ -92,7 +92,7 @@ impl Messenger for WasmMessenger {
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
-        mut from_peer_rx: UnboundedReceiver<PeerSignal>,
+        mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
@@ -138,7 +138,7 @@ impl Messenger for WasmMessenger {
 
         // Wait for answer
         let sdp = loop {
-            let signal = from_peer_rx
+            let signal = peer_signal_rx
                 .next()
                 .await
                 .expect("Signal server connection lost in the middle of a handshake");
@@ -171,7 +171,7 @@ impl Messenger for WasmMessenger {
             conn,
             received_candidates,
             wait_for_channels,
-            from_peer_rx,
+            peer_signal_rx,
         )
         .await;
 
@@ -184,7 +184,7 @@ impl Messenger for WasmMessenger {
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
-        mut from_peer_rx: UnboundedReceiver<PeerSignal>,
+        mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
@@ -206,7 +206,7 @@ impl Messenger for WasmMessenger {
         let mut received_candidates = vec![];
 
         let offer = loop {
-            let signal = from_peer_rx
+            let signal = peer_signal_rx
                 .next()
                 .await
                 .expect("Signal server connection lost in the middle of a handshake");
@@ -272,7 +272,7 @@ impl Messenger for WasmMessenger {
             conn,
             received_candidates,
             wait_for_channels,
-            from_peer_rx,
+            peer_signal_rx,
         )
         .await;
 
@@ -295,7 +295,7 @@ async fn complete_handshake(
     conn: RtcPeerConnection,
     received_candidates: Vec<PeerId>,
     mut wait_for_channels: Pin<Box<futures::future::Fuse<impl Future<Output = ()>>>>,
-    mut from_peer_rx: UnboundedReceiver<PeerSignal>,
+    mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
 ) {
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
         move |event: RtcPeerConnectionIceEvent| {
@@ -333,7 +333,7 @@ async fn complete_handshake(
                 debug!("channel ready");
                 break;
             }
-            msg = from_peer_rx.next() => {
+            msg = peer_signal_rx.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
                     debug!("received ice candidate: {candidate:?}");
                     try_add_rtc_ice_candidate(&conn, &candidate).await;

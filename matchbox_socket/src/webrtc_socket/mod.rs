@@ -107,14 +107,14 @@ trait Messenger {
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
-        from_peer_rx: UnboundedReceiver<PeerSignal>,
+        peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
-        from_peer_rx: UnboundedReceiver<PeerSignal>,
+        peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
@@ -173,9 +173,9 @@ async fn message_loop<M: Messenger>(
                         PeerEvent::PeerLeft(peer_uuid) => {peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to report peer as disconnected");},
                         PeerEvent::Signal { sender, data } => {
                             handshake_signals.entry(sender.clone()).or_insert_with(|| {
-                                let (from_peer_tx, from_peer_rx) = futures_channel::mpsc::unbounded();
+                                let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
-                                handshakes.push(M::accept_handshake(signal_peer, from_peer_rx, messages_from_peers_tx.clone(), &config));
+                                handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), &config));
                                 from_peer_tx
                             }).unbounded_send(data).expect("failed to forward signal to handshaker");
                         },

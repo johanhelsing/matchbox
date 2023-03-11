@@ -101,7 +101,7 @@ impl Messenger for NativeMessenger {
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
-        mut from_peer_rx: UnboundedReceiver<PeerSignal>,
+        mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
@@ -137,7 +137,7 @@ impl Messenger for NativeMessenger {
         signal_peer.send(PeerSignal::Offer(sdp));
 
         let answer = loop {
-            let signal = from_peer_rx
+            let signal = peer_signal_rx
                 .next()
                 .await
                 .expect("Signal server connection lost in the middle of a handshake");
@@ -162,7 +162,7 @@ impl Messenger for NativeMessenger {
             .unwrap();
 
         let trickle_fut =
-            complete_handshake(trickle, &connection, from_peer_rx, wait_for_channels).await;
+            complete_handshake(trickle, &connection, peer_signal_rx, wait_for_channels).await;
 
         HandshakeResult {
             peer_id: signal_peer.id,
@@ -178,7 +178,7 @@ impl Messenger for NativeMessenger {
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
-        mut from_peer_rx: UnboundedReceiver<PeerSignal>,
+        mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
@@ -204,7 +204,7 @@ impl Messenger for NativeMessenger {
         .await;
 
         let offer = loop {
-            match from_peer_rx.next().await.expect("error") {
+            match peer_signal_rx.next().await.expect("error") {
                 PeerSignal::Offer(offer) => {
                     break offer;
                 }
@@ -229,7 +229,7 @@ impl Messenger for NativeMessenger {
             .unwrap();
 
         let trickle_fut =
-            complete_handshake(trickle, &connection, from_peer_rx, wait_for_channels).await;
+            complete_handshake(trickle, &connection, peer_signal_rx, wait_for_channels).await;
 
         HandshakeResult {
             peer_id: signal_peer.id,
@@ -286,12 +286,12 @@ impl Messenger for NativeMessenger {
 async fn complete_handshake(
     trickle: Arc<CandidateTrickle>,
     connection: &Arc<RTCPeerConnection>,
-    from_peer_rx: UnboundedReceiver<PeerSignal>,
+    peer_signal_rx: UnboundedReceiver<PeerSignal>,
     mut wait_for_channels: Pin<Box<Fuse<impl Future<Output = ()>>>>,
 ) -> Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>>>>> {
     trickle.send_pending_candidates().await;
     let mut trickle_fut = Box::pin(
-        CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), from_peer_rx)
+        CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), peer_signal_rx)
             .compat()
             .fuse(),
     );
@@ -361,9 +361,9 @@ impl CandidateTrickle {
 
     async fn listen_for_remote_candidates(
         peer_connection: Arc<RTCPeerConnection>,
-        mut signal_receiver: UnboundedReceiver<PeerSignal>,
+        mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
     ) -> Result<(), webrtc::Error> {
-        while let Some(signal) = signal_receiver.next().await {
+        while let Some(signal) = peer_signal_rx.next().await {
             match signal {
                 PeerSignal::IceCandidate(candidate_json) => {
                     debug!("received ice candidate: {candidate_json:?}");

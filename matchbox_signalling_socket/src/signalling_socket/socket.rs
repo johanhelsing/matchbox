@@ -75,12 +75,26 @@ pub struct SignallingServer<Topology = FullMesh> {
 
 /// Common methods
 impl<Topology> SignallingServer<Topology> {
+    #[must_use]
+    pub fn new_full_mesh(
+        config: SignallingConfig,
+    ) -> (SignallingServer<FullMesh>, SignallingLoopFuture) {
+        config.new_full_mesh()
+    }
+
+    #[must_use]
+    pub fn new_client_server(
+        config: SignallingConfig,
+    ) -> (SignallingServer<ClientServer>, SignallingLoopFuture) {
+        config.new_client_server()
+    }
+
     pub fn peers(&self) -> &HashSet<PeerId> {
         &self.peers
     }
 }
 
-/// Client-Server methods
+/// Client-Server only methods
 impl SignallingServer<ClientServer> {
     pub fn is_host_connected(&self) -> bool {
         self.host.is_some()

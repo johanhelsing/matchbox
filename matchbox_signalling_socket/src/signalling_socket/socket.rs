@@ -1,25 +1,12 @@
-use std::{
-    collections::HashSet,
-    marker::PhantomData,
-    net::SocketAddr,
-    pin::{pin, Pin},
-};
-
+use crate::Error;
 use axum::{
-    extract::connect_info::IntoMakeServiceWithConnectInfo,
-    response::IntoResponse,
-    routing::{get, IntoMakeService},
+    extract::connect_info::IntoMakeServiceWithConnectInfo, response::IntoResponse, routing::get,
     Router, Server,
 };
 use futures::Future;
-use hyper::{
-    server::conn::AddrIncoming,
-    service::{make_service_fn, service_fn},
-    StatusCode,
-};
+use hyper::{server::conn::AddrIncoming, StatusCode};
 use matchbox_protocol::PeerId;
-
-use crate::Error;
+use std::{collections::HashSet, marker::PhantomData, net::SocketAddr, pin::Pin};
 
 /// General configuration options for a WebRtc signalling server.
 ///

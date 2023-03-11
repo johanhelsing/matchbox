@@ -136,13 +136,14 @@ impl WebRtcSocket {
     ///
     /// The returned future should be awaited in order for messages to be sent and received.
     #[must_use]
-    pub fn new_unreliable(room_url: impl Into<String>) -> (Self, MessageLoopFuture) {
+    pub async fn new_unreliable(room_url: impl Into<String>) -> (Self, MessageLoopFuture) {
         WebRtcSocket::new_with_config(WebRtcSocketConfig {
             room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::unreliable()],
             attempts: Some(3),
         })
+        .await
     }
 
     /// Create a new connection to the given room with a single reliable data channel
@@ -151,20 +152,21 @@ impl WebRtcSocket {
     ///
     /// The returned future should be awaited in order for messages to be sent and received.
     #[must_use]
-    pub fn new_reliable(room_url: impl Into<String>) -> (Self, MessageLoopFuture) {
+    pub async fn new_reliable(room_url: impl Into<String>) -> (Self, MessageLoopFuture) {
         WebRtcSocket::new_with_config(WebRtcSocketConfig {
             room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::reliable()],
             attempts: Some(3),
         })
+        .await
     }
 
     /// Create a new connection with the given [`WebRtcSocketConfig`]
     ///
     /// The returned future should be awaited in order for messages to be sent and received.
     #[must_use]
-    pub fn new_with_config(config: WebRtcSocketConfig) -> (Self, MessageLoopFuture) {
+    pub async fn new_with_config(config: WebRtcSocketConfig) -> (Self, MessageLoopFuture) {
         if config.channels.is_empty() {
             panic!("You need to configure at least one channel in WebRtcSocketConfig");
         }
@@ -432,7 +434,7 @@ mod test {
     #[futures_test::test]
     async fn unreachable_server() {
         // .invalid is a reserved tld for testing and documentation
-        let (_socket, fut) = WebRtcSocket::new_reliable("wss://example.invalid");
+        let (_socket, fut) = WebRtcSocket::new_reliable("wss://example.invalid").await;
 
         let result = fut.await;
         assert!(result.is_err());
@@ -446,7 +448,8 @@ mod test {
             attempts: Some(3),
             ice_server: RtcIceServerConfig::default(),
             channels: vec![ChannelConfig::unreliable()],
-        });
+        })
+        .await;
 
         let result = loop_fut.await;
         assert!(result.is_err());

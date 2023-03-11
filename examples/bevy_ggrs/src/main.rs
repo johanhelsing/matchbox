@@ -90,14 +90,23 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     };
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
-    info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcSocket::new_unreliable(room_url);
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.
     let task_pool = IoTaskPool::get();
-    task_pool.spawn(message_loop).detach();
+    // We use a mpsc channel to retrieve the socket once it has been created.
+    let (socket_tx, socket_rx) = std::sync::mpsc::channel();
 
+    let create_and_run_socket = async move {
+        info!("connecting to matchbox server: {:?}", room_url);
+        let (socket, message_loop) = WebRtcSocket::new_unreliable(room_url).await;
+        socket_tx.send(socket).unwrap();
+        message_loop.await.unwrap();
+    };
+
+    task_pool.spawn(create_and_run_socket).detach();
+
+    let socket = socket_rx.recv().unwrap();
     commands.insert_resource(SocketResource(Some(socket)));
 }
 

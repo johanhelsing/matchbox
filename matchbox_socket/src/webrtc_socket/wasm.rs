@@ -10,7 +10,7 @@ use crate::webrtc_socket::{
     WebRtcSocketConfig,
 };
 use async_trait::async_trait;
-use futures::{future::Fuse as FuseFut, stream::Fuse as FuseStr, Future, SinkExt, StreamExt};
+use futures::{Future, SinkExt, StreamExt};
 use futures_channel::{
     mpsc::Receiver,
     mpsc::{UnboundedReceiver, UnboundedSender},
@@ -30,7 +30,7 @@ use web_sys::{
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 
 pub(crate) struct WasmSignaller {
-    websocket_stream: FuseStr<WsStream>,
+    websocket_stream: futures::stream::Fuse<WsStream>,
 }
 
 #[async_trait(?Send)]
@@ -294,7 +294,7 @@ async fn complete_handshake(
     signal_peer: SignalPeer,
     conn: RtcPeerConnection,
     received_candidates: Vec<PeerId>,
-    mut wait_for_channels: Pin<Box<FuseFut<impl Future<Output = ()>>>>,
+    mut wait_for_channels: Pin<Box<futures::future::Fuse<impl Future<Output = ()>>>>,
     mut from_peer_rx: UnboundedReceiver<PeerSignal>,
 ) {
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(

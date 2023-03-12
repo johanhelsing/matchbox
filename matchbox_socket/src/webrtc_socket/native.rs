@@ -523,13 +523,13 @@ async fn create_data_channel(
 
     channel.on_error(Box::new(move |e| {
         // TODO: handle this somehow
-        warn!("Data channel error {:?}", e);
+        warn!("Data channel error {e:?}");
         Box::pin(async move {})
     }));
 
     channel.on_message(Box::new(move |message| {
         let packet = (*message.data).into();
-        debug!("rx {:?}", packet);
+        trace!("data channel message received: {packet:?}");
         from_peer_message_tx
             .unbounded_send((peer_id.clone(), packet))
             .unwrap();

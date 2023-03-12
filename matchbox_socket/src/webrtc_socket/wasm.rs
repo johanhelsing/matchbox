@@ -17,7 +17,7 @@ use futures_channel::{
 };
 use futures_util::select;
 use js_sys::{Function, Reflect};
-use log::{debug, error, warn};
+use log::{debug, error, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
@@ -216,7 +216,7 @@ impl Messenger for WasmMessenger {
                     break o;
                 }
                 PeerSignal::IceCandidate(candidate) => {
-                    debug!("got an IceCandidate signal! {}", candidate);
+                    debug!("got an IceCandidate signal: {candidate:?}");
                     received_candidates.push(candidate);
                 }
                 _ => {
@@ -325,7 +325,7 @@ async fn complete_handshake(
         try_add_rtc_ice_candidate(&conn, &candidate).await;
     }
 
-    // select for channel ready or ice candidates
+    // select for data channels ready or ice candidates
     debug!("waiting for data channels to open");
     loop {
         select! {
@@ -348,7 +348,7 @@ async fn complete_handshake(
     // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
         Box::new(move |_event: RtcPeerConnectionIceEvent| {
-            warn!("received ice candidate event after handshake completed");
+            warn!("received ice candidate event after handshake completed, ignoring");
         });
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
@@ -491,7 +491,7 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onopen(f),
         move |_: JsValue| {
-            debug!("Rtc data channel opened :D :D");
+            debug!("data channel open: {channel_id}");
             channel_open
                 .try_send(1)
                 .expect("failed to notify about open connection");
@@ -501,7 +501,7 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onmessage(f),
         move |event: MessageEvent| {
-            debug!("incoming {:?}", event);
+            trace!("data channel message received {event:?}");
             if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
                 let uarray = js_sys::Uint8Array::new(&arraybuf);
                 let body = uarray.to_vec();
@@ -516,14 +516,14 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onerror(f),
         move |event: Event| {
-            error!("Error in data channel: {:?}", event);
+            error!("Error in data channel: {event:?}");
         },
     );
 
     leaking_channel_event_handler(
         |f| channel.set_onclose(f),
         move |event: Event| {
-            warn!("Channel closed: {:?}", event);
+            warn!("data channel closed: {event:?}");
             if let Err(err) = peer_disconnected_tx.clone().try_send(()) {
                 // should only happen if the socket is dropped, or we are out of memory
                 warn!("failed to notify about data channel closing: {err:?}");

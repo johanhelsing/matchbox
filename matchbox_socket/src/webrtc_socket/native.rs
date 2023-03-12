@@ -199,10 +199,12 @@ impl Messenger for NativeMessenger {
                 .await
                 .unwrap();
 
-        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
+        let (data_channel_ready_txs, data_channels_ready_fut) =
+            create_data_channels_ready_fut(config);
+
         let data_channels = create_data_channels(
             &connection,
-            channel_ready_tx,
+            data_channel_ready_txs,
             signal_peer.id.clone(),
             peer_disconnected_tx.clone(),
             messages_from_peers_tx,
@@ -235,8 +237,13 @@ impl Messenger for NativeMessenger {
             .await
             .unwrap();
 
-        let trickle_fut =
-            complete_handshake(trickle, &connection, peer_signal_rx, wait_for_channels).await;
+        let trickle_fut = complete_handshake(
+            trickle,
+            &connection,
+            peer_signal_rx,
+            data_channels_ready_fut,
+        )
+        .await;
 
         HandshakeResult {
             peer_id: signal_peer.id,

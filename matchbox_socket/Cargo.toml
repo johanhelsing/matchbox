@@ -22,7 +22,6 @@ futures-util = { version = "0.3", default-features = false, features = [
 ] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-uuid = { version = "1.0", default-features = false, features = ["v4"] }
 log = { version = "0.4", default-features = false }
 thiserror = "1.0"
 cfg-if = "1.0"
@@ -37,7 +36,6 @@ ws_stream_wasm = { version = "0.7", default-features = false }
 wasm-bindgen-futures = { version = "0.4", default-features = false }
 wasm-bindgen = { version = "0.2", features = [ "serde-serialize" ], default-features = false }
 futures-timer = { version = "3.0", default-features = false, features = ["wasm-bindgen"] }
-uuid = { version = "1.0", default-features = false, features = ["v4", "js"] }
 js-sys = { version = "0.3", default-features = false }
 web-sys = { version = "0.3.22", default-features = false, features = [
     "MessageEvent",

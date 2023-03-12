@@ -6,7 +6,7 @@ use crate::{
     Error,
 };
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
 use std::{collections::HashMap, pin::Pin};
@@ -121,8 +121,8 @@ pub enum PeerState {
 /// Used to send and receive messages from other peers
 #[derive(Debug)]
 pub struct WebRtcSocket {
-    id: Option<PeerId>,
-    id_rx: Receiver<PeerId>,
+    id: once_cell::race::OnceBox<PeerId>,
+    id_rx: crossbeam_channel::Receiver<PeerId>,
     messages_from_peers: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
     peer_messages_out: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
@@ -173,11 +173,11 @@ impl WebRtcSocket {
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
         let (peer_messages_out_tx, peer_messages_out_rx) = new_senders_and_receivers(&config);
 
-        let (id_tx, id_rx) = futures_channel::mpsc::channel(1);
+        let (id_tx, id_rx) = crossbeam_channel::bounded(1);
 
         (
             Self {
-                id: None,
+                id: Default::default(),
                 id_rx,
                 messages_from_peers,
                 peer_messages_out: peer_messages_out_tx,
@@ -316,13 +316,13 @@ impl WebRtcSocket {
         }
     }
 
-    /// Returns the id of this peer, this may be None if a value has not yet been received from the
-    /// server.
-    pub fn id(&mut self) -> Option<PeerId> {
-        if let Some(id) = self.id.to_owned() {
+    /// Returns the id of this peer, this may be `None` if an id has not yet
+    /// been assigned by the server.
+    pub fn id(&self) -> Option<&PeerId> {
+        if let Some(id) = self.id.get() {
             Some(id)
-        } else if let Ok(Some(id)) = self.id_rx.try_next() {
-            self.id = Some(id.to_owned());
+        } else if let Ok(id) = self.id_rx.try_recv() {
+            let id = self.id.get_or_init(|| id.into());
             Some(id)
         } else {
             None
@@ -369,7 +369,7 @@ pub struct MessageLoopChannels {
 }
 
 async fn run_socket(
-    id_tx: Sender<PeerId>,
+    id_tx: crossbeam_channel::Sender<PeerId>,
     config: WebRtcSocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,

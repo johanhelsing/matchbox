@@ -341,7 +341,7 @@ pub(crate) fn new_senders_and_receivers<T>(
 pub(crate) fn create_data_channels_ready_fut(
     config: &WebRtcSocketConfig,
 ) -> (
-    Vec<futures_channel::mpsc::Sender<u8>>,
+    Vec<futures_channel::mpsc::Sender<()>>,
     Pin<Box<Fuse<impl Future<Output = ()>>>>,
 ) {
     let (senders, receivers) = (0..config.channels.len())
@@ -351,7 +351,7 @@ pub(crate) fn create_data_channels_ready_fut(
     (senders, Box::pin(wait_for_ready(receivers).fuse()))
 }
 
-async fn wait_for_ready(channel_ready_rx: Vec<futures_channel::mpsc::Receiver<u8>>) {
+async fn wait_for_ready(channel_ready_rx: Vec<futures_channel::mpsc::Receiver<()>>) {
     for mut receiver in channel_ready_rx {
         if receiver.next().await.is_none() {
             panic!("Sender closed before channel was ready");

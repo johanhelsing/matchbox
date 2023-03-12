@@ -449,7 +449,7 @@ fn create_data_channels(
     mut incoming_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peer_id: PeerId,
     peer_disconnected_tx: futures_channel::mpsc::Sender<()>,
-    mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
+    mut channel_ready: Vec<futures_channel::mpsc::Sender<()>>,
     channel_config: &[ChannelConfig],
 ) -> Vec<RtcDataChannel> {
     channel_config
@@ -474,7 +474,7 @@ fn create_data_channel(
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
     peer_disconnected_tx: futures_channel::mpsc::Sender<()>,
-    mut channel_open: futures_channel::mpsc::Sender<u8>,
+    mut channel_open: futures_channel::mpsc::Sender<()>,
     channel_config: &ChannelConfig,
     channel_id: usize,
 ) -> RtcDataChannel {
@@ -493,7 +493,7 @@ fn create_data_channel(
         move |_: JsValue| {
             debug!("data channel open: {channel_id}");
             channel_open
-                .try_send(1)
+                .try_send(())
                 .expect("failed to notify about open connection");
         },
     );

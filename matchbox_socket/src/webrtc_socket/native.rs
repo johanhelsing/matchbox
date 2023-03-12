@@ -464,7 +464,7 @@ async fn create_rtc_peer_connection(
 
 async fn create_data_channels(
     connection: &RTCPeerConnection,
-    mut data_channel_ready_txs: Vec<futures_channel::mpsc::Sender<u8>>,
+    mut data_channel_ready_txs: Vec<futures_channel::mpsc::Sender<()>>,
     peer_id: PeerId,
     peer_disconnected_tx: Sender<()>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
@@ -491,7 +491,7 @@ async fn create_data_channels(
 
 async fn create_data_channel(
     connection: &RTCPeerConnection,
-    mut channel_ready: futures_channel::mpsc::Sender<u8>,
+    mut channel_ready: futures_channel::mpsc::Sender<()>,
     peer_id: PeerId,
     mut peer_disconnected_tx: Sender<()>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
@@ -513,7 +513,7 @@ async fn create_data_channel(
     channel.on_open(Box::new(move || {
         debug!("Data channel ready");
         Box::pin(async move {
-            channel_ready.try_send(1).unwrap();
+            channel_ready.try_send(()).unwrap();
         })
     }));
 

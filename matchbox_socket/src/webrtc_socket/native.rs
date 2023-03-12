@@ -32,8 +32,8 @@ use webrtc::{
         ice_server::RTCIceServer,
     },
     peer_connection::{
-        configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
-        sdp::session_description::RTCSessionDescription, RTCPeerConnection,
+        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
+        RTCPeerConnection,
     },
 };
 
@@ -109,11 +109,10 @@ impl Messenger for NativeMessenger {
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         debug!("making offer");
-        let (connection, trickle) =
-            create_rtc_peer_connection(signal_peer.clone(), peer_disconnected_tx.clone(), config)
-                .compat()
-                .await
-                .unwrap();
+        let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config)
+            .compat()
+            .await
+            .unwrap();
 
         let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
         let data_channels = create_data_channels(
@@ -186,11 +185,10 @@ impl Messenger for NativeMessenger {
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         debug!("handshake_accept");
-        let (connection, trickle) =
-            create_rtc_peer_connection(signal_peer.clone(), peer_disconnected_tx.clone(), config)
-                .compat()
-                .await
-                .unwrap();
+        let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config)
+            .compat()
+            .await
+            .unwrap();
 
         let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
         let data_channels = create_data_channels(
@@ -391,7 +389,6 @@ impl CandidateTrickle {
 
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
-    mut peer_disconnected_tx: futures_channel::mpsc::Sender<()>,
     config: &WebRtcSocketConfig,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
@@ -426,30 +423,6 @@ async fn create_rtc_peer_connection(
                 }
             }
         })
-    }));
-
-    connection.on_peer_connection_state_change(Box::new(move |state| {
-        debug!("Peer Connection State has changed: {state}");
-        match state {
-            // These events are not currently available in web-sys (wasm)
-            // so instead, we implement our own criteria for when a peer is
-            // considered to be "Connected". See PeerState::Connected.
-            RTCPeerConnectionState::Unspecified
-            | RTCPeerConnectionState::New
-            | RTCPeerConnectionState::Connecting
-            | RTCPeerConnectionState::Connected => {}
-            // ...in other words, we currently only care about when *something*
-            // has definitely failed:
-            RTCPeerConnectionState::Disconnected
-            | RTCPeerConnectionState::Failed
-            | RTCPeerConnectionState::Closed => {
-                if let Err(err) = peer_disconnected_tx.try_send(()) {
-                    // should only happen if the socket is dropped, or we are out of memory
-                    warn!("failed to report peer state change: {err:?}");
-                }
-            }
-        }
-        Box::pin(async {})
     }));
 
     Ok((connection, trickle))

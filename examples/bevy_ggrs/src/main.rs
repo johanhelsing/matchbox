@@ -178,7 +178,7 @@ fn lobby_system(
     info!("All peers have joined, going in-game");
 
     // consume the socket (currently required because ggrs takes ownership of its socket)
-    let mut socket = socket.0.take().unwrap();
+    let socket = socket.0.take().unwrap();
 
     // extract final player list
     let players = socket.players().unwrap();

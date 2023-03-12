@@ -7,7 +7,7 @@ use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
 use futures::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
 use log::{debug, warn};
@@ -123,7 +123,7 @@ trait Messenger {
 }
 
 async fn message_loop<M: Messenger>(
-    mut id_tx: Sender<PeerId>,
+    id_tx: crossbeam_channel::Sender<PeerId>,
     config: WebRtcSocketConfig,
     channels: MessageLoopChannels,
 ) {

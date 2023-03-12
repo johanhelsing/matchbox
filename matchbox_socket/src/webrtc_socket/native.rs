@@ -272,7 +272,7 @@ impl Messenger for NativeMessenger {
             .zip(to_peer_message_rx.iter_mut())
             .map(|(data_channel, rx)| async move {
                 while let Some(message) = rx.next().await {
-                    trace!("sending packet {:?}", message);
+                    trace!("sending packet {message:?}");
                     let message = message.clone();
                     let message = Bytes::from(message);
                     if let Err(e) = data_channel.send(&message).await {

@@ -222,7 +222,7 @@ impl Messenger for WasmMessenger {
                     break o;
                 }
                 PeerSignal::IceCandidate(candidate) => {
-                    debug!("got an IceCandidate signal: {candidate:?}");
+                    debug!("received IceCandidate signal: {candidate:?}");
                     received_candidates.push(candidate);
                 }
                 _ => {
@@ -522,7 +522,7 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onerror(f),
         move |event: Event| {
-            error!("Error in data channel: {event:?}");
+            error!("error in data channel: {event:?}");
         },
     );
 

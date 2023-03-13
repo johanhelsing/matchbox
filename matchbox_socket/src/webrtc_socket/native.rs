@@ -537,7 +537,7 @@ async fn create_data_channel(
 
     channel.on_error(Box::new(move |e| {
         // TODO: handle this somehow
-        warn!("Data channel error {e:?}");
+        warn!("data channel error {e:?}");
         Box::pin(async move {})
     }));
 

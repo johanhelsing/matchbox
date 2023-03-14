@@ -26,7 +26,7 @@ log = { version = "0.4", default-features = false }
 thiserror = "1.0"
 cfg-if = "1.0"
 async-trait = { version = "0.1.64" }
-once_cell = { version = "1.17", default-features = false }
+once_cell = { version = "1.17", default-features = false, features = ["race", "alloc"] }
 crossbeam-channel = "0.5"
 
 # ggrs-socket

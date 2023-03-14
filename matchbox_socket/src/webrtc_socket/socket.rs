@@ -206,7 +206,7 @@ impl WebRtcSocket {
     pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
         let mut changes = Vec::new();
         while let Ok(Some((id, state))) = self.peer_state_rx.try_next() {
-            let old = self.peers.insert(id.clone(), state);
+            let old = self.peers.insert(id, state);
             if old != Some(state) {
                 changes.push((id, state));
             }
@@ -219,10 +219,10 @@ impl WebRtcSocket {
     /// Note: You have to call [`update_peers`] for this list to be accurate.
     ///
     /// See also: [`WebRtcSocket::disconnected_peers`]
-    pub fn connected_peers(&'_ self) -> impl std::iter::Iterator<Item = &PeerId> {
+    pub fn connected_peers(&'_ self) -> impl std::iter::Iterator<Item = PeerId> + '_ {
         self.peers.iter().filter_map(|(id, state)| {
             if state == &PeerState::Connected {
-                Some(id)
+                Some(*id)
             } else {
                 None
             }
@@ -310,19 +310,19 @@ impl WebRtcSocket {
 
         for peer_id in self.connected_peers() {
             sender
-                .unbounded_send((peer_id.clone(), packet.clone()))
+                .unbounded_send((peer_id, packet.clone()))
                 .expect("send_to failed");
         }
     }
 
     /// Returns the id of this peer, this may be `None` if an id has not yet
     /// been assigned by the server.
-    pub fn id(&self) -> Option<&PeerId> {
+    pub fn id(&self) -> Option<PeerId> {
         if let Some(id) = self.id.get() {
-            Some(id)
+            Some(*id)
         } else if let Ok(id) = self.id_rx.try_recv() {
             let id = self.id.get_or_init(|| id.into());
-            Some(id)
+            Some(*id)
         } else {
             None
         }

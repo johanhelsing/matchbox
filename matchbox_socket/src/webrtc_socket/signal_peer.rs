@@ -10,7 +10,7 @@ pub struct SignalPeer {
 impl SignalPeer {
     pub fn send(&self, signal: PeerSignal) {
         let req = PeerRequest::Signal {
-            receiver: self.id.clone(),
+            receiver: self.id,
             data: signal,
         };
         self.sender.unbounded_send(req).expect("Send error");

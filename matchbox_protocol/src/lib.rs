@@ -1,10 +1,13 @@
 use cfg_if::cfg_if;
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// The format for a peer signature given by the signalling server
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct PeerId(Uuid);
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, From, Hash, PartialOrd, Ord,
+)]
+pub struct PeerId(pub Uuid);
 
 /// Requests go from peer to signalling server
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

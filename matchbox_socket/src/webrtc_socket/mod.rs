@@ -190,7 +190,7 @@ async fn message_loop<M: Messenger>(
             }
 
             peer_uuid = peer_loops.select_next_some() => {
-                debug!("Peer {peer_uuid} finished");
+                debug!("peer {peer_uuid:?} finished");
                 peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("failed to report peer as disconnected");
             }
 

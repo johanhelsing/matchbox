@@ -264,15 +264,14 @@ impl WebRtcSocket {
         std::iter::repeat_with(|| {
             self.messages_from_peers
                 .get_mut(index)
-                .unwrap_or_else(|| panic!("No data channel with index {index}"))
+                .unwrap_or_else(|| panic!("no data channel with index: {index}"))
                 .try_next()
         })
-        // .map_while(|poll| match p { // map_while is nightly-only :(
-        .take_while(|p| !p.is_err())
-        .map(|p| match p.unwrap() {
-            Some((peer_id, packet)) => (peer_id, packet),
-            None => todo!("Handle connection closed??"),
-        })
+        // errors mean the other end of messages_from_peers was dropped
+        // or we are disconnecting, in any case it means there are no messages
+        // for us to handle.
+        .map_while(Result::ok)
+        .flatten()
         .collect()
     }
 

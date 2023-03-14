@@ -120,7 +120,7 @@ impl Messenger for NativeMessenger {
         let data_channels = create_data_channels(
             &connection,
             data_channel_ready_txs,
-            signal_peer.id.clone(),
+            signal_peer.id,
             peer_disconnected_tx,
             messages_from_peers_tx,
             &config.channels,
@@ -203,7 +203,7 @@ impl Messenger for NativeMessenger {
         let data_channels = create_data_channels(
             &connection,
             data_channel_ready_txs,
-            signal_peer.id.clone(),
+            signal_peer.id,
             peer_disconnected_tx.clone(),
             messages_from_peers_tx,
             &config.channels,
@@ -455,7 +455,7 @@ async fn create_data_channels(
         let channel = create_data_channel(
             connection,
             data_channel_ready_txs.pop().unwrap(),
-            peer_id.clone(),
+            peer_id,
             peer_disconnected_tx.clone(),
             from_peer_message_tx.get(i).unwrap().clone(),
             channel_config,
@@ -518,7 +518,7 @@ async fn create_data_channel(
         let packet = (*message.data).into();
         trace!("data channel message received: {packet:?}");
         from_peer_message_tx
-            .unbounded_send((peer_id.clone(), packet))
+            .unbounded_send((peer_id, packet))
             .unwrap();
         Box::pin(async move {})
     }));

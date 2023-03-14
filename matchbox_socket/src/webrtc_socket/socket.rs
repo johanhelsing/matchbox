@@ -206,7 +206,7 @@ impl WebRtcSocket {
     pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
         let mut changes = Vec::new();
         while let Ok(Some((id, state))) = self.peer_state_rx.try_next() {
-            let old = self.peers.insert(id.clone(), state);
+            let old = self.peers.insert(id, state);
             if old != Some(state) {
                 changes.push((id, state));
             }
@@ -311,7 +311,7 @@ impl WebRtcSocket {
 
         for peer_id in self.connected_peers() {
             sender
-                .unbounded_send((peer_id.clone(), packet.clone()))
+                .unbounded_send((peer_id, packet.clone()))
                 .expect("send_to failed");
         }
     }

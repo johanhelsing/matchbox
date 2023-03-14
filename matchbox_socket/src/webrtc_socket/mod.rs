@@ -166,15 +166,15 @@ async fn message_loop<M: Messenger>(
                         },
                         PeerEvent::NewPeer(peer_uuid) => {
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
-                            handshake_signals.insert(peer_uuid.clone(), signal_tx);
+                            handshake_signals.insert(peer_uuid, signal_tx);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
                             handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), &config))
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to report peer as disconnected");},
                         PeerEvent::Signal { sender, data } => {
-                            handshake_signals.entry(sender.clone()).or_insert_with(|| {
+                            handshake_signals.entry(sender).or_insert_with(|| {
                                 let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
-                                let signal_peer = SignalPeer::new(sender.clone(), requests_sender.clone());
+                                let signal_peer = SignalPeer::new(sender, requests_sender.clone());
                                 handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), &config));
                                 from_peer_tx
                             }).unbounded_send(data).expect("failed to forward signal to handshaker");
@@ -184,8 +184,8 @@ async fn message_loop<M: Messenger>(
             }
 
             handshake_result = handshakes.select_next_some() => {
-                data_channels.insert(handshake_result.peer_id.clone(), handshake_result.data_channels);
-                peer_state_tx.unbounded_send((handshake_result.peer_id.clone(), PeerState::Connected)).expect("failed to report peer as connected");
+                data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
+                peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected)).expect("failed to report peer as connected");
                 peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
 

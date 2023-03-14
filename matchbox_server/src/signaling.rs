@@ -51,9 +51,9 @@ pub(crate) struct ServerState {
 impl ServerState {
     /// Add a peer, returning the peers already in room
     fn add_peer(&mut self, peer: Peer) -> Vec<PeerId> {
-        let peer_id = peer.uuid.clone();
+        let peer_id = peer.uuid;
         let room = peer.room.clone();
-        self.clients.insert(peer.uuid.clone(), peer);
+        self.clients.insert(peer.uuid, peer);
         let peers = self.rooms.entry(room.clone()).or_default();
 
         let ret = peers.iter().cloned().collect();
@@ -162,7 +162,7 @@ async fn handle_ws(
             room: requested_room.clone(),
         });
 
-        let event_text = JsonPeerEvent::IdAssigned(peer_uuid.clone()).to_string();
+        let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
         let event = Message::Text(event_text.clone());
 
         if let Err(e) = add_peer_state.try_send(peer_uuid, event) {
@@ -171,7 +171,7 @@ async fn handle_ws(
             info!("{:?} -> {:?}", peer_uuid, event_text);
         };
 
-        let event_text = JsonPeerEvent::NewPeer(peer_uuid.clone()).to_string();
+        let event_text = JsonPeerEvent::NewPeer(peer_uuid).to_string();
         let event = Message::Text(event_text.clone());
 
         for peer_id in peers {
@@ -210,7 +210,7 @@ async fn handle_ws(
             PeerRequest::Signal { receiver, data } => {
                 let event = Message::Text(
                     JsonPeerEvent::Signal {
-                        sender: peer_uuid.clone(),
+                        sender: peer_uuid,
                         data,
                     }
                     .to_string(),
@@ -377,7 +377,7 @@ mod tests {
 
         // Ensure Peer B was received
         let new_peer_event = recv_peer_event(&mut client_a).await;
-        assert_eq!(new_peer_event, JsonPeerEvent::NewPeer(b_uuid.clone()));
+        assert_eq!(new_peer_event, JsonPeerEvent::NewPeer(b_uuid));
 
         // Disconnect Peer B
         _ = client_b.close(None).await;
@@ -622,11 +622,11 @@ mod tests {
         let new_peer_c = recv_peer_event(&mut client_a).await;
         let new_peer_d = recv_peer_event(&mut client_b).await;
         let new_peer_e = recv_peer_event(&mut client_b).await;
-        assert_eq!(new_peer_e, JsonPeerEvent::NewPeer(e_uuid.clone()));
+        assert_eq!(new_peer_e, JsonPeerEvent::NewPeer(e_uuid));
         let new_peer_e = recv_peer_event(&mut client_d).await;
 
         assert_eq!(new_peer_c, JsonPeerEvent::NewPeer(c_uuid));
-        assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid.clone()));
+        assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid));
         assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid));
         assert_eq!(new_peer_e, JsonPeerEvent::NewPeer(e_uuid));
 

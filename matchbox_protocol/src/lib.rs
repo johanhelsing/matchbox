@@ -1,8 +1,10 @@
 use cfg_if::cfg_if;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// The format for a peer signature given by the signalling server
-pub type PeerId = String;
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct PeerId(Uuid);
 
 /// Requests go from peer to signalling server
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

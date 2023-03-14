@@ -2992,6 +2992,7 @@ dependencies = [
  "cfg-if",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]

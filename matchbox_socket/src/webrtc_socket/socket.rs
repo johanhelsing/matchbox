@@ -267,11 +267,11 @@ impl WebRtcSocket {
                 .unwrap_or_else(|| panic!("no data channel with index: {index}"))
                 .try_next()
         })
-        .map_while(|p| match p {
-            Ok(Some((peer_id, packet))) => Some((peer_id, packet)),
-            // no more messages, or the other end of messages_from_peers was dropped
-            _ => None,
-        })
+        // errors mean the other end of messages_from_peers was dropped
+        // or we are disconnecting, in any case it means there are no messages
+        // for us to handle.
+        .map_while(Result::ok)
+        .flatten()
         .collect()
     }
 

@@ -299,7 +299,7 @@ impl Messenger for WasmMessenger {
 async fn complete_handshake(
     signal_peer: SignalPeer,
     conn: RtcPeerConnection,
-    received_candidates: Vec<PeerId>,
+    received_candidates: Vec<String>,
     mut data_channels_ready_fut: Pin<Box<futures::future::Fuse<impl Future<Output = ()>>>>,
     mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
 ) {

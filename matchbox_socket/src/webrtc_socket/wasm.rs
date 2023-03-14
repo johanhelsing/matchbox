@@ -108,7 +108,7 @@ impl Messenger for WasmMessenger {
         let data_channels = create_data_channels(
             conn.clone(),
             messages_from_peers_tx,
-            signal_peer.id.clone(),
+            signal_peer.id,
             peer_disconnected_tx,
             data_channel_ready_txs,
             &config.channels,
@@ -203,7 +203,7 @@ impl Messenger for WasmMessenger {
         let data_channels = create_data_channels(
             conn.clone(),
             messages_from_peers_tx,
-            signal_peer.id.clone(),
+            signal_peer.id,
             peer_disconnected_tx,
             data_channel_ready_txs,
             &config.channels,
@@ -465,7 +465,7 @@ fn create_data_channels(
             create_data_channel(
                 connection.clone(),
                 incoming_tx.get_mut(i).unwrap().clone(),
-                peer_id.clone(),
+                peer_id,
                 peer_disconnected_tx.clone(),
                 data_channel_ready_txs.pop().unwrap(),
                 channel,
@@ -513,7 +513,7 @@ fn create_data_channel(
                 let body = uarray.to_vec();
 
                 incoming_tx
-                    .unbounded_send((peer_id.clone(), body.into_boxed_slice()))
+                    .unbounded_send((peer_id, body.into_boxed_slice()))
                     .unwrap();
             }
         },

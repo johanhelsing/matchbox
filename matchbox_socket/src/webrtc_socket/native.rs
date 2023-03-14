@@ -114,10 +114,12 @@ impl Messenger for NativeMessenger {
             .await
             .unwrap();
 
-        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
+        let (data_channel_ready_txs, data_channels_ready_fut) =
+            create_data_channels_ready_fut(config);
+
         let data_channels = create_data_channels(
             &connection,
-            channel_ready_tx,
+            data_channel_ready_txs,
             signal_peer.id.clone(),
             peer_disconnected_tx,
             messages_from_peers_tx,
@@ -160,8 +162,13 @@ impl Messenger for NativeMessenger {
             .await
             .unwrap();
 
-        let trickle_fut =
-            complete_handshake(trickle, &connection, peer_signal_rx, wait_for_channels).await;
+        let trickle_fut = complete_handshake(
+            trickle,
+            &connection,
+            peer_signal_rx,
+            data_channels_ready_fut,
+        )
+        .await;
 
         HandshakeResult {
             peer_id: signal_peer.id,
@@ -190,10 +197,12 @@ impl Messenger for NativeMessenger {
             .await
             .unwrap();
 
-        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
+        let (data_channel_ready_txs, data_channels_ready_fut) =
+            create_data_channels_ready_fut(config);
+
         let data_channels = create_data_channels(
             &connection,
-            channel_ready_tx,
+            data_channel_ready_txs,
             signal_peer.id.clone(),
             peer_disconnected_tx.clone(),
             messages_from_peers_tx,
@@ -226,8 +235,13 @@ impl Messenger for NativeMessenger {
             .await
             .unwrap();
 
-        let trickle_fut =
-            complete_handshake(trickle, &connection, peer_signal_rx, wait_for_channels).await;
+        let trickle_fut = complete_handshake(
+            trickle,
+            &connection,
+            peer_signal_rx,
+            data_channels_ready_fut,
+        )
+        .await;
 
         HandshakeResult {
             peer_id: signal_peer.id,
@@ -256,7 +270,7 @@ impl Messenger for NativeMessenger {
             .zip(to_peer_message_rx.iter_mut())
             .map(|(data_channel, rx)| async move {
                 while let Some(message) = rx.next().await {
-                    trace!("sending packet {:?}", message);
+                    trace!("sending packet {message:?}");
                     let message = message.clone();
                     let message = Bytes::from(message);
                     if let Err(e) = data_channel.send(&message).await {
@@ -430,7 +444,7 @@ async fn create_rtc_peer_connection(
 
 async fn create_data_channels(
     connection: &RTCPeerConnection,
-    mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
+    mut data_channel_ready_txs: Vec<futures_channel::mpsc::Sender<()>>,
     peer_id: PeerId,
     peer_disconnected_tx: Sender<()>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
@@ -440,7 +454,7 @@ async fn create_data_channels(
     for (i, channel_config) in channel_configs.iter().enumerate() {
         let channel = create_data_channel(
             connection,
-            channel_ready.pop().unwrap(),
+            data_channel_ready_txs.pop().unwrap(),
             peer_id.clone(),
             peer_disconnected_tx.clone(),
             from_peer_message_tx.get(i).unwrap().clone(),
@@ -457,7 +471,7 @@ async fn create_data_channels(
 
 async fn create_data_channel(
     connection: &RTCPeerConnection,
-    mut channel_ready: futures_channel::mpsc::Sender<u8>,
+    mut channel_ready: futures_channel::mpsc::Sender<()>,
     peer_id: PeerId,
     mut peer_disconnected_tx: Sender<()>,
     from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
@@ -479,7 +493,7 @@ async fn create_data_channel(
     channel.on_open(Box::new(move || {
         debug!("Data channel ready");
         Box::pin(async move {
-            channel_ready.try_send(1).unwrap();
+            channel_ready.try_send(()).unwrap();
         })
     }));
 
@@ -496,13 +510,13 @@ async fn create_data_channel(
 
     channel.on_error(Box::new(move |e| {
         // TODO: handle this somehow
-        warn!("Data channel error {:?}", e);
+        warn!("data channel error {e:?}");
         Box::pin(async move {})
     }));
 
     channel.on_message(Box::new(move |message| {
         let packet = (*message.data).into();
-        debug!("rx {:?}", packet);
+        trace!("data channel message received: {packet:?}");
         from_peer_message_tx
             .unbounded_send((peer_id.clone(), packet))
             .unwrap();

@@ -17,7 +17,7 @@ use futures_channel::{
 };
 use futures_util::select;
 use js_sys::{Function, Reflect};
-use log::{debug, error, warn};
+use log::{debug, error, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
@@ -99,7 +99,10 @@ impl Messenger for WasmMessenger {
         debug!("making offer");
 
         let conn = create_rtc_peer_connection(config);
-        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
+
+        let (data_channel_ready_txs, data_channels_ready_fut) =
+            create_data_channels_ready_fut(config);
+
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         let data_channels = create_data_channels(
@@ -107,7 +110,7 @@ impl Messenger for WasmMessenger {
             messages_from_peers_tx,
             signal_peer.id.clone(),
             peer_disconnected_tx,
-            channel_ready_tx,
+            data_channel_ready_txs,
             &config.channels,
         );
 
@@ -170,7 +173,7 @@ impl Messenger for WasmMessenger {
             signal_peer.clone(),
             conn,
             received_candidates,
-            wait_for_channels,
+            data_channels_ready_fut,
             peer_signal_rx,
         )
         .await;
@@ -191,7 +194,10 @@ impl Messenger for WasmMessenger {
         debug!("handshake_accept");
 
         let conn = create_rtc_peer_connection(config);
-        let (channel_ready_tx, wait_for_channels) = create_data_channels_ready_fut(config);
+
+        let (data_channel_ready_txs, data_channels_ready_fut) =
+            create_data_channels_ready_fut(config);
+
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         let data_channels = create_data_channels(
@@ -199,7 +205,7 @@ impl Messenger for WasmMessenger {
             messages_from_peers_tx,
             signal_peer.id.clone(),
             peer_disconnected_tx,
-            channel_ready_tx,
+            data_channel_ready_txs,
             &config.channels,
         );
 
@@ -216,7 +222,7 @@ impl Messenger for WasmMessenger {
                     break o;
                 }
                 PeerSignal::IceCandidate(candidate) => {
-                    debug!("got an IceCandidate signal! {}", candidate);
+                    debug!("received IceCandidate signal: {candidate:?}");
                     received_candidates.push(candidate);
                 }
                 _ => {
@@ -271,7 +277,7 @@ impl Messenger for WasmMessenger {
             signal_peer.clone(),
             conn,
             received_candidates,
-            wait_for_channels,
+            data_channels_ready_fut,
             peer_signal_rx,
         )
         .await;
@@ -294,7 +300,7 @@ async fn complete_handshake(
     signal_peer: SignalPeer,
     conn: RtcPeerConnection,
     received_candidates: Vec<PeerId>,
-    mut wait_for_channels: Pin<Box<futures::future::Fuse<impl Future<Output = ()>>>>,
+    mut data_channels_ready_fut: Pin<Box<futures::future::Fuse<impl Future<Output = ()>>>>,
     mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
 ) {
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
@@ -325,12 +331,12 @@ async fn complete_handshake(
         try_add_rtc_ice_candidate(&conn, &candidate).await;
     }
 
-    // select for channel ready or ice candidates
+    // select for data channels ready or ice candidates
     debug!("waiting for data channels to open");
     loop {
         select! {
-            _ = wait_for_channels => {
-                debug!("channel ready");
+            _ = data_channels_ready_fut => {
+                debug!("data channels ready");
                 break;
             }
             msg = peer_signal_rx.next() => {
@@ -348,7 +354,7 @@ async fn complete_handshake(
     // See: <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceGatheringState>
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> =
         Box::new(move |_event: RtcPeerConnectionIceEvent| {
-            warn!("received ice candidate event after handshake completed");
+            warn!("received ice candidate event after handshake completed, ignoring");
         });
     let onicecandidate = Closure::wrap(onicecandidate);
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
@@ -449,7 +455,7 @@ fn create_data_channels(
     mut incoming_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peer_id: PeerId,
     peer_disconnected_tx: futures_channel::mpsc::Sender<()>,
-    mut channel_ready: Vec<futures_channel::mpsc::Sender<u8>>,
+    mut data_channel_ready_txs: Vec<futures_channel::mpsc::Sender<()>>,
     channel_config: &[ChannelConfig],
 ) -> Vec<RtcDataChannel> {
     channel_config
@@ -461,7 +467,7 @@ fn create_data_channels(
                 incoming_tx.get_mut(i).unwrap().clone(),
                 peer_id.clone(),
                 peer_disconnected_tx.clone(),
-                channel_ready.pop().unwrap(),
+                data_channel_ready_txs.pop().unwrap(),
                 channel,
                 i,
             )
@@ -474,7 +480,7 @@ fn create_data_channel(
     incoming_tx: futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>,
     peer_id: PeerId,
     peer_disconnected_tx: futures_channel::mpsc::Sender<()>,
-    mut channel_open: futures_channel::mpsc::Sender<u8>,
+    mut channel_open: futures_channel::mpsc::Sender<()>,
     channel_config: &ChannelConfig,
     channel_id: usize,
 ) -> RtcDataChannel {
@@ -491,9 +497,9 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onopen(f),
         move |_: JsValue| {
-            debug!("Rtc data channel opened :D :D");
+            debug!("data channel open: {channel_id}");
             channel_open
-                .try_send(1)
+                .try_send(())
                 .expect("failed to notify about open connection");
         },
     );
@@ -501,7 +507,7 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onmessage(f),
         move |event: MessageEvent| {
-            debug!("incoming {:?}", event);
+            trace!("data channel message received {event:?}");
             if let Ok(arraybuf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
                 let uarray = js_sys::Uint8Array::new(&arraybuf);
                 let body = uarray.to_vec();
@@ -516,14 +522,14 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onerror(f),
         move |event: Event| {
-            error!("Error in data channel: {:?}", event);
+            error!("error in data channel: {event:?}");
         },
     );
 
     leaking_channel_event_handler(
         |f| channel.set_onclose(f),
         move |event: Event| {
-            warn!("Channel closed: {:?}", event);
+            warn!("data channel closed: {event:?}");
             if let Err(err) = peer_disconnected_tx.clone().try_send(()) {
                 // should only happen if the socket is dropped, or we are out of memory
                 warn!("failed to notify about data channel closing: {err:?}");

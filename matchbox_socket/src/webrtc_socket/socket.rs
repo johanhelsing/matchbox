@@ -349,7 +349,7 @@ impl WebRtcSocket {
 }
 
 pub(crate) fn new_senders_and_receivers<T>(
-    channel_configs: &Vec<ChannelConfig>,
+    channel_configs: &[ChannelConfig],
 ) -> (Vec<UnboundedSender<T>>, Vec<UnboundedReceiver<T>>) {
     (0..channel_configs.len())
         .map(|_| futures_channel::mpsc::unbounded())
@@ -357,7 +357,7 @@ pub(crate) fn new_senders_and_receivers<T>(
 }
 
 pub(crate) fn create_data_channels_ready_fut(
-    channel_configs: &Vec<ChannelConfig>,
+    channel_configs: &[ChannelConfig],
 ) -> (
     Vec<futures_channel::mpsc::Sender<()>>,
     Pin<Box<Fuse<impl Future<Output = ()>>>>,

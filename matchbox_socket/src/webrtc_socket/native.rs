@@ -107,7 +107,7 @@ impl Messenger for NativeMessenger {
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
-        channel_configs: &Vec<ChannelConfig>,
+        channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         async {
             let (to_peer_message_tx, to_peer_message_rx) =
@@ -192,7 +192,7 @@ impl Messenger for NativeMessenger {
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
-        channel_configs: &Vec<ChannelConfig>,
+        channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         async {
             let (to_peer_message_tx, to_peer_message_rx) =

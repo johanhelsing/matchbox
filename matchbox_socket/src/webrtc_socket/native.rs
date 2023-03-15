@@ -89,28 +89,96 @@ impl PeerDataSender for UnboundedSender<Packet> {
     }
 }
 
+type NativeHandshakeMeta = (
+    Vec<UnboundedReceiver<Packet>>,
+    Vec<Arc<RTCDataChannel>>,
+    Pin<Box<dyn FusedFuture<Output = Result<(), webrtc::Error>> + Send>>,
+    Receiver<()>,
+);
+
 #[async_trait]
 impl Messenger for NativeMessenger {
     type DataChannel = UnboundedSender<Packet>;
-    type HandshakeMeta = (
-        Vec<UnboundedReceiver<Packet>>,
-        Vec<Arc<RTCDataChannel>>,
-        Pin<Box<dyn FusedFuture<Output = Result<(), webrtc::Error>> + Send>>,
-        Receiver<()>,
-    );
+    type HandshakeMeta = NativeHandshakeMeta;
 
     async fn offer_handshake(
+        signal_peer: SignalPeer,
+        peer_signal_rx: UnboundedReceiver<PeerSignal>,
+        messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
+        config: &WebRtcSocketConfig,
+    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+        Self::offer_handshake_impl(signal_peer, peer_signal_rx, messages_from_peers_tx, config)
+            // In order for the socket to work in non-tokio async contexts (like e.g. Bevy tasks),
+            // we need this call, otherwise we will panic.
+            .compat()
+            .await
+    }
+
+    async fn accept_handshake(
+        signal_peer: SignalPeer,
+        peer_signal_rx: UnboundedReceiver<PeerSignal>,
+        messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
+        config: &WebRtcSocketConfig,
+    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+        Self::accept_handshake_impl(signal_peer, peer_signal_rx, messages_from_peers_tx, config)
+            // In order for the socket to work in non-tokio async contexts (like e.g. Bevy tasks),
+            // we need this call, otherwise we will panic.
+            .compat()
+            .await
+    }
+
+    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
+        let (mut to_peer_message_rx, data_channels, mut trickle_fut, mut peer_disconnected) =
+            handshake_meta;
+
+        assert_eq!(
+            data_channels.len(),
+            to_peer_message_rx.len(),
+            "amount of data channels and receivers differ"
+        );
+
+        let mut message_loop_futs: FuturesUnordered<_> = data_channels
+            .iter()
+            .zip(to_peer_message_rx.iter_mut())
+            .map(|(data_channel, rx)| async move {
+                while let Some(message) = rx.next().await {
+                    trace!("sending packet {message:?}");
+                    let message = message.clone();
+                    let message = Bytes::from(message);
+                    if let Err(e) = data_channel.send(&message).await {
+                        error!("error sending to data channel: {e:?}")
+                    }
+                }
+            })
+            .collect();
+
+        loop {
+            select! {
+                _ = peer_disconnected.next() => break,
+
+                _ = message_loop_futs.next() => break,
+                // TODO: this means that the signalling is down, should return an
+                // error
+                _ = trickle_fut => continue,
+            }
+        }
+
+        peer_uuid
+    }
+}
+
+impl NativeMessenger {
+    async fn offer_handshake_impl(
         signal_peer: SignalPeer,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> HandshakeResult<UnboundedSender<Packet>, NativeHandshakeMeta> {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         debug!("making offer");
         let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config)
-            .compat()
             .await
             .unwrap();
 
@@ -128,13 +196,9 @@ impl Messenger for NativeMessenger {
         .await;
 
         // TODO: maybe pass in options? ice restart etc.?
-        let offer = connection.create_offer(None).compat().await.unwrap();
+        let offer = connection.create_offer(None).await.unwrap();
         let sdp = offer.sdp.clone();
-        connection
-            .set_local_description(offer)
-            .compat()
-            .await
-            .unwrap();
+        connection.set_local_description(offer).await.unwrap();
         signal_peer.send(PeerSignal::Offer(sdp));
 
         let answer = loop {
@@ -182,18 +246,17 @@ impl Messenger for NativeMessenger {
         }
     }
 
-    async fn accept_handshake(
+    async fn accept_handshake_impl(
         signal_peer: SignalPeer,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         config: &WebRtcSocketConfig,
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> HandshakeResult<UnboundedSender<Packet>, NativeHandshakeMeta> {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         debug!("handshake_accept");
         let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config)
-            .compat()
             .await
             .unwrap();
 
@@ -227,13 +290,9 @@ impl Messenger for NativeMessenger {
             .await
             .unwrap();
 
-        let answer = connection.create_answer(None).compat().await.unwrap();
+        let answer = connection.create_answer(None).await.unwrap();
         signal_peer.send(PeerSignal::Answer(answer.sdp.clone()));
-        connection
-            .set_local_description(answer)
-            .compat()
-            .await
-            .unwrap();
+        connection.set_local_description(answer).await.unwrap();
 
         let trickle_fut = complete_handshake(
             trickle,
@@ -254,45 +313,6 @@ impl Messenger for NativeMessenger {
             ),
         }
     }
-
-    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
-        let (mut to_peer_message_rx, data_channels, mut trickle_fut, mut peer_disconnected) =
-            handshake_meta;
-
-        assert_eq!(
-            data_channels.len(),
-            to_peer_message_rx.len(),
-            "amount of data channels and receivers differ"
-        );
-
-        let mut message_loop_futs: FuturesUnordered<_> = data_channels
-            .iter()
-            .zip(to_peer_message_rx.iter_mut())
-            .map(|(data_channel, rx)| async move {
-                while let Some(message) = rx.next().await {
-                    trace!("sending packet {message:?}");
-                    let message = message.clone();
-                    let message = Bytes::from(message);
-                    if let Err(e) = data_channel.send(&message).await {
-                        error!("error sending to data channel: {e:?}")
-                    }
-                }
-            })
-            .collect();
-
-        loop {
-            select! {
-                _ = peer_disconnected.next() => break,
-
-                _ = message_loop_futs.next() => break,
-                // TODO: this means that the signalling is down, should return an
-                // error
-                _ = trickle_fut => continue,
-            }
-        }
-
-        peer_uuid
-    }
 }
 
 async fn complete_handshake(
@@ -304,7 +324,6 @@ async fn complete_handshake(
     trickle.send_pending_candidates().await;
     let mut trickle_fut = Box::pin(
         CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), peer_signal_rx)
-            .compat()
             .fuse(),
     );
 

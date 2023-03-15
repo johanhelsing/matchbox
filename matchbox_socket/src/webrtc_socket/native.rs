@@ -125,6 +125,7 @@ impl Messenger for NativeMessenger {
             messages_from_peers_tx,
             &config.channels,
         )
+        .compat()
         .await;
 
         // TODO: maybe pass in options? ice restart etc.?
@@ -140,6 +141,7 @@ impl Messenger for NativeMessenger {
         let answer = loop {
             let signal = peer_signal_rx
                 .next()
+                .compat()
                 .await
                 .expect("Signal server connection lost in the middle of a handshake");
 
@@ -159,6 +161,7 @@ impl Messenger for NativeMessenger {
         let remote_description = RTCSessionDescription::answer(answer).unwrap();
         connection
             .set_remote_description(remote_description)
+            .compat()
             .await
             .unwrap();
 
@@ -168,6 +171,7 @@ impl Messenger for NativeMessenger {
             peer_signal_rx,
             data_channels_ready_fut,
         )
+        .compat()
         .await;
 
         HandshakeResult {
@@ -208,10 +212,11 @@ impl Messenger for NativeMessenger {
             messages_from_peers_tx,
             &config.channels,
         )
+        .compat()
         .await;
 
         let offer = loop {
-            match peer_signal_rx.next().await.expect("error") {
+            match peer_signal_rx.next().compat().await.expect("error") {
                 PeerSignal::Offer(offer) => {
                     break offer;
                 }
@@ -224,6 +229,7 @@ impl Messenger for NativeMessenger {
         let remote_description = RTCSessionDescription::offer(offer).unwrap();
         connection
             .set_remote_description(remote_description)
+            .compat()
             .await
             .unwrap();
 
@@ -241,6 +247,7 @@ impl Messenger for NativeMessenger {
             peer_signal_rx,
             data_channels_ready_fut,
         )
+        .compat()
         .await;
 
         HandshakeResult {
@@ -269,11 +276,11 @@ impl Messenger for NativeMessenger {
             .iter()
             .zip(to_peer_message_rx.iter_mut())
             .map(|(data_channel, rx)| async move {
-                while let Some(message) = rx.next().await {
+                while let Some(message) = rx.next().compat().await {
                     trace!("sending packet {message:?}");
                     let message = message.clone();
                     let message = Bytes::from(message);
-                    if let Err(e) = data_channel.send(&message).await {
+                    if let Err(e) = data_channel.send(&message).compat().await {
                         error!("error sending to data channel: {e:?}")
                     }
                 }

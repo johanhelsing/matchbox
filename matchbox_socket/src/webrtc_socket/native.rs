@@ -1,10 +1,13 @@
 use super::{error::MessagingError, HandshakeResult, PeerDataSender};
-use crate::webrtc_socket::{
-    error::SignallingError,
-    messages::PeerSignal,
-    signal_peer::SignalPeer,
-    socket::{create_data_channels_ready_fut, new_senders_and_receivers},
-    ChannelConfig, Messenger, Packet, Signaller, WebRtcSocketConfig,
+use crate::{
+    webrtc_socket::{
+        error::SignallingError,
+        messages::PeerSignal,
+        signal_peer::SignalPeer,
+        socket::{create_data_channels_ready_fut, new_senders_and_receivers},
+        ChannelConfig, Messenger, Packet, Signaller,
+    },
+    RtcIceServerConfig,
 };
 use async_compat::CompatExt;
 use async_trait::async_trait;
@@ -103,19 +106,22 @@ impl Messenger for NativeMessenger {
         signal_peer: SignalPeer,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
-        config: &WebRtcSocketConfig,
+        ice_server_config: &RtcIceServerConfig,
+        channel_configs: &Vec<ChannelConfig>,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         async {
-            let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
+            let (to_peer_message_tx, to_peer_message_rx) =
+                new_senders_and_receivers(channel_configs);
             let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
             debug!("making offer");
-            let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config)
-                .await
-                .unwrap();
+            let (connection, trickle) =
+                create_rtc_peer_connection(signal_peer.clone(), ice_server_config)
+                    .await
+                    .unwrap();
 
             let (data_channel_ready_txs, data_channels_ready_fut) =
-                create_data_channels_ready_fut(config);
+                create_data_channels_ready_fut(channel_configs);
 
             let data_channels = create_data_channels(
                 &connection,
@@ -123,7 +129,7 @@ impl Messenger for NativeMessenger {
                 signal_peer.id,
                 peer_disconnected_tx,
                 messages_from_peers_tx,
-                &config.channels,
+                channel_configs,
             )
             .await;
 
@@ -185,19 +191,22 @@ impl Messenger for NativeMessenger {
         signal_peer: SignalPeer,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
-        config: &WebRtcSocketConfig,
+        ice_server_config: &RtcIceServerConfig,
+        channel_configs: &Vec<ChannelConfig>,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         async {
-            let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(config);
+            let (to_peer_message_tx, to_peer_message_rx) =
+                new_senders_and_receivers(channel_configs);
             let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
             debug!("handshake_accept");
-            let (connection, trickle) = create_rtc_peer_connection(signal_peer.clone(), config)
-                .await
-                .unwrap();
+            let (connection, trickle) =
+                create_rtc_peer_connection(signal_peer.clone(), ice_server_config)
+                    .await
+                    .unwrap();
 
             let (data_channel_ready_txs, data_channels_ready_fut) =
-                create_data_channels_ready_fut(config);
+                create_data_channels_ready_fut(channel_configs);
 
             let data_channels = create_data_channels(
                 &connection,
@@ -205,7 +214,7 @@ impl Messenger for NativeMessenger {
                 signal_peer.id,
                 peer_disconnected_tx.clone(),
                 messages_from_peers_tx,
-                &config.channels,
+                channel_configs,
             )
             .await;
 
@@ -404,16 +413,15 @@ impl CandidateTrickle {
 
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
-    config: &WebRtcSocketConfig,
+    ice_server_config: &RtcIceServerConfig,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
     let api = APIBuilder::new().build();
 
-    let ice_server = &config.ice_server;
     let config = RTCConfiguration {
         ice_servers: vec![RTCIceServer {
-            urls: ice_server.urls.clone(),
-            username: ice_server.username.clone().unwrap_or_default(),
-            credential: ice_server.credential.clone().unwrap_or_default(),
+            urls: ice_server_config.urls.clone(),
+            username: ice_server_config.username.clone().unwrap_or_default(),
+            credential: ice_server_config.credential.clone().unwrap_or_default(),
             ..Default::default()
         }],
         ..Default::default()

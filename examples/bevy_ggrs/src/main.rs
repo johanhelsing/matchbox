@@ -1,7 +1,7 @@
 use bevy::{log::LogPlugin, prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, Session};
 use ggrs::SessionBuilder;
-use matchbox_socket::{PeerState, WebRtcSocket};
+use matchbox_socket::{PeerState, WebRtcSocket, WebRtcSocketBuilder};
 
 mod args;
 mod box_game;
@@ -91,7 +91,9 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcSocket::new_unreliable(room_url);
+    let (socket, message_loop) = WebRtcSocketBuilder::new(room_url, Some(3))
+        .add_unreliable_channel()
+        .build();
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.

@@ -6,8 +6,8 @@ use super::{
 };
 use crate::webrtc_socket::{
     error::SignallingError, messages::PeerSignal, signal_peer::SignalPeer,
-    socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, Signaller,
-    WebRtcSocketConfig,
+    socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, RtcIceServerConfig,
+    Signaller,
 };
 use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
@@ -94,14 +94,15 @@ impl Messenger for WasmMessenger {
         signal_peer: SignalPeer,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
-        config: &WebRtcSocketConfig,
+        ice_server_config: &RtcIceServerConfig,
+        channel_configs: &Vec<ChannelConfig>,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         debug!("making offer");
 
-        let conn = create_rtc_peer_connection(config);
+        let conn = create_rtc_peer_connection(ice_server_config);
 
         let (data_channel_ready_txs, data_channels_ready_fut) =
-            create_data_channels_ready_fut(config);
+            create_data_channels_ready_fut(channel_configs);
 
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
@@ -111,7 +112,7 @@ impl Messenger for WasmMessenger {
             signal_peer.id,
             peer_disconnected_tx,
             data_channel_ready_txs,
-            &config.channels,
+            channel_configs,
         );
 
         // Create offer
@@ -189,14 +190,15 @@ impl Messenger for WasmMessenger {
         signal_peer: SignalPeer,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
-        config: &WebRtcSocketConfig,
+        ice_server_config: &RtcIceServerConfig,
+        channel_configs: &Vec<ChannelConfig>,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         debug!("handshake_accept");
 
-        let conn = create_rtc_peer_connection(config);
+        let conn = create_rtc_peer_connection(ice_server_config);
 
         let (data_channel_ready_txs, data_channels_ready_fut) =
-            create_data_channels_ready_fut(config);
+            create_data_channels_ready_fut(channel_configs);
 
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
@@ -206,7 +208,7 @@ impl Messenger for WasmMessenger {
             signal_peer.id,
             peer_disconnected_tx,
             data_channel_ready_txs,
-            &config.channels,
+            channel_configs,
         );
 
         let mut received_candidates = vec![];
@@ -389,7 +391,7 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
     .expect("failed to add ice candidate");
 }
 
-fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection {
+fn create_rtc_peer_connection(ice_server_config: &RtcIceServerConfig) -> RtcPeerConnection {
     #[derive(Serialize)]
     struct IceServerConfig {
         urls: Vec<String>,
@@ -398,11 +400,10 @@ fn create_rtc_peer_connection(config: &WebRtcSocketConfig) -> RtcPeerConnection 
     }
 
     let mut peer_config = RtcConfiguration::new();
-    let ice_server = &config.ice_server;
     let ice_server_config = IceServerConfig {
-        urls: ice_server.urls.clone(),
-        username: ice_server.username.clone().unwrap_or_default(),
-        credential: ice_server.credential.clone().unwrap_or_default(),
+        urls: ice_server_config.urls.clone(),
+        username: ice_server_config.username.clone().unwrap_or_default(),
+        credential: ice_server_config.credential.clone().unwrap_or_default(),
     };
     let ice_server_config_list = [ice_server_config];
     peer_config.ice_servers(&serde_wasm_bindgen::to_value(&ice_server_config_list).unwrap());

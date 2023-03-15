@@ -72,9 +72,13 @@ impl Default for RtcIceServerConfig {
     }
 }
 
-/// General configuration options for a WebRtc connection.
+/// Builder for [`WebRtcSocket`]s.
 ///
-/// See [`WebRtcSocket::new_with_config`]
+/// Begin with [`WebRtcSocketBuilder::new`] and add at least one channel with
+/// [`WebRtcSocketBuilder::add_channel`],
+/// [`WebRtcSocketBuilder::add_reliable_channel`], or
+/// [`WebRtcSocketBuilder::add_unreliable_channel`] before calling
+/// [`WebRtcSocketBuilder::build`] to produce the desired [`WebRtcSocket`].
 #[derive(Debug, Clone)]
 pub struct WebRtcSocketBuilder {
     /// The url for the room to connect to
@@ -208,6 +212,8 @@ pub struct WebRtcSocket {
 
 impl WebRtcSocket {
     /// Handle peers connecting or disconnecting
+    ///
+    /// Constructed using [`WebRtcSocketBuilder`].
     ///
     /// Update the set of peers used by [`connected_peers`],
     /// [`disconnected_peers`], and [`broadcast_on_channel`].

@@ -1,7 +1,7 @@
 use ggrs::{Message, PlayerType};
 use matchbox_protocol::PeerId;
 
-use crate::WebRtcSocket;
+use crate::{ChannelConfig, WebRtcSocket, WebRtcSocketBuilder};
 
 #[derive(Debug, thiserror::Error)]
 #[error("The client has not yet been given a Peer Id")]
@@ -47,5 +47,13 @@ impl ggrs::NonBlockingSocket<PeerId> for WebRtcSocket {
             messages.push((id, msg));
         }
         messages
+    }
+}
+
+impl WebRtcSocketBuilder {
+    /// Adds a new channel configured correctly for usage with GGRS to the [`WebRtcSocket`].
+    pub fn add_ggrs_channel(mut self) -> Self {
+        self.channels.push(ChannelConfig::unreliable());
+        self
     }
 }

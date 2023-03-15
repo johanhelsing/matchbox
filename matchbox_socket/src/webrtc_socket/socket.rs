@@ -75,7 +75,7 @@ impl Default for RtcIceServerConfig {
 
 /// Tags types which are used to indicate the number of [`WebRtcChannel`]s or
 /// [`ChannelConfig`]s in a [`WebRtcSocket`] or [`WebRtcSocketBuilder`] respectively.
-pub trait ChannelPlurality {}
+pub trait ChannelPlurality: Send + Sync {}
 
 /// Tags types which are used to indicate a quantity of [`ChannelConfig`]s which can be
 /// used to build a [`WebRtcSocket`].

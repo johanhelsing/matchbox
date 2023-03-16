@@ -211,6 +211,17 @@ pub struct WebRtcSocket {
 }
 
 impl WebRtcSocket {
+    /// Creates a new builder for a connection to a given room with a given number of
+    /// re-connection attempts.
+    ///
+    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`],
+    /// [`WebRtcSocketBuilder::add_reliable_channel`], or
+    /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
+    /// [`WebRtcSocket`]
+    pub fn builder(room_url: impl ToString, attempts: Option<u16>) -> WebRtcSocketBuilder {
+        WebRtcSocketBuilder::new(room_url, attempts)
+    }
+
     /// Handle peers connecting or disconnecting
     ///
     /// Constructed using [`WebRtcSocketBuilder`].

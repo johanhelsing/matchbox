@@ -118,6 +118,12 @@ impl WebRtcSocketBuilder {
         }
     }
 
+    /// Sets the socket ICE server configuration.
+    pub fn ice_server(mut self, ice_server: RtcIceServerConfig) -> Self {
+        self.ice_server = ice_server;
+        self
+    }
+
     /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
     pub fn add_channel(mut self, config: ChannelConfig) -> Self {
         self.channels.push(config);

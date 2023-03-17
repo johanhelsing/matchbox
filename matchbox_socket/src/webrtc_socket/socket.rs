@@ -102,25 +102,32 @@ pub struct WebRtcSocketBuilder {
 }
 
 impl WebRtcSocketBuilder {
-    /// Creates a new builder for a connection to a given room with a given number of
-    /// re-connection attempts.
+    /// Creates a new builder for a connection to a given room with the default ICE
+    /// server configuration, and three reconnection attempts.
     ///
     /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`],
     /// [`WebRtcSocketBuilder::add_reliable_channel`], or
     /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
     /// [`WebRtcSocket`]
-    pub fn new(room_url: impl ToString, attempts: Option<u16>) -> Self {
+    pub fn new(room_url: impl ToString) -> Self {
         Self {
             room_url: room_url.to_string(),
             ice_server: RtcIceServerConfig::default(),
             channels: Vec::default(),
-            attempts,
+            attempts: Some(3),
         }
     }
 
     /// Sets the socket ICE server configuration.
     pub fn ice_server(mut self, ice_server: RtcIceServerConfig) -> Self {
         self.ice_server = ice_server;
+        self
+    }
+
+    /// Sets the number of attempts to make at reconnecting, if None the socket will
+    /// attempt to connect indefinitely.
+    pub fn reconnect_attempts(mut self, attempts: Option<u16>) -> Self {
+        self.attempts = attempts;
         self
     }
 
@@ -224,8 +231,8 @@ impl WebRtcSocket {
     /// [`WebRtcSocketBuilder::add_reliable_channel`], or
     /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
     /// [`WebRtcSocket`]
-    pub fn builder(room_url: impl ToString, attempts: Option<u16>) -> WebRtcSocketBuilder {
-        WebRtcSocketBuilder::new(room_url, attempts)
+    pub fn builder(room_url: impl ToString) -> WebRtcSocketBuilder {
+        WebRtcSocketBuilder::new(room_url)
     }
 
     /// Handle peers connecting or disconnecting
@@ -464,7 +471,7 @@ mod test {
     #[futures_test::test]
     async fn unreachable_server() {
         // .invalid is a reserved tld for testing and documentation
-        let (_socket, fut) = WebRtcSocketBuilder::new("wss://example.invalid", Some(3))
+        let (_socket, fut) = WebRtcSocketBuilder::new("wss://example.invalid")
             .add_reliable_channel()
             .build();
 
@@ -475,7 +482,8 @@ mod test {
 
     #[futures_test::test]
     async fn test_signalling_attempts() {
-        let (_socket, loop_fut) = WebRtcSocketBuilder::new("wss://example.invalid/", Some(3))
+        let (_socket, loop_fut) = WebRtcSocketBuilder::new("wss://example.invalid/")
+            .reconnect_attempts(Some(3))
             .add_reliable_channel()
             .build();
 

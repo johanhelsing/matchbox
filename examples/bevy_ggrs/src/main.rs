@@ -91,7 +91,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcSocketBuilder::new(room_url, Some(3))
+    let (socket, message_loop) = WebRtcSocketBuilder::new(room_url)
         .add_ggrs_channel()
         .build();
 

@@ -31,7 +31,7 @@ async fn main() {
 
 async fn async_main() {
     info!("Connecting to matchbox");
-    let (mut socket, loop_fut) = WebRtcSocketBuilder::new("ws://localhost:3536/", Some(3))
+    let (mut socket, loop_fut) = WebRtcSocketBuilder::new("ws://localhost:3536/")
         .add_unreliable_channel()
         .build();
 

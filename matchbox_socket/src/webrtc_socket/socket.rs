@@ -109,9 +109,9 @@ impl WebRtcSocketBuilder {
     /// [`WebRtcSocketBuilder::add_reliable_channel`], or
     /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
     /// [`WebRtcSocket`]
-    pub fn new(room_url: impl ToString) -> Self {
+    pub fn new(room_url: impl Into<String>) -> Self {
         Self {
-            room_url: room_url.to_string(),
+            room_url: room_url.into(),
             ice_server: RtcIceServerConfig::default(),
             channels: Vec::default(),
             attempts: Some(3),
@@ -231,7 +231,7 @@ impl WebRtcSocket {
     /// [`WebRtcSocketBuilder::add_reliable_channel`], or
     /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
     /// [`WebRtcSocket`]
-    pub fn builder(room_url: impl ToString) -> WebRtcSocketBuilder {
+    pub fn builder(room_url: impl Into<String>) -> WebRtcSocketBuilder {
         WebRtcSocketBuilder::new(room_url)
     }
 

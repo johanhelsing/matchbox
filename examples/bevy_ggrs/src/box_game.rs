@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_ggrs::{PlayerInputs, Rollback, RollbackIdProvider, Session};
 use bytemuck::{Pod, Zeroable};
 use ggrs::{Config, PlayerHandle};
+use matchbox_socket::PeerId;
 use std::hash::Hash;
 
 const BLUE: Color = Color::rgb(0.8, 0.6, 0.2);
@@ -29,7 +30,7 @@ pub struct GGRSConfig;
 impl Config for GGRSConfig {
     type Input = BoxInput;
     type State = u8;
-    type Address = String;
+    type Address = PeerId;
 }
 
 #[repr(C)]

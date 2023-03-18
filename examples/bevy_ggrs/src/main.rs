@@ -91,7 +91,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcSocket::new_unreliable(room_url);
+    let (socket, message_loop) = WebRtcSocket::new_ggrs(room_url);
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.
@@ -178,7 +178,7 @@ fn lobby_system(
     info!("All peers have joined, going in-game");
 
     // consume the socket (currently required because ggrs takes ownership of its socket)
-    let mut socket = socket.0.take().unwrap();
+    let socket = socket.0.take().unwrap();
 
     // extract final player list
     let players = socket.players().unwrap();

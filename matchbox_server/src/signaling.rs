@@ -51,9 +51,9 @@ pub(crate) struct ServerState {
 impl ServerState {
     /// Add a peer, returning the peers already in room
     fn add_peer(&mut self, peer: Peer) -> Vec<PeerId> {
-        let peer_id = peer.uuid.clone();
+        let peer_id = peer.uuid;
         let room = peer.room.clone();
-        self.clients.insert(peer.uuid.clone(), peer);
+        self.clients.insert(peer.uuid, peer);
         let peers = self.rooms.entry(room.clone()).or_default();
 
         let ret = peers.iter().cloned().collect();
@@ -89,8 +89,8 @@ impl ServerState {
     }
 
     /// Send a message to a peer without blocking.
-    fn try_send(&self, id: &PeerId, message: Message) -> Result<(), ServerError> {
-        let peer = self.clients.get(id);
+    fn try_send(&self, id: PeerId, message: Message) -> Result<(), ServerError> {
+        let peer = self.clients.get(&id);
         let peer = match peer {
             Some(peer) => peer,
             None => {
@@ -151,33 +151,33 @@ async fn handle_ws(
     let (ws_sender, mut ws_receiver) = websocket.split();
     let sender = spawn_sender_task(ws_sender);
 
-    let peer_uuid = uuid::Uuid::new_v4().to_string();
+    let peer_uuid = uuid::Uuid::new_v4().into();
 
     {
         let mut add_peer_state = state.lock().await;
 
         let peers = add_peer_state.add_peer(Peer {
-            uuid: peer_uuid.clone(),
+            uuid: peer_uuid,
             sender: sender.clone(),
             room: requested_room.clone(),
         });
 
-        let event_text = JsonPeerEvent::IdAssigned(peer_uuid.clone()).to_string();
+        let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
         let event = Message::Text(event_text.clone());
 
-        if let Err(e) = add_peer_state.try_send(&peer_uuid, event) {
-            error!("error sending to {peer_uuid}: {e:?}");
+        if let Err(e) = add_peer_state.try_send(peer_uuid, event) {
+            error!("error sending to {peer_uuid:?}: {e:?}");
         } else {
             info!("{:?} -> {:?}", peer_uuid, event_text);
         };
 
-        let event_text = JsonPeerEvent::NewPeer(peer_uuid.clone()).to_string();
+        let event_text = JsonPeerEvent::NewPeer(peer_uuid).to_string();
         let event = Message::Text(event_text.clone());
 
         for peer_id in peers {
             // Tell everyone about this new peer
-            if let Err(e) = add_peer_state.try_send(&peer_id, event.clone()) {
-                error!("error sending to {peer_id}: {e:?}");
+            if let Err(e) = add_peer_state.try_send(peer_id, event.clone()) {
+                error!("error sending to {peer_id:?}: {e:?}");
             } else {
                 info!("{:?} -> {:?}", peer_id, event_text);
             }
@@ -191,7 +191,7 @@ async fn handle_ws(
             Err(ClientRequestError::Axum(e)) => {
                 // Most likely a ConnectionReset or similar.
                 error!("Axum error while receiving request: {:?}", e);
-                warn!("Severing connection with {peer_uuid}");
+                warn!("Severing connection with {peer_uuid:?}");
                 break; // give up on this peer.
             }
             Err(ClientRequestError::Close) => {
@@ -210,7 +210,7 @@ async fn handle_ws(
             PeerRequest::Signal { receiver, data } => {
                 let event = Message::Text(
                     JsonPeerEvent::Signal {
-                        sender: peer_uuid.clone(),
+                        sender: peer_uuid,
                         data,
                     }
                     .to_string(),
@@ -221,7 +221,7 @@ async fn handle_ws(
                         error!("error sending: {:?}", e);
                     }
                 } else {
-                    warn!("peer not found ({receiver}), ignoring signal");
+                    warn!("peer not found ({receiver:?}), ignoring signal");
                 }
             }
             PeerRequest::KeepAlive => {
@@ -242,8 +242,9 @@ async fn handle_ws(
             .map(|room_peers| {
                 room_peers
                     .iter()
-                    .filter(|peer_id| *peer_id != &peer_uuid)
-                    .collect::<Vec<&String>>()
+                    .copied()
+                    .filter(|peer_id| *peer_id != peer_uuid)
+                    .collect::<Vec<PeerId>>()
             })
             .unwrap_or_default();
         // Tell each connected peer about the disconnected peer.
@@ -376,7 +377,7 @@ mod tests {
 
         // Ensure Peer B was received
         let new_peer_event = recv_peer_event(&mut client_a).await;
-        assert_eq!(new_peer_event, JsonPeerEvent::NewPeer(b_uuid.clone()));
+        assert_eq!(new_peer_event, JsonPeerEvent::NewPeer(b_uuid));
 
         // Disconnect Peer B
         _ = client_b.close(None).await;
@@ -408,7 +409,7 @@ mod tests {
 
         let new_peer_event = recv_peer_event(&mut client_a).await;
         let peer_uuid = match new_peer_event {
-            JsonPeerEvent::NewPeer(peer) => peer,
+            JsonPeerEvent::NewPeer(PeerId(peer_uuid)) => peer_uuid.to_string(),
             _ => panic!("unexpected event"),
         };
 
@@ -621,11 +622,11 @@ mod tests {
         let new_peer_c = recv_peer_event(&mut client_a).await;
         let new_peer_d = recv_peer_event(&mut client_b).await;
         let new_peer_e = recv_peer_event(&mut client_b).await;
-        assert_eq!(new_peer_e, JsonPeerEvent::NewPeer(e_uuid.clone()));
+        assert_eq!(new_peer_e, JsonPeerEvent::NewPeer(e_uuid));
         let new_peer_e = recv_peer_event(&mut client_d).await;
 
         assert_eq!(new_peer_c, JsonPeerEvent::NewPeer(c_uuid));
-        assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid.clone()));
+        assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid));
         assert_eq!(new_peer_d, JsonPeerEvent::NewPeer(d_uuid));
         assert_eq!(new_peer_e, JsonPeerEvent::NewPeer(e_uuid));
 

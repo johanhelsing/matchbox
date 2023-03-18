@@ -21,8 +21,8 @@ The Matchbox project contains both:
 
 ## Examples
 
-- [simple](examples/simple/README.md): A simple communication loop using matchbox_socket
-- [bevy_ggrs](examples/bevy_ggrs/README.md): An example browser game, using `bevy` and `bevy_ggrs`
+- [simple](examples/simple): A simple communication loop using matchbox_socket
+- [bevy_ggrs](examples/bevy_ggrs): An example browser game, using `bevy` and `bevy_ggrs`
   - Live 2-player demo: <https://helsing.studio/box_game/>
   - Live 4-player demo: <https://helsing.studio/box_game/?players=4>
 

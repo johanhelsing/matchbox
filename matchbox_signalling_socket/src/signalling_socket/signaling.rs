@@ -3,13 +3,8 @@ use axum::{
     response::IntoResponse,
 };
 use futures::lock::Mutex;
-use matchbox_protocol::PeerId;
 use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tracing::info;
 
 use super::state::SignalingState;

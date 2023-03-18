@@ -5,4 +5,4 @@ pub(crate) mod signaling;
 pub(crate) mod state;
 pub(crate) mod topologies;
 
-pub use server::SignallingServer;
+pub use server::SignalingServer;

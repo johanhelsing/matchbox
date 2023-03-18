@@ -1,15 +1,10 @@
-use super::{
-    builder::SignalingServerBuilder,
-    topologies::{ClientServer, FullMesh},
-};
+use super::builder::SignalingServerBuilder;
 use axum::Router;
-use matchbox_protocol::PeerId;
-use std::{collections::HashSet, marker::PhantomData, net::SocketAddr};
-use tracing_subscriber::fmt::format::Full;
+use std::net::SocketAddr;
 
 /// Contains the interface end of a signalling server
 #[derive(Debug)]
-pub struct SignallingServer {
+pub struct SignalingServer {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
     /// The router used by the signalling server
@@ -17,7 +12,7 @@ pub struct SignallingServer {
 }
 
 /// Common methods
-impl SignallingServer {
+impl SignalingServer {
     pub fn builder<Topology>(
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<Topology> {

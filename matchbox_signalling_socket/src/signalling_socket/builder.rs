@@ -4,7 +4,7 @@ use crate::{
         state::SignalingState,
         topologies::{ClientServer, FullMesh},
     },
-    SignallingServer,
+    SignalingServer,
 };
 use axum::{routing::get, Router};
 use std::{marker::PhantomData, net::SocketAddr, sync::Arc};
@@ -15,10 +15,10 @@ use tower_http::{
 };
 use tracing::Level;
 
-/// Builder for [`SignallingServer`]s.
+/// Builder for [`SignalingServer`]s.
 ///
-/// Begin with [`SignallingServerBuilder::new`] and add parameters before calling
-/// [`SignallingServerBuilder::build`] to produce the desired [`SignallingServer`].
+/// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
+/// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
 #[derive(Debug, Clone)]
 pub struct SignalingServerBuilder<Topology> {
     /// The socket address to broadcast on
@@ -109,8 +109,8 @@ impl<Topology> SignalingServerBuilder<Topology> {
     }
 
     /// Create a [`SignallingServer`].
-    pub fn build(self) -> SignallingServer {
-        SignallingServer {
+    pub fn build(self) -> SignalingServer {
+        SignalingServer {
             socket_addr: self.socket_addr,
             router: self.router,
         }

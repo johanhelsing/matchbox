@@ -1,20 +1,19 @@
-use crate::signalling_socket::signaling::handle_ws;
-use axum::{extract::ws::WebSocket, routing::get, Router};
-use futures::lock::Mutex;
-use matchbox_protocol::PeerId;
+use crate::{
+    signalling_socket::{
+        signaling::ws_handler,
+        state::SignalingState,
+        topologies::{ClientServer, FullMesh},
+    },
+    SignallingServer,
+};
+use axum::{routing::get, Router};
+use std::{marker::PhantomData, net::SocketAddr, sync::Arc};
 use tower_http::{
     cors::{Any, CorsLayer},
-    trace::{DefaultOnResponse, MakeSpan, OnBodyChunk, OnEos, OnFailure, TraceLayer},
+    trace::{DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
 use tracing::Level;
-
-use super::{signaling::ws_handler, state::SignalingState};
-use crate::{
-    signalling_socket::topologies::{ClientServer, FullMesh},
-    SignallingServer,
-};
-use std::{marker::PhantomData, net::SocketAddr, sync::Arc};
 
 /// Builder for [`SignallingServer`]s.
 ///
@@ -53,7 +52,7 @@ impl<Topology> SignallingServerBuilder<Topology> {
     pub fn full_mesh_topology(self) -> SignallingServerBuilder<FullMesh> {
         // TODO: When #![feature(type_changing_struct_update)] is stable, just do
         // TODO: - SignallingServerBuilder { ..self }
-        SignallingServerBuilder {
+        SignallingServerBuilder::<FullMesh> {
             socket_addr: self.socket_addr,
             router: default_router(),
             _pd: PhantomData,
@@ -64,7 +63,7 @@ impl<Topology> SignallingServerBuilder<Topology> {
     pub fn client_server_topology(self) -> SignallingServerBuilder<ClientServer> {
         // TODO: When #![feature(type_changing_struct_update)] is stable, just do
         // TODO: - SignallingServerBuilder { ..self }
-        SignallingServerBuilder {
+        SignallingServerBuilder::<ClientServer> {
             socket_addr: self.socket_addr,
             router: self.router,
             _pd: PhantomData,
@@ -75,6 +74,14 @@ impl<Topology> SignallingServerBuilder<Topology> {
     pub fn router(mut self, mut map: impl FnMut(&mut Router)) -> Self {
         map(&mut self.router);
         self
+    }
+
+    fn on_peer_connected(mut self) -> Self {
+        todo!()
+    }
+
+    fn on_peer_disconnected(mut self) -> Self {
+        todo!()
     }
 
     /// Apply permissive CORS middleware for debug purposes.
@@ -100,18 +107,22 @@ impl<Topology> SignallingServerBuilder<Topology> {
         );
         self
     }
-}
 
-impl SignallingServerBuilder<FullMesh> {
-    /// Create a [`SignallingServer`] with full-mesh topology.
-    pub fn build_full_mesh(&self) -> SignallingServer<FullMesh> {
-        todo!()
+    /// Create a [`SignallingServer`].
+    pub fn build(self) -> SignallingServer {
+        SignallingServer {
+            socket_addr: self.socket_addr,
+            router: self.router,
+        }
     }
 }
 
 impl SignallingServerBuilder<ClientServer> {
-    /// Create a [`SignallingServer`] with client-server topology.
-    pub fn build_client_server(&self) -> SignallingServer<FullMesh> {
+    pub fn on_host_connected(mut self) -> Self {
+        todo!()
+    }
+
+    pub fn on_host_disconnected(mut self) -> Self {
         todo!()
     }
 }

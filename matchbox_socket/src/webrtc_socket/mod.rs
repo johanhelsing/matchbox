@@ -14,7 +14,7 @@ use log::{debug, warn};
 use matchbox_protocol::PeerId;
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
-pub use socket::{ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketConfig};
+pub use socket::{ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketBuilder};
 use std::{collections::HashMap, pin::Pin, time::Duration};
 
 use self::error::{MessagingError, SignallingError};
@@ -107,16 +107,18 @@ trait Messenger {
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
-        peer_signal_rx: UnboundedReceiver<PeerSignal>,
+        mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
-        config: &WebRtcSocketConfig,
+        ice_server_config: &RtcIceServerConfig,
+        channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
         peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
-        config: &WebRtcSocketConfig,
+        ice_server_config: &RtcIceServerConfig,
+        channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
@@ -124,7 +126,7 @@ trait Messenger {
 
 async fn message_loop<M: Messenger>(
     id_tx: crossbeam_channel::Sender<PeerId>,
-    config: WebRtcSocketConfig,
+    config: WebRtcSocketBuilder,
     channels: MessageLoopChannels,
 ) {
     let MessageLoopChannels {
@@ -168,14 +170,14 @@ async fn message_loop<M: Messenger>(
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid, signal_tx);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), &config))
+                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), &config.ice_server, &config.channels))
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to report peer as disconnected");},
                         PeerEvent::Signal { sender, data } => {
                             handshake_signals.entry(sender).or_insert_with(|| {
                                 let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender, requests_sender.clone());
-                                handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), &config));
+                                handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), &config.ice_server, &config.channels));
                                 from_peer_tx
                             }).unbounded_send(data).expect("failed to forward signal to handshaker");
                         },

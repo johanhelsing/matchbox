@@ -124,8 +124,8 @@ impl WebRtcSocketBuilder {
         self
     }
 
-    /// Sets the number of attempts to make at reconnecting, if None the socket will
-    /// attempt to connect indefinitely.
+    /// Sets the number of attempts to make at reconnecting to the signalling server,
+    /// if `None` the socket will attempt to connect indefinitely.
     pub fn reconnect_attempts(mut self, attempts: Option<u16>) -> Self {
         self.attempts = attempts;
         self

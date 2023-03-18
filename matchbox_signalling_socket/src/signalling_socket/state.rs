@@ -19,10 +19,12 @@ pub struct SignalingState {
 }
 
 impl SignalingState {
-    /// Add a peer
-    pub(crate) fn add_peer(&mut self, peer: Peer) {
+    /// Add a peer, returning peers that already existed
+    pub(crate) fn add_peer(&mut self, peer: Peer) -> HashMap<PeerId, Peer> {
+        let prior_peers = self.peers.clone();
         let peer_id = peer.uuid;
         self.peers.insert(peer.uuid, peer);
+        prior_peers
     }
 
     /// Remove a peer from the state if it existed, returning the peer removed.

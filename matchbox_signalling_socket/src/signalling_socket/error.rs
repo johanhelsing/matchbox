@@ -6,8 +6,12 @@ use tokio::sync::mpsc::error::SendError;
 pub enum ClientRequestError {
     #[error("Axum error")]
     Axum(#[from] axum::Error),
+    #[error("Message is close")]
+    Close,
     #[error("Json error")]
     Json(#[from] serde_json::Error),
+    #[error("Unsupported message type")]
+    UnsupportedType,
 }
 
 /// An error in server logic.

@@ -235,6 +235,32 @@ impl WebRtcSocket {
         WebRtcSocketBuilder::new(room_url)
     }
 
+    /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] for a
+    /// socket with a single unreliable channel.
+    ///
+    /// The returned [`MessageLoopFuture`] should be awaited in order for messages to
+    /// be sent and received.
+    ///
+    /// Please use the [`WebRtcSocketBuilder`] to create non-trivial sockets.
+    pub fn new_unreliable(room_url: impl Into<String>) -> (WebRtcSocket, MessageLoopFuture) {
+        WebRtcSocketBuilder::new(room_url)
+            .add_unreliable_channel()
+            .build()
+    }
+
+    /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] for a
+    /// socket with a single reliable channel.
+    ///
+    /// The returned [`MessageLoopFuture`] should be awaited in order for messages to
+    /// be sent and received.
+    ///
+    /// Please use the [`WebRtcSocketBuilder`] to create non-trivial sockets.
+    pub fn new_reliable(room_url: impl Into<String>) -> (WebRtcSocket, MessageLoopFuture) {
+        WebRtcSocketBuilder::new(room_url)
+            .add_reliable_channel()
+            .build()
+    }
+
     /// Handle peers connecting or disconnecting
     ///
     /// Constructed using [`WebRtcSocketBuilder`].

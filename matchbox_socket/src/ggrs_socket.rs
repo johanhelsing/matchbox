@@ -1,13 +1,26 @@
 use ggrs::{Message, PlayerType};
 use matchbox_protocol::PeerId;
 
-use crate::{ChannelConfig, WebRtcSocket, WebRtcSocketBuilder};
+use crate::{ChannelConfig, MessageLoopFuture, WebRtcSocket, WebRtcSocketBuilder};
 
 #[derive(Debug, thiserror::Error)]
 #[error("The client has not yet been given a Peer Id")]
 pub struct UnknownPeerId;
 
 impl WebRtcSocket {
+    /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] for a
+    /// socket with a single channel configured correctly for usage with GGRS.
+    ///
+    /// The returned [`MessageLoopFuture`] should be awaited in order for messages to
+    /// be sent and received.
+    ///
+    /// Please use the [`WebRtcSocketBuilder`] to create non-trivial sockets.
+    pub fn new_ggrs(room_url: impl Into<String>) -> (WebRtcSocket, MessageLoopFuture) {
+        WebRtcSocketBuilder::new(room_url)
+            .add_ggrs_channel()
+            .build()
+    }
+
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     pub fn players(&self) -> Result<Vec<PlayerType<PeerId>>, UnknownPeerId> {
         let our_id = self.id().ok_or(UnknownPeerId)?;

@@ -1,8 +1,20 @@
+use crate::signalling_socket::handlers::handle_ws;
+use axum::{extract::ws::WebSocket, routing::get, Router};
+use futures::lock::Mutex;
+use matchbox_protocol::PeerId;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    trace::{DefaultOnResponse, MakeSpan, OnBodyChunk, OnEos, OnFailure, TraceLayer},
+    LatencyUnit,
+};
+use tracing::Level;
+
+use super::handlers::{ws_handler, SignallingState};
 use crate::{
     signalling_socket::topologies::{ClientServer, FullMesh},
     SignallingServer,
 };
-use std::{marker::PhantomData, net::SocketAddr};
+use std::{marker::PhantomData, net::SocketAddr, sync::Arc};
 
 /// Builder for [`SignallingServer`]s.
 ///
@@ -13,7 +25,18 @@ pub struct SignallingServerBuilder<Topology> {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
 
+    /// The router used by the signalling server
+    pub(crate) router: Router,
+
     _pd: PhantomData<Topology>,
+}
+
+fn default_router() -> Router {
+    Router::new()
+        .route("/:path", get(ws_handler))
+        .with_state(Arc::new(futures::lock::Mutex::new(
+            SignallingState::default(),
+        )))
 }
 
 impl<Topology> SignallingServerBuilder<Topology> {
@@ -21,6 +44,7 @@ impl<Topology> SignallingServerBuilder<Topology> {
     pub fn new(socket_addr: impl Into<SocketAddr>) -> Self {
         Self {
             socket_addr: socket_addr.into(),
+            router: default_router(),
             _pd: PhantomData,
         }
     }
@@ -31,6 +55,7 @@ impl<Topology> SignallingServerBuilder<Topology> {
         // TODO: - SignallingServerBuilder { ..self }
         SignallingServerBuilder {
             socket_addr: self.socket_addr,
+            router: default_router(),
             _pd: PhantomData,
         }
     }
@@ -41,8 +66,39 @@ impl<Topology> SignallingServerBuilder<Topology> {
         // TODO: - SignallingServerBuilder { ..self }
         SignallingServerBuilder {
             socket_addr: self.socket_addr,
+            router: self.router,
             _pd: PhantomData,
         }
+    }
+
+    /// Modify the router.
+    pub fn router(mut self, mut map: impl FnMut(&mut Router)) -> Self {
+        map(&mut self.router);
+        self
+    }
+
+    /// Apply permissive CORS middleware for debug purposes.
+    pub fn cors(mut self) -> Self {
+        self.router = self.router.layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        );
+        self
+    }
+
+    /// Apply a default tracing middleware layer for debug purposes.
+    pub fn trace(mut self) -> Self {
+        self.router = self.router.layer(
+            // Middleware for logging from tower-http
+            TraceLayer::new_for_http().on_response(
+                DefaultOnResponse::new()
+                    .level(Level::INFO)
+                    .latency_unit(LatencyUnit::Micros),
+            ),
+        );
+        self
     }
 }
 

@@ -30,11 +30,6 @@ pub(crate) struct RequestedRoom {
     next: Option<usize>,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-pub(crate) struct QueryParam {
-    next: Option<usize>,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct Peer {
     pub uuid: PeerId,

@@ -1,3 +1,4 @@
+use super::state::SignalingState;
 use axum::{
     extract::{ws::WebSocket, ConnectInfo, Path, Query, State, WebSocketUpgrade},
     response::IntoResponse,
@@ -6,8 +7,6 @@ use futures::lock::Mutex;
 use serde::Deserialize;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tracing::info;
-
-use super::state::SignalingState;
 
 pub struct WsExtract {
     addr: SocketAddr,
@@ -20,7 +19,7 @@ pub struct WsExtract {
 pub(crate) struct RoomId(String);
 
 /// The handler for the HTTP request to upgrade to WebSockets.
-/// This is the last point where we can extract TCP/IP metadata such as IP address of the client.
+/// This is the last point where we can extract metadata such as IP address of the client.
 pub(crate) async fn ws_handler(
     ws: WebSocketUpgrade,
     path: Option<Path<RoomId>>,

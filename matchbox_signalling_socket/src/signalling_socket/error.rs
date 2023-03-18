@@ -12,7 +12,7 @@ pub enum ClientRequestError {
 
 /// An error in server logic.
 #[derive(Debug, thiserror::Error)]
-pub enum ServerError {
+pub enum SignalingError {
     #[error("Unknown recipient peer")]
     UnknownPeer,
     #[error("Undeliverable message")]

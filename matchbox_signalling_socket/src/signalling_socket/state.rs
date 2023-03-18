@@ -2,7 +2,7 @@ use axum::extract::ws::Message;
 use matchbox_protocol::PeerId;
 use std::collections::HashMap;
 
-use super::error::ServerError;
+use super::error::SignalingError;
 
 /// A wrapper for storage in the signaling server state
 #[derive(Debug, Clone)]
@@ -32,15 +32,15 @@ impl SignalingState {
     }
 
     /// Send a message to a peer without blocking.
-    pub(crate) fn try_send(&self, id: PeerId, message: Message) -> Result<(), ServerError> {
+    pub(crate) fn try_send(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
         let peer = self.peers.get(&id);
         let peer = match peer {
             Some(peer) => peer,
             None => {
-                return Err(ServerError::UnknownPeer);
+                return Err(SignalingError::UnknownPeer);
             }
         };
 
-        peer.sender.send(Ok(message)).map_err(ServerError::from)
+        peer.sender.send(Ok(message)).map_err(SignalingError::from)
     }
 }

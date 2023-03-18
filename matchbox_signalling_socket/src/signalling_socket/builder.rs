@@ -24,7 +24,7 @@ pub struct SignalingServerBuilder<Topology> {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
 
-    /// The router used by the signalling server
+    /// The router used by the signaling server
     pub(crate) router: Router,
 
     _pd: PhantomData<Topology>,
@@ -39,7 +39,7 @@ fn default_router() -> Router {
 }
 
 impl<Topology> SignalingServerBuilder<Topology> {
-    /// Creates a new builder for a [`SignallingServer`].
+    /// Creates a new builder for a [`SignalingServer`].
     pub fn new(socket_addr: impl Into<SocketAddr>) -> Self {
         Self {
             socket_addr: socket_addr.into(),
@@ -48,7 +48,7 @@ impl<Topology> SignalingServerBuilder<Topology> {
         }
     }
 
-    /// Changes the topology of the [`SignallingServer`] to full-mesh.
+    /// Changes the topology of the [`SignalingServer`] to full-mesh.
     pub fn full_mesh_topology(self) -> SignalingServerBuilder<FullMesh> {
         // TODO: When #![feature(type_changing_struct_update)] is stable, just do
         // TODO: - SignallingServerBuilder { ..self }
@@ -59,7 +59,7 @@ impl<Topology> SignalingServerBuilder<Topology> {
         }
     }
 
-    /// Changes the topology of the [`SignallingServer`] to client-server.
+    /// Changes the topology of the [`SignalingServer`] to client-server.
     pub fn client_server_topology(self) -> SignalingServerBuilder<ClientServer> {
         // TODO: When #![feature(type_changing_struct_update)] is stable, just do
         // TODO: - SignallingServerBuilder { ..self }
@@ -108,7 +108,7 @@ impl<Topology> SignalingServerBuilder<Topology> {
         self
     }
 
-    /// Create a [`SignallingServer`].
+    /// Create a [`SignalingServer`].
     pub fn build(self) -> SignalingServer {
         SignalingServer {
             socket_addr: self.socket_addr,

@@ -20,7 +20,7 @@ use tracing::Level;
 /// Begin with [`SignallingServerBuilder::new`] and add parameters before calling
 /// [`SignallingServerBuilder::build`] to produce the desired [`SignallingServer`].
 #[derive(Debug, Clone)]
-pub struct SignallingServerBuilder<Topology> {
+pub struct SignalingServerBuilder<Topology> {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
 
@@ -38,7 +38,7 @@ fn default_router() -> Router {
         )))
 }
 
-impl<Topology> SignallingServerBuilder<Topology> {
+impl<Topology> SignalingServerBuilder<Topology> {
     /// Creates a new builder for a [`SignallingServer`].
     pub fn new(socket_addr: impl Into<SocketAddr>) -> Self {
         Self {
@@ -49,10 +49,10 @@ impl<Topology> SignallingServerBuilder<Topology> {
     }
 
     /// Changes the topology of the [`SignallingServer`] to full-mesh.
-    pub fn full_mesh_topology(self) -> SignallingServerBuilder<FullMesh> {
+    pub fn full_mesh_topology(self) -> SignalingServerBuilder<FullMesh> {
         // TODO: When #![feature(type_changing_struct_update)] is stable, just do
         // TODO: - SignallingServerBuilder { ..self }
-        SignallingServerBuilder::<FullMesh> {
+        SignalingServerBuilder::<FullMesh> {
             socket_addr: self.socket_addr,
             router: default_router(),
             _pd: PhantomData,
@@ -60,10 +60,10 @@ impl<Topology> SignallingServerBuilder<Topology> {
     }
 
     /// Changes the topology of the [`SignallingServer`] to client-server.
-    pub fn client_server_topology(self) -> SignallingServerBuilder<ClientServer> {
+    pub fn client_server_topology(self) -> SignalingServerBuilder<ClientServer> {
         // TODO: When #![feature(type_changing_struct_update)] is stable, just do
         // TODO: - SignallingServerBuilder { ..self }
-        SignallingServerBuilder::<ClientServer> {
+        SignalingServerBuilder::<ClientServer> {
             socket_addr: self.socket_addr,
             router: self.router,
             _pd: PhantomData,
@@ -117,7 +117,7 @@ impl<Topology> SignallingServerBuilder<Topology> {
     }
 }
 
-impl SignallingServerBuilder<ClientServer> {
+impl SignalingServerBuilder<ClientServer> {
     pub fn on_host_connected(mut self) -> Self {
         todo!()
     }

@@ -1,5 +1,5 @@
 use super::{
-    builder::SignallingServerBuilder,
+    builder::SignalingServerBuilder,
     topologies::{ClientServer, FullMesh},
 };
 use axum::Router;
@@ -20,8 +20,8 @@ pub struct SignallingServer {
 impl SignallingServer {
     pub fn builder<Topology>(
         socket_addr: impl Into<SocketAddr>,
-    ) -> SignallingServerBuilder<Topology> {
-        SignallingServerBuilder::new(socket_addr)
+    ) -> SignalingServerBuilder<Topology> {
+        SignalingServerBuilder::new(socket_addr)
     }
 
     pub async fn serve(self) -> Result<(), crate::Error> {

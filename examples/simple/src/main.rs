@@ -1,7 +1,7 @@
 use futures::{select, FutureExt};
 use futures_timer::Delay;
 use log::info;
-use matchbox_socket::{PeerState, WebRtcSocketBuilder};
+use matchbox_socket::{PeerState, WebRtcSocket};
 use std::time::Duration;
 
 #[cfg(target_arch = "wasm32")]
@@ -31,9 +31,7 @@ async fn main() {
 
 async fn async_main() {
     info!("Connecting to matchbox");
-    let (mut socket, loop_fut) = WebRtcSocketBuilder::new("ws://localhost:3536/")
-        .add_unreliable_channel()
-        .build();
+    let (mut socket, loop_fut) = WebRtcSocket::new_reliable("ws://localhost:3536/");
 
     let loop_fut = loop_fut.fuse();
     futures::pin_mut!(loop_fut);

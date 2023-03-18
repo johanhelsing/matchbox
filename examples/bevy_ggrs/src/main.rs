@@ -1,7 +1,7 @@
 use bevy::{log::LogPlugin, prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, Session};
 use ggrs::SessionBuilder;
-use matchbox_socket::{PeerState, WebRtcSocket, WebRtcSocketBuilder};
+use matchbox_socket::{PeerState, WebRtcSocket};
 
 mod args;
 mod box_game;
@@ -91,9 +91,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcSocketBuilder::new(room_url)
-        .add_ggrs_channel()
-        .build();
+    let (socket, message_loop) = WebRtcSocket::new_ggrs(room_url);
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.

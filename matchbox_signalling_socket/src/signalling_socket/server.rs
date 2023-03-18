@@ -3,7 +3,7 @@ use super::{
     topologies::{ClientServer, FullMesh},
 };
 use matchbox_protocol::PeerId;
-use std::{collections::HashSet, marker::PhantomData};
+use std::{collections::HashSet, marker::PhantomData, net::SocketAddr};
 
 /// Contains the interface end of a signalling server
 #[derive(Debug, Default)]
@@ -15,8 +15,8 @@ pub struct SignallingServer<Topology = FullMesh> {
 
 /// Common methods
 impl<Topology> SignallingServer<Topology> {
-    pub fn builder() -> SignallingServerBuilder<Topology> {
-        SignallingServerBuilder::n
+    pub fn builder(socket_addr: impl Into<SocketAddr>) -> SignallingServerBuilder<Topology> {
+        SignallingServerBuilder::new(socket_addr)
     }
 
     pub fn peers(&self) -> &HashSet<PeerId> {

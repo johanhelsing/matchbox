@@ -1,4 +1,7 @@
-use super::topologies::{ClientServer, FullMesh};
+use super::{
+    builder::SignallingServerBuilder,
+    topologies::{ClientServer, FullMesh},
+};
 use matchbox_protocol::PeerId;
 use std::{collections::HashSet, marker::PhantomData};
 
@@ -12,6 +15,10 @@ pub struct SignallingServer<Topology = FullMesh> {
 
 /// Common methods
 impl<Topology> SignallingServer<Topology> {
+    pub fn builder() -> SignallingServerBuilder<Topology> {
+        SignallingServerBuilder::n
+    }
+
     pub fn peers(&self) -> &HashSet<PeerId> {
         &self.peers
     }

@@ -1,7 +1,8 @@
-use crate::SignallingServer;
+use crate::{
+    signalling_socket::topologies::{ClientServer, FullMesh},
+    SignallingServer,
+};
 use std::{marker::PhantomData, net::SocketAddr};
-
-use super::topologies::{ClientServer, FullMesh};
 
 /// Builder for [`SignallingServer`]s.
 ///
@@ -16,18 +17,30 @@ pub struct SignallingServerBuilder<Topology> {
 }
 
 impl<Topology> SignallingServerBuilder<Topology> {
-    /// Creates a new builder for a [`SignallingServer`] with full-mesh topology.
-    pub fn new_full_mesh(socket_addr: impl Into<SocketAddr>) -> Self {
+    /// Creates a new builder for a [`SignallingServer`].
+    pub fn new(socket_addr: impl Into<SocketAddr>) -> Self {
         Self {
             socket_addr: socket_addr.into(),
             _pd: PhantomData,
         }
     }
 
-    /// Creates a new builder for a [`SignallingServer`] with client-server topology.
-    pub fn new_client_server(socket_addr: impl Into<SocketAddr>) -> Self {
-        Self {
-            socket_addr: socket_addr.into(),
+    /// Changes the topology of the [`SignallingServer`] to full-mesh.
+    pub fn full_mesh_topology(self) -> SignallingServerBuilder<FullMesh> {
+        // TODO: When #![feature(type_changing_struct_update)] is stable, just do
+        // TODO: - SignallingServerBuilder { ..self }
+        SignallingServerBuilder {
+            socket_addr: self.socket_addr,
+            _pd: PhantomData,
+        }
+    }
+
+    /// Changes the topology of the [`SignallingServer`] to client-server.
+    pub fn client_server_topology(self) -> SignallingServerBuilder<ClientServer> {
+        // TODO: When #![feature(type_changing_struct_update)] is stable, just do
+        // TODO: - SignallingServerBuilder { ..self }
+        SignallingServerBuilder {
+            socket_addr: self.socket_addr,
             _pd: PhantomData,
         }
     }

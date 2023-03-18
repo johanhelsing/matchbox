@@ -6,4 +6,4 @@ mod error;
 mod signalling_socket;
 
 pub use error::Error;
-pub use signalling_socket::socket::SignallingServer;
+pub use signalling_socket::server::SignallingServer;

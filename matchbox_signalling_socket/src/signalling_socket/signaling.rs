@@ -12,18 +12,13 @@ use std::{
 };
 use tracing::info;
 
-/// Contains the signalling server state
-#[derive(Default, Debug, Clone)]
-pub struct SignallingState {
-    peers: HashSet<PeerId>,
-    host: Option<PeerId>,
-}
+use super::state::SignalingState;
 
 pub struct WsExtract {
     addr: SocketAddr,
     path: Option<String>,
     query_params: Option<HashMap<String, String>>,
-    state: Arc<Mutex<SignallingState>>,
+    state: Arc<Mutex<SignalingState>>,
 }
 
 #[derive(Debug, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
@@ -35,7 +30,7 @@ pub(crate) async fn ws_handler(
     ws: WebSocketUpgrade,
     path: Option<Path<RoomId>>,
     Query(params): Query<HashMap<String, String>>,
-    State(state): State<Arc<Mutex<SignallingState>>>,
+    State(state): State<Arc<Mutex<SignalingState>>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     info!("`{addr}` connected.");

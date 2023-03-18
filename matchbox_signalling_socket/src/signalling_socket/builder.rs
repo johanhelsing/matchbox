@@ -1,4 +1,4 @@
-use crate::signalling_socket::handlers::handle_ws;
+use crate::signalling_socket::signaling::handle_ws;
 use axum::{extract::ws::WebSocket, routing::get, Router};
 use futures::lock::Mutex;
 use matchbox_protocol::PeerId;
@@ -9,7 +9,7 @@ use tower_http::{
 };
 use tracing::Level;
 
-use super::handlers::{ws_handler, SignallingState};
+use super::{signaling::ws_handler, state::SignalingState};
 use crate::{
     signalling_socket::topologies::{ClientServer, FullMesh},
     SignallingServer,
@@ -35,7 +35,7 @@ fn default_router() -> Router {
     Router::new()
         .route("/:path", get(ws_handler))
         .with_state(Arc::new(futures::lock::Mutex::new(
-            SignallingState::default(),
+            SignalingState::default(),
         )))
 }
 

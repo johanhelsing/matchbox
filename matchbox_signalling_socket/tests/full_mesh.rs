@@ -1,10 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use futures::{SinkExt, StreamExt};
+    use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
+    use futures_timer::Delay;
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signalling_socket::SignalingServer;
     use std::{net::Ipv4Addr, str::FromStr, sync::atomic::AtomicBool};
-    use tokio::net::TcpStream;
+    use tokio::{
+        net::TcpStream,
+        select,
+        time::{self, Duration},
+    };
     use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
     // Helper to take the next PeerEvent from a stream
@@ -25,26 +30,6 @@ mod tests {
         } else {
             panic!("Peer_event was not IdAssigned: {peer_event:?}");
         }
-    }
-
-    #[tokio::test]
-    async fn ws_on_connect_callback() {
-        let success = std::sync::Arc::new(AtomicBool::new(false));
-
-        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .on_peer_connected({
-                let success = success.clone();
-                || async move { success.store(true, std::sync::atomic::Ordering::Relaxed) }
-            })
-            .build();
-        let addr = server.local_addr();
-        tokio::spawn(server.serve());
-
-        tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
-            .await
-            .expect("handshake");
-
-        assert!(success.load(std::sync::atomic::Ordering::Acquire))
     }
 
     #[tokio::test]
@@ -170,5 +155,61 @@ mod tests {
                 sender: a_uuid,
             }
         );
+    }
+
+    #[tokio::test]
+    async fn ws_on_connect_callback() {
+        let success = std::sync::Arc::new(AtomicBool::new(false));
+
+        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .on_peer_connected({
+                let success = success.clone();
+                || async move { success.store(true, std::sync::atomic::Ordering::Release) }
+            })
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        // Connect
+        tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+            .await
+            .expect("handshake");
+
+        assert!(success.load(std::sync::atomic::Ordering::Acquire))
+    }
+
+    #[tokio::test]
+    async fn ws_on_disconnect_callback() {
+        let success = std::sync::Arc::new(AtomicBool::new(false));
+
+        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .on_peer_disconnected({
+                let success = success.clone();
+                || async move { success.store(true, std::sync::atomic::Ordering::Release) }
+            })
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        // Connect
+        {
+            tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+                .await
+                .expect("handshake");
+        }
+        // Disconnects due to scope drop
+        // Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
+        let fetch = Delay::new(Duration::from_millis(1)).fuse();
+        let timeout = Delay::new(Duration::from_millis(100)).fuse();
+        pin_mut!(timeout, fetch);
+        select! {
+            _ = &mut fetch => {
+                if !success.load(std::sync::atomic::Ordering::Acquire) {
+                    fetch.set(Delay::new(Duration::from_millis(1)).fuse());
+                }
+            }
+            _ = timeout => panic!("on_disconnect didn't trigger within performance goal")
+        };
+        assert!(success.load(std::sync::atomic::Ordering::Acquire))
     }
 }

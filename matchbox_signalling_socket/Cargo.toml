@@ -27,3 +27,4 @@ tokio-stream = "0.1"
 
 [dev-dependencies]
 tokio-tungstenite = "0.18.0"
+futures-timer = "3.0"

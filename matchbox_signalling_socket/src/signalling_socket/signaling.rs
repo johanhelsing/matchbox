@@ -140,6 +140,11 @@ pub(crate) async fn full_mesh_ws(
 
     // Peer disconnected or otherwise ended communication.
     info!("Removing peer: {:?}", peer_uuid);
+    // Lifecycle event: On Disconnected
+    {
+        let callbacks = &mut callbacks.lock().await.on_peer_disconnected;
+        callbacks.as_mut().await;
+    }
     let mut state = state.lock().await;
     if let Some(removed_peer) = state.remove_peer(&peer_uuid) {
         // Tell each connected peer about the disconnected peer.

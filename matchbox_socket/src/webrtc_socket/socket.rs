@@ -160,25 +160,26 @@ impl WebRtcSocketBuilder {
     /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and received.
     pub fn build(self) -> (WebRtcSocket, MessageLoopFuture) {
         if self.channels.is_empty() {
-            panic!("You need to configure at least one channel in WebRtcSocketConfig");
+            panic!("You need to configure at least one channel in WebRtcSocketBuilder");
         }
 
-        let (messages_from_peers_tx, messages_from_peers) =
-            new_senders_and_receivers(&self.channels);
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
-        let (peer_messages_out_tx, peer_messages_out_rx) =
-            new_senders_and_receivers(&self.channels);
-
+        let (channels, inner_channels): (_, Vec<_>) = (0..self.channels.len())
+            .map(|_| {
+                let (channel, inner_channel) = WebRtcChannel::new();
+                (Some(channel), inner_channel)
+            })
+            .unzip();
+        let (peer_messages_out_rx, messages_from_peers_tx) = inner_channels.into_iter().unzip();
         let (id_tx, id_rx) = crossbeam_channel::bounded(1);
 
         (
             WebRtcSocket {
                 id: Default::default(),
                 id_rx,
-                messages_from_peers,
-                peer_messages_out: peer_messages_out_tx,
                 peer_state_rx,
                 peers: Default::default(),
+                channels,
             },
             Box::pin(run_socket(
                 id_tx,
@@ -209,18 +210,65 @@ pub enum PeerState {
     /// - The peer left the signalling server
     Disconnected,
 }
+/// Used to send and recieve packets on a given web rtc channel
+#[derive(Debug)]
+pub struct WebRtcChannel {
+    tx: UnboundedSender<(PeerId, Packet)>,
+    rx: UnboundedReceiver<(PeerId, Packet)>,
+}
 
-/// Contains the interface end of a full-mesh web rtc connection
-///
-/// Used to send and receive messages from other peers
+impl WebRtcChannel {
+    fn new() -> (
+        Self,
+        (
+            UnboundedReceiver<(PeerId, Packet)>,
+            UnboundedSender<(PeerId, Packet)>,
+        ),
+    ) {
+        let (to_peer_tx, to_peer_rx) = futures_channel::mpsc::unbounded::<(PeerId, Packet)>();
+        let (from_peer_tx, from_peer_rx) = futures_channel::mpsc::unbounded::<(PeerId, Packet)>();
+
+        (
+            Self {
+                rx: from_peer_rx,
+                tx: to_peer_tx,
+            },
+            (to_peer_rx, from_peer_tx),
+        )
+    }
+
+    /// Call this where you want to handle new received messages from a specific channel as
+    /// configured in [`WebRtcSocketBuilder::channels`]. The index of a channel is its index in
+    /// the vec [`WebRtcSocketBuilder::channels`] as you configured it before (or 0 for the
+    /// default channel if you use the default configuration).
+    ///
+    /// messages are removed from the socket when called
+    pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
+        std::iter::repeat_with(|| self.rx.try_next())
+            .map_while(Result::ok)
+            .flatten()
+            .collect()
+    }
+
+    /// Send a packet to the given peer on a specific channel as configured in
+    /// [`WebRtcSocketBuilder::channels`].
+    ///
+    /// The index of a channel is its index in the vec [`WebRtcSocketBuilder::channels`] as you
+    /// configured it before (or 0 for the default channel if you use the default
+    /// configuration).
+    pub fn send(&mut self, packet: Packet, peer: PeerId) {
+        self.tx.unbounded_send((peer, packet)).expect("Send failed");
+    }
+}
+
+/// Contains a set of web rtc channels and some connection metadata.
 #[derive(Debug)]
 pub struct WebRtcSocket {
     id: once_cell::race::OnceBox<PeerId>,
     id_rx: crossbeam_channel::Receiver<PeerId>,
-    messages_from_peers: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
-    peer_messages_out: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peers: HashMap<PeerId, PeerState>,
+    channels: Vec<Option<WebRtcChannel>>,
 }
 
 impl WebRtcSocket {
@@ -259,6 +307,28 @@ impl WebRtcSocket {
         WebRtcSocketBuilder::new(room_url)
             .add_reliable_channel()
             .build()
+    }
+
+    /// Gets a reference to the [`WebRtcChannel`] of a given id. May return [`None`] if
+    /// the channel has been taken.
+    ///
+    /// See also: [`WebRtcSocket::take_channel`]
+    pub fn channel(&mut self, channel: usize) -> Option<&mut WebRtcChannel> {
+        self.channels
+            .get_mut(channel)
+            .expect(&format!("No channel exists with id {channel}"))
+            .as_mut()
+    }
+
+    /// Takes the [`WebRtcChannel`] of a given id. May return [`None`] if the channel
+    /// has been taken.
+    ///
+    /// See also: [`WebRtcSocket::channel`]
+    pub fn take_channel(&mut self, channel: usize) -> Option<WebRtcChannel> {
+        self.channels
+            .get_mut(channel)
+            .expect(&format!("No channel exists with id {channel}"))
+            .take()
     }
 
     /// Handle peers connecting or disconnecting
@@ -313,77 +383,6 @@ impl WebRtcSocket {
         })
     }
 
-    /// Call this where you want to handle new received messages from the default channel (with
-    /// index 0) which will be the only channel if you didn't configure any explicitly
-    ///
-    /// messages are removed from the socket when called
-    ///
-    /// See also: [`WebRtcSocket::receive_on_channel`]
-    pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
-        self.receive_on_channel(0)
-    }
-
-    /// Call this where you want to handle new received messages from a specific channel as
-    /// configured in [`WebRtcSocketConfig::channels`]. The index of a channel is its index in
-    /// the vec [`WebRtcSocketConfig::channels`] as you configured it before (or 0 for the
-    /// default channel if you use the default configuration).
-    ///
-    /// messages are removed from the socket when called
-    pub fn receive_on_channel(&mut self, index: usize) -> Vec<(PeerId, Packet)> {
-        std::iter::repeat_with(|| {
-            self.messages_from_peers
-                .get_mut(index)
-                .unwrap_or_else(|| panic!("no data channel with index: {index}"))
-                .try_next()
-        })
-        // errors mean the other end of messages_from_peers was dropped
-        // or we are disconnecting, in any case it means there are no messages
-        // for us to handle.
-        .map_while(Result::ok)
-        .flatten()
-        .collect()
-    }
-
-    /// Send a packet to the given peer on the default channel (with index 0) which will be the only
-    /// channel if you didn't configure any explicitly
-    ///
-    /// See also [`WebRtcSocket::send_on_channel`]
-    pub fn send<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
-        self.send_on_channel(packet, id, 0);
-    }
-
-    /// Send a packet to the given peer on a specific channel as configured in
-    /// [`WebRtcSocketConfig::channels`].
-    ///
-    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] as you
-    /// configured it before (or 0 for the default channel if you use the default
-    /// configuration).
-    pub fn send_on_channel<T: Into<PeerId>>(&mut self, packet: Packet, id: T, index: usize) {
-        self.peer_messages_out
-            .get(index)
-            .unwrap_or_else(|| panic!("No data channel with index {index}"))
-            .unbounded_send((id.into(), packet))
-            .expect("send_to failed");
-    }
-
-    /// Send a packet to all connected peers on a specific channel as configured in
-    /// [`WebRtcSocketConfig::channels`].
-    ///
-    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] on socket
-    /// creation.
-    pub fn broadcast_on_channel(&mut self, packet: Packet, index: usize) {
-        let sender = self
-            .peer_messages_out
-            .get(index)
-            .unwrap_or_else(|| panic!("No data channel with index {index}"));
-
-        for peer_id in self.connected_peers() {
-            sender
-                .unbounded_send((peer_id, packet.clone()))
-                .expect("send_to failed");
-        }
-    }
-
     /// Returns the id of this peer, this may be `None` if an id has not yet
     /// been assigned by the server.
     pub fn id(&self) -> Option<PeerId> {
@@ -396,14 +395,6 @@ impl WebRtcSocket {
             None
         }
     }
-}
-
-pub(crate) fn new_senders_and_receivers<T>(
-    channel_configs: &[ChannelConfig],
-) -> (Vec<UnboundedSender<T>>, Vec<UnboundedReceiver<T>>) {
-    (0..channel_configs.len())
-        .map(|_| futures_channel::mpsc::unbounded())
-        .unzip()
 }
 
 pub(crate) fn create_data_channels_ready_fut(

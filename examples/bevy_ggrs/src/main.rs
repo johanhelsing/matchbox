@@ -177,11 +177,8 @@ fn lobby_system(
 
     info!("All peers have joined, going in-game");
 
-    // consume the socket (currently required because ggrs takes ownership of its socket)
-    let socket = socket.0.take().unwrap();
-
     // extract final player list
-    let players = socket.players();
+    let players = socket.0.as_mut().unwrap().players();
 
     let max_prediction = 12;
 
@@ -199,9 +196,12 @@ fn lobby_system(
             .expect("failed to add player");
     }
 
+    // consume the channel (required because ggrs takes ownership of its socket)
+    let channel = socket.0.as_mut().unwrap().take_channel(0).unwrap();
+
     // start the GGRS session
     let sess = sess_build
-        .start_p2p_session(socket)
+        .start_p2p_session(channel)
         .expect("failed to start session");
 
     commands.insert_resource(Session::P2PSession(sess));

@@ -1,7 +1,7 @@
 use ggrs::{Message, PlayerType};
 use matchbox_protocol::PeerId;
 
-use crate::{ChannelConfig, MessageLoopFuture, WebRtcSocket, WebRtcSocketBuilder};
+use crate::{ChannelConfig, MessageLoopFuture, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder};
 
 impl WebRtcSocket {
     /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] for a
@@ -44,7 +44,7 @@ impl WebRtcSocket {
     }
 }
 
-impl ggrs::NonBlockingSocket<PeerId> for WebRtcSocket {
+impl ggrs::NonBlockingSocket<PeerId> for WebRtcChannel {
     fn send_to(&mut self, msg: &Message, addr: &PeerId) {
         let buf = bincode::serialize(&msg).unwrap();
         let packet = buf.into_boxed_slice();

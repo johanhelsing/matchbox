@@ -14,7 +14,9 @@ use log::{debug, warn};
 use matchbox_protocol::PeerId;
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
-pub use socket::{ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketBuilder};
+pub use socket::{
+    ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
+};
 use std::{collections::HashMap, pin::Pin, time::Duration};
 
 use self::error::{MessagingError, SignallingError};

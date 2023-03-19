@@ -46,7 +46,7 @@ async fn async_main() {
                 PeerState::Connected => {
                     info!("Peer joined: {:?}", peer);
                     let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
-                    socket.send(packet, peer);
+                    socket.channel(0).as_mut().unwrap().send(packet, peer);
                 }
                 PeerState::Disconnected => {
                     info!("Peer left: {peer:?}");
@@ -55,7 +55,7 @@ async fn async_main() {
         }
 
         // Accept any messages incoming
-        for (peer, packet) in socket.receive() {
+        for (peer, packet) in socket.channel(0).unwrap().receive() {
             let message = String::from_utf8_lossy(&packet);
             info!("Message from {peer:?}: {message:?}");
         }

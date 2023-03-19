@@ -22,7 +22,6 @@ impl SignalingState {
     /// Add a peer, returning peers that already existed
     pub(crate) fn add_peer(&mut self, peer: Peer) -> HashMap<PeerId, Peer> {
         let prior_peers = self.peers.clone();
-        let peer_id = peer.uuid;
         self.peers.insert(peer.uuid, peer);
         prior_peers
     }

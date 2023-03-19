@@ -109,10 +109,18 @@ impl<Topology> SignalingServerBuilder<Topology> {
     }
 
     /// Create a [`SignalingServer`].
+    /// 
+    /// Panics
+    /// 
     pub fn build(self) -> SignalingServer {
+        let server = axum::Server::bind(&self.socket_addr).serve(
+            self.router
+                .into_make_service_with_connect_info::<SocketAddr>(),
+        );
+        let socket_addr = server.local_addr();
         SignalingServer {
-            socket_addr: self.socket_addr,
-            router: self.router,
+            server,
+            socket_addr,
         }
     }
 }

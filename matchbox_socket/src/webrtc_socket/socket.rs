@@ -1,3 +1,4 @@
+use super::error::ChannelError;
 use crate::{
     webrtc_socket::{
         message_loop, signalling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
@@ -10,8 +11,6 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
 use std::{collections::HashMap, pin::Pin};
-
-use super::error::ChannelError;
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
@@ -166,13 +165,17 @@ impl WebRtcSocketBuilder {
         }
 
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
-        let (channels, inner_channels): (_, Vec<_>) = (0..self.channels.len())
-            .map(|_| {
-                let (channel, inner_channel) = WebRtcChannel::new();
-                (Some(channel), inner_channel)
-            })
-            .unzip();
-        let (peer_messages_out_rx, messages_from_peers_tx) = inner_channels.into_iter().unzip();
+
+        let (messages_from_peers_tx, messages_from_peers_rx) =
+            new_senders_and_receivers(&self.channels);
+        let (peer_messages_out_tx, peer_messages_out_rx) =
+            new_senders_and_receivers(&self.channels);
+        let channels = messages_from_peers_rx
+            .into_iter()
+            .zip(peer_messages_out_tx.into_iter())
+            .map(|(rx, tx)| Some(WebRtcChannel { rx, tx }))
+            .collect();
+
         let (id_tx, id_rx) = crossbeam_channel::bounded(1);
 
         (
@@ -220,25 +223,6 @@ pub struct WebRtcChannel {
 }
 
 impl WebRtcChannel {
-    fn new() -> (
-        Self,
-        (
-            UnboundedReceiver<(PeerId, Packet)>,
-            UnboundedSender<(PeerId, Packet)>,
-        ),
-    ) {
-        let (to_peer_tx, to_peer_rx) = futures_channel::mpsc::unbounded::<(PeerId, Packet)>();
-        let (from_peer_tx, from_peer_rx) = futures_channel::mpsc::unbounded::<(PeerId, Packet)>();
-
-        (
-            Self {
-                rx: from_peer_rx,
-                tx: to_peer_tx,
-            },
-            (to_peer_rx, from_peer_tx),
-        )
-    }
-
     /// Call this where you want to handle new received messages from a specific channel as
     /// configured in [`WebRtcSocketBuilder::channels`]. The index of a channel is its index in
     /// the vec [`WebRtcSocketBuilder::channels`] as you configured it before (or 0 for the

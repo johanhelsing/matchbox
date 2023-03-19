@@ -24,7 +24,10 @@ pub enum PeerEvent<S> {
     IdAssigned(PeerId),
     NewPeer(PeerId),
     PeerLeft(PeerId),
-    Signal { sender: PeerId, data: S },
+    Signal {
+        sender: PeerId,
+        data: S,
+    },
 }
 
 cfg_if! {

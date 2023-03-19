@@ -54,7 +54,7 @@ impl<Topology> SignalingServerBuilder<Topology> {
 
     pub fn on_peer_connected<F, Fut>(mut self, callback: F) -> Self
     where
-        F: Fn() -> Fut + 'static,
+        F: FnOnce() -> Fut + 'static,
         Fut: Future<Output = ()> + 'static + Send,
     {
         self.callbacks.try_lock().unwrap().on_peer_connected = Box::pin(callback());
@@ -63,7 +63,7 @@ impl<Topology> SignalingServerBuilder<Topology> {
 
     pub fn on_peer_disconnected<F, Fut>(mut self, callback: F) -> Self
     where
-        F: Fn() -> Fut + 'static + Send + Sync,
+        F: FnOnce() -> Fut + 'static + Send + Sync,
         Fut: Future<Output = ()> + 'static + Send,
     {
         self.callbacks.try_lock().unwrap().on_peer_disconnected = Box::pin(callback());

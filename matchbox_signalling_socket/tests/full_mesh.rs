@@ -28,12 +28,14 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic]
     async fn ws_on_connect_callback() {
         let success = std::sync::Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .on_peer_connected(|| async { panic!("This should panic") })
+            .on_peer_connected({
+                let success = success.clone();
+                || async move { success.store(true, std::sync::atomic::Ordering::Relaxed) }
+            })
             .build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
@@ -41,6 +43,8 @@ mod tests {
         tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
             .await
             .expect("handshake");
+
+        assert!(success.load(std::sync::atomic::Ordering::Acquire))
     }
 
     #[tokio::test]

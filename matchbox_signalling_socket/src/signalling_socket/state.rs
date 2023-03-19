@@ -2,7 +2,7 @@ use axum::extract::ws::Message;
 use matchbox_protocol::PeerId;
 use std::collections::HashMap;
 
-use super::error::SignalingError;
+use super::{callbacks::Callbacks, error::SignalingError};
 
 /// A wrapper for storage in the signaling server state
 #[derive(Debug, Clone)]

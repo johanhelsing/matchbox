@@ -1,13 +1,10 @@
 use crate::{
-    signalling_socket::{
-        signaling::ws_handler,
-        state::SignalingState,
-        topologies::{ClientServer, FullMesh},
-    },
+    signalling_socket::{signaling::ws_handler, state::SignalingState, topologies::ClientServer},
     SignalingServer,
 };
 use axum::{routing::get, Router};
-use std::{marker::PhantomData, net::SocketAddr, sync::Arc};
+use futures::{lock::Mutex, Future};
+use std::{cell::RefCell, marker::PhantomData, net::SocketAddr, pin::Pin, rc::Rc, sync::Arc};
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
@@ -15,11 +12,12 @@ use tower_http::{
 };
 use tracing::Level;
 
+use super::callbacks::Callbacks;
+
 /// Builder for [`SignalingServer`]s.
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
 /// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
-#[derive(Debug, Clone)]
 pub struct SignalingServerBuilder<Topology> {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
@@ -27,61 +25,48 @@ pub struct SignalingServerBuilder<Topology> {
     /// The router used by the signaling server
     pub(crate) router: Router,
 
-    _pd: PhantomData<Topology>,
-}
+    /// The callbacks used by the signalling server
+    pub(crate) callbacks: Callbacks,
 
-fn default_router() -> Router {
-    Router::new()
-        .route("/:path", get(ws_handler))
-        .with_state(Arc::new(futures::lock::Mutex::new(
-            SignalingState::default(),
-        )))
+    _pd: PhantomData<Topology>,
 }
 
 impl<Topology> SignalingServerBuilder<Topology> {
     /// Creates a new builder for a [`SignalingServer`].
     pub fn new(socket_addr: impl Into<SocketAddr>) -> Self {
+        let state = Arc::new(Mutex::new(SignalingState::default()));
         Self {
             socket_addr: socket_addr.into(),
-            router: default_router(),
-            _pd: PhantomData,
-        }
-    }
-
-    /// Changes the topology of the [`SignalingServer`] to full-mesh.
-    pub fn full_mesh_topology(self) -> SignalingServerBuilder<FullMesh> {
-        // TODO: When #![feature(type_changing_struct_update)] is stable, just do
-        // TODO: - SignallingServerBuilder { ..self }
-        SignalingServerBuilder::<FullMesh> {
-            socket_addr: self.socket_addr,
-            router: default_router(),
-            _pd: PhantomData,
-        }
-    }
-
-    /// Changes the topology of the [`SignalingServer`] to client-server.
-    pub fn client_server_topology(self) -> SignalingServerBuilder<ClientServer> {
-        // TODO: When #![feature(type_changing_struct_update)] is stable, just do
-        // TODO: - SignallingServerBuilder { ..self }
-        SignalingServerBuilder::<ClientServer> {
-            socket_addr: self.socket_addr,
-            router: self.router,
+            router: Router::new()
+                .route("/:path", get(ws_handler))
+                .with_state(state),
+            callbacks: Callbacks::default(),
             _pd: PhantomData,
         }
     }
 
     /// Modify the router.
-    pub fn router(mut self, mut map: impl FnMut(&mut Router)) -> Self {
-        map(&mut self.router);
+    pub fn router(mut self, mut alter: impl FnMut(&mut Router)) -> Self {
+        alter(&mut self.router);
         self
     }
 
-    fn on_peer_connected(mut self) -> Self {
-        todo!()
+    fn on_peer_connected<F, Fut>(mut self, callback: F) -> Self
+    where
+        F: Fn() -> Fut + 'static,
+        Fut: Future<Output = ()> + 'static + Send,
+    {
+        self.callbacks.on_peer_connected = Box::new(move || Box::pin(callback()));
+        self
     }
 
-    fn on_peer_disconnected(mut self) -> Self {
-        todo!()
+    fn on_peer_disconnected<F, Fut>(mut self, callback: F) -> Self
+    where
+        F: Fn() -> Fut + 'static,
+        Fut: Future<Output = ()> + 'static + Send,
+    {
+        self.callbacks.on_peer_disconnected = Box::new(move || Box::pin(callback()));
+        self
     }
 
     /// Apply permissive CORS middleware for debug purposes.
@@ -109,10 +94,10 @@ impl<Topology> SignalingServerBuilder<Topology> {
     }
 
     /// Create a [`SignalingServer`].
-    /// 
-    /// Panics
-    /// 
-    pub fn build(self) -> SignalingServer {
+    ///
+    /// # Panics
+    /// This method will panic if the socket address requested cannot be bound.
+    pub fn build(mut self) -> SignalingServer {
         let server = axum::Server::bind(&self.socket_addr).serve(
             self.router
                 .into_make_service_with_connect_info::<SocketAddr>(),

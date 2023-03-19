@@ -19,12 +19,14 @@ pub struct SignalingServer {
 /// Common methods
 impl SignalingServer {
     /// Creates a new builder for a [`SignalingServer`] with full-mesh topology.
-    pub fn full_mesh(socket_addr: impl Into<SocketAddr>) -> SignalingServerBuilder<FullMesh> {
+    pub fn full_mesh_builder(
+        socket_addr: impl Into<SocketAddr>,
+    ) -> SignalingServerBuilder<FullMesh> {
         SignalingServerBuilder::new(socket_addr)
     }
 
     /// Creates a new builder for a [`SignalingServer`] with client-server topology.
-    pub fn client_server(
+    pub fn client_server_builder(
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<ClientServer> {
         SignalingServerBuilder::new(socket_addr)
@@ -38,8 +40,7 @@ impl SignalingServer {
     /// Serve the signaling server
     pub async fn serve(self) -> Result<(), crate::Error> {
         // TODO: Shouldn't this return Result<!, crate::Error>?
-        let x = self.server.await;
-        match x {
+        match self.server.await {
             Ok(()) => Ok(()),
             Err(e) => Err(crate::Error::from(e)),
         }

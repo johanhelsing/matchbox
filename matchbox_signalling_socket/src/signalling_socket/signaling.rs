@@ -1,6 +1,6 @@
-use crate::signalling_socket::state::Peer;
+use crate::signalling_socket::{callbacks, state::Peer};
 
-use super::{error::ClientRequestError, state::SignalingState};
+use super::{callbacks::Callbacks, error::ClientRequestError, state::SignalingState};
 use axum::{
     extract::{
         ws::{Message, WebSocket},
@@ -41,11 +41,11 @@ pub(crate) async fn ws_handler(
     };
 
     // Finalize the upgrade process by returning upgrade callback to client
-    ws.on_upgrade(move |websocket| handle_ws(websocket, extract, state))
+    ws.on_upgrade(move |websocket| full_mesh_ws(websocket, extract, state))
 }
 
 /// One of these handlers is spawned for every web socket.
-pub(crate) async fn handle_ws(
+pub(crate) async fn full_mesh_ws(
     websocket: WebSocket,
     extract: WsExtract,
     state: Arc<Mutex<SignalingState>>,
@@ -54,6 +54,7 @@ pub(crate) async fn handle_ws(
     let sender = spawn_sender_task(ws_sender);
 
     let peer_uuid = uuid::Uuid::new_v4().into();
+
     {
         let mut add_peer_state = state.lock().await;
         let peers = add_peer_state.add_peer(Peer {

@@ -3,10 +3,6 @@ use matchbox_protocol::PeerId;
 
 use crate::{ChannelConfig, MessageLoopFuture, WebRtcSocket, WebRtcSocketBuilder};
 
-#[derive(Debug, thiserror::Error)]
-#[error("The client has not yet been given a Peer Id")]
-pub struct UnknownPeerId;
-
 impl WebRtcSocket {
     /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] for a
     /// socket with a single channel configured correctly for usage with GGRS.
@@ -22,8 +18,12 @@ impl WebRtcSocket {
     }
 
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
-    pub fn players(&self) -> Result<Vec<PlayerType<PeerId>>, UnknownPeerId> {
-        let our_id = self.id().ok_or(UnknownPeerId)?;
+    pub fn players(&self) -> Vec<PlayerType<PeerId>> {
+        let Some(our_id) = self.id() else {
+            // we're still waiting for the server to initialize our id
+            // no peers should be added at this point anyway
+            return vec![PlayerType::Local];
+        };
 
         // player order needs to be consistent order across all peers
         let mut ids: Vec<_> = self
@@ -32,8 +32,7 @@ impl WebRtcSocket {
             .collect();
         ids.sort();
 
-        let players = ids
-            .into_iter()
+        ids.into_iter()
             .map(|id| {
                 if id == our_id {
                     PlayerType::Local
@@ -41,8 +40,7 @@ impl WebRtcSocket {
                     PlayerType::Remote(id)
                 }
             })
-            .collect();
-        Ok(players)
+            .collect()
     }
 }
 

@@ -181,7 +181,7 @@ fn lobby_system(
     let socket = socket.0.take().unwrap();
 
     // extract final player list
-    let players = socket.players().unwrap();
+    let players = socket.players();
 
     let max_prediction = 12;
 

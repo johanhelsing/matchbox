@@ -3,7 +3,7 @@ mod tests {
     use futures::{SinkExt, StreamExt};
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signalling_socket::SignalingServer;
-    use std::{net::Ipv4Addr, str::FromStr};
+    use std::{net::Ipv4Addr, str::FromStr, sync::atomic::AtomicBool};
     use tokio::net::TcpStream;
     use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
@@ -25,6 +25,22 @@ mod tests {
         } else {
             panic!("Peer_event was not IdAssigned: {peer_event:?}");
         }
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn ws_on_connect_callback() {
+        let success = std::sync::Arc::new(AtomicBool::new(false));
+
+        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .on_peer_connected(|| async { panic!("This should panic") })
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+            .await
+            .expect("handshake");
     }
 
     #[tokio::test]

@@ -1,8 +1,9 @@
+use super::callbacks::Callbacks;
 use crate::{
     signalling_socket::{signaling::ws_handler, state::SignalingState, topologies::ClientServer},
     SignalingServer,
 };
-use axum::{routing::get, Router};
+use axum::{routing::get, Extension, Router};
 use futures::{lock::Mutex, Future};
 use std::{cell::RefCell, marker::PhantomData, net::SocketAddr, pin::Pin, rc::Rc, sync::Arc};
 use tower_http::{
@@ -11,8 +12,6 @@ use tower_http::{
     LatencyUnit,
 };
 use tracing::Level;
-
-use super::callbacks::Callbacks;
 
 /// Builder for [`SignalingServer`]s.
 ///
@@ -26,7 +25,7 @@ pub struct SignalingServerBuilder<Topology> {
     pub(crate) router: Router,
 
     /// The callbacks used by the signalling server
-    pub(crate) callbacks: Callbacks,
+    pub(crate) callbacks: Arc<Mutex<Callbacks>>,
 
     _pd: PhantomData<Topology>,
 }
@@ -35,12 +34,14 @@ impl<Topology> SignalingServerBuilder<Topology> {
     /// Creates a new builder for a [`SignalingServer`].
     pub fn new(socket_addr: impl Into<SocketAddr>) -> Self {
         let state = Arc::new(Mutex::new(SignalingState::default()));
+        let callbacks = Arc::new(Mutex::new(Callbacks::default()));
         Self {
             socket_addr: socket_addr.into(),
             router: Router::new()
                 .route("/:path", get(ws_handler))
-                .with_state(state),
-            callbacks: Callbacks::default(),
+                .with_state(state)
+                .layer(Extension(Arc::clone(&callbacks))),
+            callbacks,
             _pd: PhantomData,
         }
     }
@@ -51,21 +52,21 @@ impl<Topology> SignalingServerBuilder<Topology> {
         self
     }
 
-    fn on_peer_connected<F, Fut>(mut self, callback: F) -> Self
+    pub fn on_peer_connected<F, Fut>(mut self, callback: F) -> Self
     where
         F: Fn() -> Fut + 'static,
         Fut: Future<Output = ()> + 'static + Send,
     {
-        self.callbacks.on_peer_connected = Box::new(move || Box::pin(callback()));
+        self.callbacks.try_lock().unwrap().on_peer_connected = Box::pin(callback());
         self
     }
 
-    fn on_peer_disconnected<F, Fut>(mut self, callback: F) -> Self
+    pub fn on_peer_disconnected<F, Fut>(mut self, callback: F) -> Self
     where
-        F: Fn() -> Fut + 'static,
+        F: Fn() -> Fut + 'static + Send + Sync,
         Fut: Future<Output = ()> + 'static + Send,
     {
-        self.callbacks.on_peer_disconnected = Box::new(move || Box::pin(callback()));
+        self.callbacks.try_lock().unwrap().on_peer_disconnected = Box::pin(callback());
         self
     }
 

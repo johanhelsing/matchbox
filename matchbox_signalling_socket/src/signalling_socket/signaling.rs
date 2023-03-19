@@ -7,6 +7,7 @@ use axum::{
         ConnectInfo, Path, Query, State, WebSocketUpgrade,
     },
     response::IntoResponse,
+    Extension,
 };
 use futures::{lock::Mutex, stream::SplitSink, StreamExt};
 use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerRequest};
@@ -28,6 +29,7 @@ pub(crate) async fn ws_handler(
     path: Option<Path<String>>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<Arc<Mutex<SignalingState>>>,
+    Extension(callbacks): Extension<Arc<Mutex<Callbacks>>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     info!("`{addr}` connected.");
@@ -41,7 +43,7 @@ pub(crate) async fn ws_handler(
     };
 
     // Finalize the upgrade process by returning upgrade callback to client
-    ws.on_upgrade(move |websocket| full_mesh_ws(websocket, extract, state))
+    ws.on_upgrade(move |websocket| full_mesh_ws(websocket, extract, state, callbacks))
 }
 
 /// One of these handlers is spawned for every web socket.
@@ -49,12 +51,17 @@ pub(crate) async fn full_mesh_ws(
     websocket: WebSocket,
     extract: WsExtract,
     state: Arc<Mutex<SignalingState>>,
+    callbacks: Arc<Mutex<Callbacks>>,
 ) {
     let (ws_sender, mut ws_receiver) = websocket.split();
     let sender = spawn_sender_task(ws_sender);
 
     let peer_uuid = uuid::Uuid::new_v4().into();
-
+    // Lifecycle event: On Connected
+    {
+        let callbacks = &mut callbacks.lock().await.on_peer_connected;
+        callbacks.as_mut().await;
+    }
     {
         let mut add_peer_state = state.lock().await;
         let peers = add_peer_state.add_peer(Peer {

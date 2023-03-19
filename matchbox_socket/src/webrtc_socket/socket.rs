@@ -11,6 +11,8 @@ use log::{debug, error};
 use matchbox_protocol::PeerId;
 use std::{collections::HashMap, pin::Pin};
 
+use super::error::ChannelError;
+
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
 #[derive(Debug, Clone)]
@@ -313,22 +315,24 @@ impl WebRtcSocket {
     /// the channel has been taken.
     ///
     /// See also: [`WebRtcSocket::take_channel`]
-    pub fn channel(&mut self, channel: usize) -> Option<&mut WebRtcChannel> {
+    pub fn channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, ChannelError> {
         self.channels
             .get_mut(channel)
-            .expect(&format!("No channel exists with id {channel}"))
+            .ok_or(ChannelError::ChannelNotFound)?
             .as_mut()
+            .ok_or(ChannelError::ChannelTaken)
     }
 
     /// Takes the [`WebRtcChannel`] of a given id. May return [`None`] if the channel
     /// has been taken.
     ///
     /// See also: [`WebRtcSocket::channel`]
-    pub fn take_channel(&mut self, channel: usize) -> Option<WebRtcChannel> {
+    pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, ChannelError> {
         self.channels
             .get_mut(channel)
-            .expect(&format!("No channel exists with id {channel}"))
+            .ok_or(ChannelError::ChannelNotFound)?
             .take()
+            .ok_or(ChannelError::ChannelTaken)
     }
 
     /// Handle peers connecting or disconnecting

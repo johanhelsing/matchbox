@@ -2,6 +2,14 @@ use crate::webrtc_socket::messages::PeerEvent;
 use cfg_if::cfg_if;
 use futures_channel::mpsc::TrySendError;
 
+#[derive(Debug, thiserror::Error)]
+pub enum ChannelError {
+    #[error("This channel was never created")]
+    ChannelNotFound,
+    #[error("This channel has already been taken")]
+    ChannelTaken,
+}
+
 /// An error that can occur with WebRTC signalling.
 #[derive(Debug, thiserror::Error)]
 pub enum SignallingError {

@@ -295,8 +295,7 @@ impl WebRtcSocket {
             .build()
     }
 
-    /// Gets a reference to the [`WebRtcChannel`] of a given id. May return [`None`] if
-    /// the channel has been taken.
+    /// Gets a reference to the [`WebRtcChannel`] of a given id.
     ///
     /// See also: [`WebRtcSocket::take_channel`]
     pub fn channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, ChannelError> {
@@ -307,8 +306,7 @@ impl WebRtcSocket {
             .ok_or(ChannelError::ChannelTaken)
     }
 
-    /// Takes the [`WebRtcChannel`] of a given id. May return [`None`] if the channel
-    /// has been taken.
+    /// Takes the [`WebRtcChannel`] of a given id.
     ///
     /// See also: [`WebRtcSocket::channel`]
     pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, ChannelError> {

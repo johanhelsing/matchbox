@@ -27,7 +27,7 @@ pub struct WsExtract {
 
 #[derive(Clone)]
 pub struct SignalingStateMachine {
-    inner: Arc<Box<dyn Fn(WsUpgrade) -> BoxFuture<'static, ()> + Send + Sync + 'static>>,
+    inner: Arc<Box<dyn Fn(WsUpgrade) -> BoxFuture<'static, ()> + Send + Sync>>,
 }
 
 impl Default for SignalingStateMachine {

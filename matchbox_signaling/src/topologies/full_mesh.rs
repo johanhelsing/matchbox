@@ -1,20 +1,8 @@
-use crate::signaling_server::{
-    callbacks::Callbacks,
-    error::ClientRequestError,
-    signaling::{WsExtract, WsUpgrade},
-    state::{self, Peer, SignalingState},
-};
-use axum::{
-    extract::{
-        ws::{Message, WebSocket},
-        ConnectInfo, Path, Query, State, WebSocketUpgrade,
-    },
-    response::IntoResponse,
-    Extension,
-};
-use futures::{lock::Mutex, stream::SplitSink, StreamExt};
+use crate::signaling_server::{error::ClientRequestError, signaling::WsUpgrade, state::Peer};
+use axum::extract::ws::{Message, WebSocket};
+use futures::{stream::SplitSink, StreamExt};
 use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerRequest};
-use std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::Arc};
+use std::str::FromStr;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};

@@ -1,24 +1,16 @@
 use crate::{
-    signaling_server::{callbacks, state::Peer},
-    topologies,
+    signaling_server::{callbacks::Callbacks, state::SignalingState},
+    topologies::{FullMesh, Topology},
 };
-
-use super::{callbacks::Callbacks, error::ClientRequestError, state::SignalingState};
 use async_trait::async_trait;
 use axum::{
-    extract::{
-        ws::{Message, WebSocket},
-        ConnectInfo, Path, Query, State, WebSocketUpgrade,
-    },
+    extract::{ws::WebSocket, ConnectInfo, Path, Query, State, WebSocketUpgrade},
     response::IntoResponse,
     Extension,
 };
-use futures::{future::BoxFuture, lock::Mutex, stream::SplitSink, Future, StreamExt};
-use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerRequest};
-use std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::Arc};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{error, info, warn};
+use futures::{future::BoxFuture, lock::Mutex, Future};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tracing::info;
 
 pub struct WsUpgrade {
     pub ws: WebSocket,
@@ -35,16 +27,13 @@ pub struct WsExtract {
 
 #[derive(Clone)]
 pub struct SignalingStateMachine {
-    inner: Arc<Mutex<Box<dyn Fn(WsUpgrade) -> BoxFuture<'static, ()> + Send + Sync + 'static>>>,
+    inner: Arc<Box<dyn Fn(WsUpgrade) -> BoxFuture<'static, ()> + Send + Sync + 'static>>,
 }
 
 impl Default for SignalingStateMachine {
     fn default() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(Box::new(|x| {
-                Box::pin(topologies::full_mesh::state_machine(x))
-            }))),
-        }
+        // Defaults to full-mesh
+        FullMesh::state_machine()
     }
 }
 
@@ -55,7 +44,7 @@ impl SignalingStateMachine {
         Fut: Future<Output = ()> + 'static + Send,
     {
         Self {
-            inner: Arc::new(Mutex::new(Box::new(move |ws| Box::pin(callback(ws))))),
+            inner: Arc::new(Box::new(move |ws| Box::pin(callback(ws)))),
         }
     }
 }
@@ -89,9 +78,7 @@ pub(crate) async fn ws_handler(
             state,
             callbacks,
         };
-        let cb = state_machine.inner.clone();
-        let cb_lock = cb.try_lock().unwrap();
-        cb_lock(upgrade)
+        (*state_machine.inner)(upgrade)
     })
 }
 

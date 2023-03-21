@@ -1,7 +1,4 @@
-use futures::{future::BoxFuture, Future};
-use std::pin::Pin;
-
-use super::signaling::WsUpgrade;
+use futures::future::BoxFuture;
 
 /// Callbacks used by the signalling server
 pub struct Callbacks {

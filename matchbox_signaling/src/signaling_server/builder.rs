@@ -6,7 +6,7 @@ use crate::{
 };
 use axum::{routing::get, Extension, Router};
 use futures::{lock::Mutex, Future};
-use std::{cell::RefCell, marker::PhantomData, net::SocketAddr, pin::Pin, rc::Rc, sync::Arc};
+use std::{marker::PhantomData, net::SocketAddr, sync::Arc};
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},

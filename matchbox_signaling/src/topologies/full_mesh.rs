@@ -1,6 +1,9 @@
-use crate::signalling_socket::{callbacks, state::Peer};
-
-use super::{callbacks::Callbacks, error::ClientRequestError, state::SignalingState};
+use crate::signaling_server::{
+    callbacks::Callbacks,
+    error::ClientRequestError,
+    signaling::{WsExtract, WsUpgrade},
+    state::{self, Peer, SignalingState},
+};
 use axum::{
     extract::{
         ws::{Message, WebSocket},
@@ -16,44 +19,16 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};
 
-pub struct WsExtract {
-    addr: SocketAddr,
-    path: Option<String>,
-    query_params: Option<HashMap<String, String>>,
-}
-
-/// The handler for the HTTP request to upgrade to WebSockets.
-/// This is the last point where we can extract metadata such as IP address of the client.
-pub(crate) async fn ws_handler(
-    ws: WebSocketUpgrade,
-    path: Option<Path<String>>,
-    Query(params): Query<HashMap<String, String>>,
-    State(state): State<Arc<Mutex<SignalingState>>>,
-    Extension(callbacks): Extension<Arc<Mutex<Callbacks>>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-) -> impl IntoResponse {
-    info!("`{addr}` connected.");
-
-    let path = path.map(|path| path.0);
-    let query_params = Some(params);
-    let extract = WsExtract {
-        addr,
-        path,
-        query_params,
-    };
-
-    // Finalize the upgrade process by returning upgrade callback to client
-    ws.on_upgrade(move |websocket| full_mesh_ws(websocket, extract, state, callbacks))
-}
-
 /// One of these handlers is spawned for every web socket.
-pub(crate) async fn full_mesh_ws(
-    websocket: WebSocket,
-    extract: WsExtract,
-    state: Arc<Mutex<SignalingState>>,
-    callbacks: Arc<Mutex<Callbacks>>,
-) {
-    let (ws_sender, mut ws_receiver) = websocket.split();
+pub(crate) async fn state_machine(ws_upgrade: WsUpgrade) {
+    let WsUpgrade {
+        ws,
+        extract,
+        state,
+        callbacks,
+    } = ws_upgrade;
+
+    let (ws_sender, mut ws_receiver) = ws.split();
     let sender = spawn_sender_task(ws_sender);
 
     let peer_uuid = uuid::Uuid::new_v4().into();

@@ -3,7 +3,7 @@ members = [
     "matchbox_protocol",
     "matchbox_socket",
     "matchbox_server",
-    "matchbox_signalling_socket",
+    "matchbox_signaling",
     "examples/*",
 ]
 resolver = "2" # Important! Bevy/WGPU needs this!

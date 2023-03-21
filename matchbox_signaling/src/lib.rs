@@ -3,7 +3,8 @@
 #![forbid(unsafe_code)]
 
 mod error;
-mod signalling_socket;
+mod signaling_server;
+mod topologies;
 
 pub use error::Error;
-pub use signalling_socket::server::SignalingServer;
+pub use signaling_server::server::SignalingServer;

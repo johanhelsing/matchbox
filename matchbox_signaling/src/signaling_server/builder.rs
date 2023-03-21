@@ -1,6 +1,7 @@
-use super::callbacks::Callbacks;
+use super::{callbacks::Callbacks, signaling::SignalingStateMachine};
 use crate::{
-    signalling_socket::{signaling::ws_handler, state::SignalingState, topologies::ClientServer},
+    signaling_server::{signaling::ws_handler, state::SignalingState},
+    topologies::ClientServer,
     SignalingServer,
 };
 use axum::{routing::get, Extension, Router};
@@ -27,6 +28,9 @@ pub struct SignalingServerBuilder<Topology> {
     /// The callbacks used by the signalling server
     pub(crate) callbacks: Arc<Mutex<Callbacks>>,
 
+    /// The state machine that runs a websocket to completion, also where topology is implemented
+    pub(crate) state_machine: SignalingStateMachine,
+
     _pd: PhantomData<Topology>,
 }
 
@@ -42,6 +46,7 @@ impl<Topology> SignalingServerBuilder<Topology> {
                 .with_state(state)
                 .layer(Extension(Arc::clone(&callbacks))),
             callbacks,
+            state_machine: SignalingStateMachine::default(),
             _pd: PhantomData,
         }
     }
@@ -52,7 +57,7 @@ impl<Topology> SignalingServerBuilder<Topology> {
         self
     }
 
-    pub fn on_peer_connected<F, Fut>(mut self, callback: F) -> Self
+    pub fn on_peer_connected<F, Fut>(self, callback: F) -> Self
     where
         F: FnOnce() -> Fut + 'static,
         Fut: Future<Output = ()> + 'static + Send,
@@ -61,7 +66,7 @@ impl<Topology> SignalingServerBuilder<Topology> {
         self
     }
 
-    pub fn on_peer_disconnected<F, Fut>(mut self, callback: F) -> Self
+    pub fn on_peer_disconnected<F, Fut>(self, callback: F) -> Self
     where
         F: FnOnce() -> Fut + 'static + Send + Sync,
         Fut: Future<Output = ()> + 'static + Send,
@@ -99,6 +104,9 @@ impl<Topology> SignalingServerBuilder<Topology> {
     /// # Panics
     /// This method will panic if the socket address requested cannot be bound.
     pub fn build(mut self) -> SignalingServer {
+        // Insert topology
+        let topology = self.state_machine;
+        self.router = self.router.layer(Extension(topology));
         let server = axum::Server::bind(&self.socket_addr).serve(
             self.router
                 .into_make_service_with_connect_info::<SocketAddr>(),
@@ -112,11 +120,19 @@ impl<Topology> SignalingServerBuilder<Topology> {
 }
 
 impl SignalingServerBuilder<ClientServer> {
-    pub fn on_host_connected(mut self) -> Self {
+    pub fn on_host_connected<F, Fut>(self, callback: F) -> Self
+    where
+        F: FnOnce() -> Fut + 'static,
+        Fut: Future<Output = ()> + 'static + Send,
+    {
         todo!()
     }
 
-    pub fn on_host_disconnected(mut self) -> Self {
+    pub fn on_host_disconnected<F, Fut>(self, callback: F) -> Self
+    where
+        F: FnOnce() -> Fut + 'static,
+        Fut: Future<Output = ()> + 'static + Send,
+    {
         todo!()
     }
 }

@@ -1,4 +1,4 @@
-use crate::signalling_socket::error::SignalingError;
+use crate::signaling_server::error::SignalingError;
 
 /// Errors that can happen when using a signaling server.
 #[derive(Debug, thiserror::Error)]

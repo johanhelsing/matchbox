@@ -3,13 +3,9 @@ mod tests {
     use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
     use futures_timer::Delay;
     use matchbox_protocol::{JsonPeerEvent, PeerId};
-    use matchbox_signalling_socket::SignalingServer;
+    use matchbox_signaling::SignalingServer;
     use std::{net::Ipv4Addr, str::FromStr, sync::atomic::AtomicBool};
-    use tokio::{
-        net::TcpStream,
-        select,
-        time::{self, Duration},
-    };
+    use tokio::{net::TcpStream, select, time::Duration};
     use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
     // Helper to take the next PeerEvent from a stream

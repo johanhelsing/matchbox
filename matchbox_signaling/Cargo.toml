@@ -1,5 +1,5 @@
 [package]
-name = "matchbox_signalling_socket"
+name = "matchbox_signaling"
 version = "0.5.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>", "Spencer C. Imbleau <spencer@imbleau.com>"]
 description = "Painless WebRTC peer-to-peer signalling socket"
@@ -24,6 +24,7 @@ uuid = { version = "1.0", features = ["serde", "v4"] }
 clap = { version = "4.0", features = ["derive", "env"] }
 thiserror = "1.0"
 tokio-stream = "0.1"
+async-trait = { version = "0.1" }
 
 [dev-dependencies]
 tokio-tungstenite = "0.18.0"

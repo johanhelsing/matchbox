@@ -25,6 +25,14 @@ pub struct WsExtract {
     pub query_params: Option<HashMap<String, String>>,
 }
 
+#[async_trait]
+pub trait SignalingTopology {
+    /// A run-to-completion state machine, spawned once for every websocket.
+    async fn state_machine(upgrade: WsUpgrade)
+    where
+        Self: Sized;
+}
+
 #[derive(Clone)]
 pub struct SignalingStateMachine {
     inner: Arc<Box<dyn Fn(WsUpgrade) -> BoxFuture<'static, ()> + Send + Sync>>,
@@ -38,6 +46,17 @@ impl Default for SignalingStateMachine {
 }
 
 impl SignalingStateMachine {
+    pub fn from_top<T>(top: T) -> Self
+    where
+        T: SignalingTopology + 'static,
+    {
+        let fnc = <T as SignalingTopology>::state_machine;
+
+        Self {
+            inner: Arc::new(Box::new(move |ws| Box::pin(fnc(ws)))),
+        }
+    }
+
     pub fn from<F, Fut>(callback: F) -> Self
     where
         F: Fn(WsUpgrade) -> Fut + 'static + Send + Sync,
@@ -80,10 +99,4 @@ pub(crate) async fn ws_handler(
         };
         (*state_machine.inner)(upgrade)
     })
-}
-
-#[async_trait]
-pub trait SignalingService {
-    /// One of these handlers is spawned for every web socket.
-    async fn state_machine(upgrade: WsUpgrade);
 }

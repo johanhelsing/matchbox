@@ -34,7 +34,7 @@ pub struct SignalingServerBuilder<Topology: SignalingTopology> {
 
 impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
     /// Creates a new builder for a [`SignalingServer`].
-    pub fn new(socket_addr: impl Into<SocketAddr>, topology: impl Into<Topology>) -> Self {
+    pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology) -> Self {
         let state = Arc::new(Mutex::new(SignalingState::default()));
         let callbacks = Arc::new(Mutex::new(Callbacks::default()));
         Self {
@@ -44,7 +44,7 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
                 .with_state(state)
                 .layer(Extension(Arc::clone(&callbacks))),
             callbacks,
-            topology: topology.into(),
+            topology,
         }
     }
 
@@ -55,8 +55,8 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
     }
 
     /// Change the topology.
-    pub fn topology(mut self, topology: impl Into<Topology>) -> Self {
-        self.topology = topology.into();
+    pub fn topology(mut self, topology: Topology) -> Self {
+        self.topology = topology;
         self
     }
 

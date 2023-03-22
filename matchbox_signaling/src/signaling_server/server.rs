@@ -20,14 +20,14 @@ impl SignalingServer {
     pub fn full_mesh_builder(
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<FullMesh> {
-        SignalingServerBuilder::new(socket_addr)
+        SignalingServerBuilder::new(socket_addr, FullMesh)
     }
 
     /// Creates a new builder for a [`SignalingServer`] with client-server topology.
     pub fn client_server_builder(
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<ClientServer> {
-        SignalingServerBuilder::new(socket_addr)
+        SignalingServerBuilder::new(socket_addr, ClientServer)
     }
 
     /// Returns the local address this server is bound to

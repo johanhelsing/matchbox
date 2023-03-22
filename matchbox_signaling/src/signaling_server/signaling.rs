@@ -1,8 +1,7 @@
 use crate::{
     signaling_server::{callbacks::Callbacks, state::SignalingState},
-    topologies::{FullMesh, Topology},
+    topologies::SignalingTopology,
 };
-use async_trait::async_trait;
 use axum::{
     extract::{ws::WebSocket, ConnectInfo, Path, Query, State, WebSocketUpgrade},
     response::IntoResponse,
@@ -25,46 +24,27 @@ pub struct WsExtract {
     pub query_params: Option<HashMap<String, String>>,
 }
 
-#[async_trait]
-pub trait SignalingTopology {
-    /// A run-to-completion state machine, spawned once for every websocket.
-    async fn state_machine(upgrade: WsUpgrade)
-    where
-        Self: Sized;
-}
-
 #[derive(Clone)]
-pub struct SignalingStateMachine {
-    inner: Arc<Box<dyn Fn(WsUpgrade) -> BoxFuture<'static, ()> + Send + Sync>>,
-}
-
-impl Default for SignalingStateMachine {
-    fn default() -> Self {
-        // Defaults to full-mesh
-        FullMesh::state_machine()
-    }
-}
+pub struct SignalingStateMachine(
+    Arc<Box<dyn Fn(WsUpgrade) -> BoxFuture<'static, ()> + Send + Sync>>,
+);
 
 impl SignalingStateMachine {
-    pub fn from_top<T>(top: T) -> Self
+    pub fn from_topology<T>(top: T) -> Self
     where
-        T: SignalingTopology + 'static,
+        T: SignalingTopology,
     {
-        let fnc = <T as SignalingTopology>::state_machine;
-
-        Self {
-            inner: Arc::new(Box::new(move |ws| Box::pin(fnc(ws)))),
-        }
+        Self(Arc::new(Box::new(move |ws| {
+            Box::pin(<T as SignalingTopology>::state_machine(ws))
+        })))
     }
 
-    pub fn from<F, Fut>(callback: F) -> Self
+    pub fn new<F, Fut>(callback: F) -> Self
     where
         F: Fn(WsUpgrade) -> Fut + 'static + Send + Sync,
         Fut: Future<Output = ()> + 'static + Send,
     {
-        Self {
-            inner: Arc::new(Box::new(move |ws| Box::pin(callback(ws)))),
-        }
+        Self(Arc::new(Box::new(move |ws| Box::pin(callback(ws)))))
     }
 }
 
@@ -97,6 +77,6 @@ pub(crate) async fn ws_handler(
             state,
             callbacks,
         };
-        (*state_machine.inner)(upgrade)
+        (*state_machine.0)(upgrade)
     })
 }

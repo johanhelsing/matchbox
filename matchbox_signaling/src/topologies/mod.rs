@@ -1,19 +1,17 @@
-use crate::signaling_server::signaling::SignalingStateMachine;
+use crate::signaling_server::signaling::WsUpgrade;
+use async_trait::async_trait;
 
+mod client_server;
 mod full_mesh;
 
-pub trait Topology {
-    fn state_machine() -> SignalingStateMachine;
+#[async_trait]
+pub trait SignalingTopology {
+    /// A run-to-completion state machine, spawned once for every websocket.
+    async fn state_machine(upgrade: WsUpgrade);
 }
 
 #[derive(Debug, Default)]
 pub struct FullMesh;
-
-impl Topology for FullMesh {
-    fn state_machine() -> SignalingStateMachine {
-        SignalingStateMachine::from(full_mesh::state_machine)
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct ClientServer;

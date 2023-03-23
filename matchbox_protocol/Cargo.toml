@@ -12,7 +12,7 @@ homepage = "https://github.com/johanhelsing/matchbox"
 readme = "../README.md"
 
 [features]
-json = ["serde_json"]
+json = ["dep:serde_json"]
 
 [dependencies]
 cfg-if = "1.0"

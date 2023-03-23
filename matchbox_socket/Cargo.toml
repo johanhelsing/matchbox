@@ -47,7 +47,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
     "RtcIceConnectionState",
     "RtcConfiguration", "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType",
 ] }
-serde-wasm-bindgen = { version = "0.4" }
+serde-wasm-bindgen = { version = "0.5" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-tungstenite = { version = "0.20", default-features = false, features = [ "async-std-runtime", "async-tls" ] }

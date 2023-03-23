@@ -1,6 +1,6 @@
 [package]
 name = "bevy_matchbox"
-version = "0.1.0"
+version = "0.6.0"
 authors = [
   "Johan Helsing <johanhelsing@gmail.com>",
   "Garry O'Donnell <garry.euan.odonnell@ntlworld.com",

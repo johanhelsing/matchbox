@@ -6,4 +6,8 @@ mod signaling_server;
 mod topologies;
 
 pub use error::Error;
-pub use signaling_server::server::SignalingServer;
+pub use signaling_server::{
+    builder::SignalingServerBuilder,
+    callbacks::{Callback, Callbacks},
+    server::SignalingServer,
+};

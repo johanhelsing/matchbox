@@ -1,4 +1,3 @@
-use futures::future::BoxFuture;
 use std::{fmt, rc::Rc};
 
 /// Universal callback wrapper.
@@ -20,14 +19,6 @@ impl<IN, OUT> Clone for Callback<IN, OUT> {
         Self {
             cb: self.cb.clone(),
         }
-    }
-}
-
-#[allow(clippy::vtable_address_comparisons)]
-impl<IN, OUT> PartialEq for Callback<IN, OUT> {
-    fn eq(&self, other: &Callback<IN, OUT>) -> bool {
-        let (Callback { cb }, Callback { cb: rhs_cb }) = (self, other);
-        Rc::ptr_eq(cb, rhs_cb)
     }
 }
 

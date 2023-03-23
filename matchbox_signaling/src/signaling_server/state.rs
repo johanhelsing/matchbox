@@ -1,8 +1,7 @@
+use crate::signaling_server::error::SignalingError;
 use axum::extract::ws::Message;
 use matchbox_protocol::PeerId;
 use std::collections::HashMap;
-
-use super::error::SignalingError;
 
 /// A wrapper for storage in the signaling server state
 #[derive(Debug, Clone)]
@@ -15,7 +14,6 @@ pub(crate) struct Peer {
 #[derive(Default, Debug, Clone)]
 pub struct SignalingState {
     pub(crate) peers: HashMap<PeerId, Peer>,
-    pub(crate) host: Option<PeerId>,
 }
 
 impl SignalingState {

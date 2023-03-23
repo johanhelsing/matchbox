@@ -1,4 +1,7 @@
-use crate::signaling_server::{error::ClientRequestError, signaling::WsUpgrade, state::Peer};
+use crate::{
+    signaling_server::{error::ClientRequestError, signaling::WsUpgrade, state::Peer},
+    topologies::{FullMesh, SignalingTopology},
+};
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
 use futures::{stream::SplitSink, StreamExt};
@@ -7,8 +10,6 @@ use std::str::FromStr;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};
-
-use super::{FullMesh, SignalingTopology};
 
 #[async_trait]
 impl SignalingTopology for FullMesh {

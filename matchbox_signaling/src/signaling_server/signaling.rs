@@ -30,7 +30,7 @@ pub struct SignalingStateMachine(
 );
 
 impl SignalingStateMachine {
-    pub fn from_topology<T>(top: T) -> Self
+    pub fn from_topology<T>(_: T) -> Self
     where
         T: SignalingTopology,
     {

@@ -79,6 +79,8 @@ impl SignalingTopology for FullMesh {
 
             info!("{:?} <- {:?}", peer_uuid, request);
 
+            // Lifecycle event: On Signal
+            callbacks.on_signal.emit(());
             match request {
                 PeerRequest::Signal { receiver, data } => {
                     let event = Message::Text(
@@ -104,11 +106,9 @@ impl SignalingTopology for FullMesh {
             }
         }
 
-        // Peer disconnected or otherwise ended communication.
-        info!("Removing peer: {:?}", peer_uuid);
         // Lifecycle event: On Connected
         callbacks.on_peer_disconnected.emit(());
-
+        // Peer disconnected or otherwise ended communication.
         let mut state = state.lock().await;
         if let Some(removed_peer) = state.remove_peer(&peer_uuid) {
             // Tell each connected peer about the disconnected peer.

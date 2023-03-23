@@ -2,7 +2,7 @@
 mod tests {
     use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
     use futures_timer::Delay;
-    use matchbox_protocol::{JsonPeerEvent, PeerId};
+    use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
     use matchbox_signaling::SignalingServer;
     use std::{
         net::Ipv4Addr,
@@ -210,6 +210,42 @@ mod tests {
                 .expect("handshake");
         }
         // Disconnects due to scope drop
+
+        // Give adaquete time for the callback to trigger
+        let fetch = Delay::new(Duration::from_millis(1)).fuse();
+        let timeout = Delay::new(Duration::from_millis(100)).fuse();
+        pin_mut!(timeout, fetch);
+        select! {
+            _ = &mut fetch => {
+                if !success.load(std::sync::atomic::Ordering::Acquire) {
+                    fetch.set(Delay::new(Duration::from_millis(1)).fuse());
+                }
+            }
+            _ = timeout => panic!("timeout")
+        };
+        assert!(success.load(std::sync::atomic::Ordering::Acquire))
+    }
+
+    #[tokio::test]
+    async fn ws_on_signal_callback() {
+        let success = Arc::new(AtomicBool::new(false));
+
+        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .on_signal({
+                let success = success.clone();
+                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+            })
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        // Connect
+        let (mut stream, _) = tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+            .await
+            .expect("handshake");
+
+        let request = PeerRequest::KeepAlive.to_string();
+        stream.send(Message::Text(request)).await.unwrap();
 
         // Give adaquete time for the callback to trigger
         let fetch = Delay::new(Duration::from_millis(1)).fuse();

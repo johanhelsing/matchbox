@@ -61,8 +61,8 @@ impl<IN> Default for Callback<IN> {
 /// Callbacks used by the signalling server
 #[derive(Default, Debug, Clone)]
 pub struct Callbacks {
-    /// Triggered on connection to the signalling server
-    pub(crate) on_message: Callback<(), ()>,
+    /// Triggered on peer requests to the signalling server
+    pub(crate) on_signal: Callback<(), ()>,
     /// Triggered on a new connection to the signalling server
     pub(crate) on_peer_connected: Callback<(), ()>,
     /// Triggered on a disconnection to the signalling server

@@ -64,6 +64,15 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
     }
 
     // Set a callback triggered on new peer connections.
+    pub fn on_signal<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(()) -> () + 'static,
+    {
+        self.callbacks.on_signal = Callback::from(callback);
+        self
+    }
+
+    // Set a callback triggered on new peer connections.
     pub fn on_peer_connected<F>(mut self, callback: F) -> Self
     where
         F: Fn(()) -> () + 'static,

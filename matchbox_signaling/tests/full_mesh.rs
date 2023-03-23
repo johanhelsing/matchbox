@@ -4,7 +4,11 @@ mod tests {
     use futures_timer::Delay;
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signaling::SignalingServer;
-    use std::{net::Ipv4Addr, str::FromStr, sync::atomic::AtomicBool};
+    use std::{
+        net::Ipv4Addr,
+        str::FromStr,
+        sync::{atomic::AtomicBool, Arc},
+    };
     use tokio::{net::TcpStream, select, time::Duration};
     use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
@@ -155,15 +159,12 @@ mod tests {
 
     #[tokio::test]
     async fn ws_on_connect_callback() {
-        let success = std::sync::Arc::new(AtomicBool::new(false));
+        let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
             .on_peer_connected({
                 let success = success.clone();
-                move |_| {
-                    panic!();
-                    success.store(true, std::sync::atomic::Ordering::Release)
-                }
+                move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })
             .build();
         let addr = server.local_addr();
@@ -174,12 +175,24 @@ mod tests {
             .await
             .expect("handshake");
 
+        // Give adaquete time for the callback to trigger
+        let fetch = Delay::new(Duration::from_millis(1)).fuse();
+        let timeout = Delay::new(Duration::from_millis(100)).fuse();
+        pin_mut!(timeout, fetch);
+        select! {
+            _ = &mut fetch => {
+                if !success.load(std::sync::atomic::Ordering::Acquire) {
+                    fetch.set(Delay::new(Duration::from_millis(1)).fuse());
+                }
+            }
+            _ = timeout => panic!("timeout")
+        };
         assert!(success.load(std::sync::atomic::Ordering::Acquire))
     }
 
     #[tokio::test]
     async fn ws_on_disconnect_callback() {
-        let success = std::sync::Arc::new(AtomicBool::new(false));
+        let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
             .on_peer_disconnected({
@@ -197,7 +210,8 @@ mod tests {
                 .expect("handshake");
         }
         // Disconnects due to scope drop
-        // Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
+
+        // Give adaquete time for the callback to trigger
         let fetch = Delay::new(Duration::from_millis(1)).fuse();
         let timeout = Delay::new(Duration::from_millis(100)).fuse();
         pin_mut!(timeout, fetch);
@@ -207,7 +221,7 @@ mod tests {
                     fetch.set(Delay::new(Duration::from_millis(1)).fuse());
                 }
             }
-            _ = timeout => panic!("on_disconnect didn't trigger within performance goal")
+            _ = timeout => panic!("timeout")
         };
         assert!(success.load(std::sync::atomic::Ordering::Acquire))
     }

@@ -45,8 +45,7 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
             socket_addr: socket_addr.into(),
             router: Router::new()
                 .route("/:path", get(ws_handler))
-                .with_state(state)
-                .layer(Extension(callbacks.clone())),
+                .with_state(state),
             callbacks,
             topology,
         }
@@ -113,7 +112,10 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
     pub fn build(mut self) -> SignalingServer {
         // Insert topology
         let state_machine = SignalingStateMachine::from_topology(self.topology);
-        self.router = self.router.layer(Extension(state_machine));
+        self.router = self
+            .router
+            .layer(Extension(state_machine))
+            .layer(Extension(self.callbacks));
         let server = axum::Server::bind(&self.socket_addr).serve(
             self.router
                 .into_make_service_with_connect_info::<SocketAddr>(),

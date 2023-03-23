@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use crate::signaling_server::handlers::WsUpgrade;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, Future};
+use std::sync::Arc;
 
 mod client_server;
 mod full_mesh;
@@ -17,9 +16,7 @@ impl SignalingStateMachine {
     where
         T: SignalingTopology,
     {
-        Self(Arc::new(Box::new(move |ws| {
-            Box::pin(<T as SignalingTopology>::state_machine(ws))
-        })))
+        Self::new(|ws| <T as SignalingTopology>::state_machine(ws))
     }
 
     pub fn new<F, Fut>(callback: F) -> Self

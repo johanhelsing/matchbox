@@ -737,7 +737,6 @@ dependencies = [
  "bevy_ggrs",
  "bytemuck",
  "clap",
- "console_error_panic_hook",
  "ggrs",
  "matchbox_socket",
  "serde",

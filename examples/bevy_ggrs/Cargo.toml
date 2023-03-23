@@ -12,7 +12,6 @@ license = "MIT OR Apache-2.0"
 web-sys = { version = "0.3", features = [
     "Document", "Location", # for getting args from query string
 ] }
-console_error_panic_hook = "0.1"
 serde_qs = "0.12"
 wasm-bindgen = "0.2"
 ggrs = { version = "0.9", features = ["wasm-bindgen"] }

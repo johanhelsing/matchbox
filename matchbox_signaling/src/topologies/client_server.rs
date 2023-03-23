@@ -1,5 +1,6 @@
+use crate::signaling_server::handlers::WsUpgrade;
+
 use super::{ClientServer, SignalingTopology};
-use crate::signaling_server::signaling::WsUpgrade;
 use async_trait::async_trait;
 
 #[async_trait]

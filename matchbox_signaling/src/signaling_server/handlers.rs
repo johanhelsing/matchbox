@@ -1,6 +1,6 @@
 use crate::{
     signaling_server::{callbacks::Callbacks, state::SignalingState},
-    topologies::SignalingTopology,
+    topologies::{SignalingStateMachine, SignalingTopology},
 };
 use axum::{
     extract::{ws::WebSocket, ConnectInfo, Path, Query, State, WebSocketUpgrade},
@@ -15,37 +15,13 @@ pub struct WsUpgrade {
     pub ws: WebSocket,
     pub extract: WsExtract,
     pub state: Arc<Mutex<SignalingState>>,
-    pub callbacks: Arc<Mutex<Callbacks>>,
+    pub callbacks: Callbacks,
 }
 
 pub struct WsExtract {
     pub addr: SocketAddr,
     pub path: Option<String>,
     pub query_params: Option<HashMap<String, String>>,
-}
-
-#[derive(Clone)]
-pub struct SignalingStateMachine(
-    Arc<Box<dyn Fn(WsUpgrade) -> BoxFuture<'static, ()> + Send + Sync>>,
-);
-
-impl SignalingStateMachine {
-    pub fn from_topology<T>(_: T) -> Self
-    where
-        T: SignalingTopology,
-    {
-        Self(Arc::new(Box::new(move |ws| {
-            Box::pin(<T as SignalingTopology>::state_machine(ws))
-        })))
-    }
-
-    pub fn new<F, Fut>(callback: F) -> Self
-    where
-        F: Fn(WsUpgrade) -> Fut + 'static + Send + Sync,
-        Fut: Future<Output = ()> + 'static + Send,
-    {
-        Self(Arc::new(Box::new(move |ws| Box::pin(callback(ws)))))
-    }
 }
 
 /// The handler for the HTTP request to upgrade to WebSockets.
@@ -55,7 +31,7 @@ pub(crate) async fn ws_handler(
     path: Option<Path<String>>,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<Arc<Mutex<SignalingState>>>,
-    Extension(callbacks): Extension<Arc<Mutex<Callbacks>>>,
+    Extension(callbacks): Extension<Callbacks>,
     Extension(state_machine): Extension<SignalingStateMachine>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {

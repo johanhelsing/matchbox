@@ -1,21 +1,75 @@
 use futures::future::BoxFuture;
+use std::{fmt, rc::Rc};
 
-/// Callbacks used by the signalling server
-pub struct Callbacks {
-    /// Triggered on connection to the signalling server
-    pub(crate) on_message: BoxFuture<'static, ()>,
-    /// Triggered on a new connection to the signalling server
-    pub(crate) on_peer_connected: BoxFuture<'static, ()>,
-    /// Triggered on a disconnection to the signalling server
-    pub(crate) on_peer_disconnected: BoxFuture<'static, ()>,
+/// Universal callback wrapper.
+///
+/// An `Rc` wrapper is used to make it cloneable.
+pub struct Callback<IN, OUT = ()> {
+    /// A callback which can be called multiple times
+    pub(crate) cb: Rc<dyn Fn(IN) -> OUT>,
 }
 
-impl Default for Callbacks {
-    fn default() -> Self {
+impl<IN, OUT, F: Fn(IN) -> OUT + 'static> From<F> for Callback<IN, OUT> {
+    fn from(func: F) -> Self {
+        Callback { cb: Rc::new(func) }
+    }
+}
+
+impl<IN, OUT> Clone for Callback<IN, OUT> {
+    fn clone(&self) -> Self {
         Self {
-            on_message: Box::pin(async {}),
-            on_peer_connected: Box::pin(async {}),
-            on_peer_disconnected: Box::pin(async {}),
+            cb: self.cb.clone(),
         }
     }
 }
+
+#[allow(clippy::vtable_address_comparisons)]
+impl<IN, OUT> PartialEq for Callback<IN, OUT> {
+    fn eq(&self, other: &Callback<IN, OUT>) -> bool {
+        let (Callback { cb }, Callback { cb: rhs_cb }) = (self, other);
+        Rc::ptr_eq(cb, rhs_cb)
+    }
+}
+
+impl<IN, OUT> fmt::Debug for Callback<IN, OUT> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Callback<_>")
+    }
+}
+
+impl<IN, OUT> Callback<IN, OUT> {
+    /// This method calls the callback's function.
+    pub fn emit(&self, value: IN) -> OUT {
+        (*self.cb)(value)
+    }
+}
+
+impl<IN> Callback<IN> {
+    /// Creates a "no-op" callback which can be used when it is not suitable to use an
+    /// `Option<Callback>`.
+    pub fn noop() -> Self {
+        Self::from(|_| ())
+    }
+}
+
+impl<IN> Default for Callback<IN> {
+    fn default() -> Self {
+        Self::noop()
+    }
+}
+
+/// Callbacks used by the signalling server
+#[derive(Default, Debug, Clone)]
+pub struct Callbacks {
+    /// Triggered on connection to the signalling server
+    pub(crate) on_message: Callback<(), ()>,
+    /// Triggered on a new connection to the signalling server
+    pub(crate) on_peer_connected: Callback<(), ()>,
+    /// Triggered on a disconnection to the signalling server
+    pub(crate) on_peer_disconnected: Callback<(), ()>,
+}
+
+#[allow(unsafe_code)]
+unsafe impl Send for Callbacks {}
+#[allow(unsafe_code)]
+unsafe impl Sync for Callbacks {}

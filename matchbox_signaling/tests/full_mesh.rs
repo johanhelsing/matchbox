@@ -160,7 +160,10 @@ mod tests {
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
             .on_peer_connected({
                 let success = success.clone();
-                || async move { success.store(true, std::sync::atomic::Ordering::Release) }
+                move |_| {
+                    panic!();
+                    success.store(true, std::sync::atomic::Ordering::Release)
+                }
             })
             .build();
         let addr = server.local_addr();
@@ -181,7 +184,7 @@ mod tests {
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
             .on_peer_disconnected({
                 let success = success.clone();
-                || async move { success.store(true, std::sync::atomic::Ordering::Release) }
+                move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })
             .build();
         let addr = server.local_addr();

@@ -1,5 +1,5 @@
 use crate::{
-    signaling_server::{error::ClientRequestError, signaling::WsUpgrade, state::Peer},
+    signaling_server::{error::ClientRequestError, handlers::WsUpgrade, state::Peer},
     topologies::{FullMesh, SignalingTopology},
 };
 use async_trait::async_trait;
@@ -27,10 +27,7 @@ impl SignalingTopology for FullMesh {
 
         let peer_uuid = uuid::Uuid::new_v4().into();
         // Lifecycle event: On Connected
-        {
-            let callbacks = &mut callbacks.lock().await.on_peer_connected;
-            callbacks.as_mut().await;
-        }
+        callbacks.on_peer_connected.emit(());
         {
             let mut add_peer_state = state.lock().await;
             let peers = add_peer_state.add_peer(Peer {
@@ -109,11 +106,9 @@ impl SignalingTopology for FullMesh {
 
         // Peer disconnected or otherwise ended communication.
         info!("Removing peer: {:?}", peer_uuid);
-        // Lifecycle event: On Disconnected
-        {
-            let callbacks = &mut callbacks.lock().await.on_peer_disconnected;
-            callbacks.as_mut().await;
-        }
+        // Lifecycle event: On Connected
+        callbacks.on_peer_disconnected.emit(());
+
         let mut state = state.lock().await;
         if let Some(removed_peer) = state.remove_peer(&peer_uuid) {
             // Tell each connected peer about the disconnected peer.

@@ -1,18 +1,22 @@
-use super::{callbacks::Callbacks, signaling::SignalingStateMachine};
 use crate::{
-    signaling_server::{signaling::ws_handler, state::SignalingState},
-    topologies::{ClientServer, FullMesh, SignalingTopology},
+    signaling_server::state::SignalingState,
+    topologies::{ClientServer, FullMesh, SignalingStateMachine, SignalingTopology},
     SignalingServer,
 };
 use axum::{routing::get, Extension, Router};
 use futures::{lock::Mutex, Future};
-use std::{marker::PhantomData, net::SocketAddr, sync::Arc};
+use std::{marker::PhantomData, net::SocketAddr, rc::Rc, sync::Arc};
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
 use tracing::Level;
+
+use super::{
+    callbacks::{Callback, Callbacks},
+    handlers::ws_handler,
+};
 
 /// Builder for [`SignalingServer`]s.
 ///
@@ -26,7 +30,7 @@ pub struct SignalingServerBuilder<Topology: SignalingTopology> {
     pub(crate) router: Router,
 
     /// The callbacks used by the signalling server
-    pub(crate) callbacks: Arc<Mutex<Callbacks>>,
+    pub(crate) callbacks: Callbacks,
 
     /// The state machine that runs a websocket to completion, also where topology is implemented
     pub(crate) topology: Topology,
@@ -36,13 +40,13 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
     /// Creates a new builder for a [`SignalingServer`].
     pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology) -> Self {
         let state = Arc::new(Mutex::new(SignalingState::default()));
-        let callbacks = Arc::new(Mutex::new(Callbacks::default()));
+        let callbacks = Callbacks::default();
         Self {
             socket_addr: socket_addr.into(),
             router: Router::new()
                 .route("/:path", get(ws_handler))
                 .with_state(state)
-                .layer(Extension(Arc::clone(&callbacks))),
+                .layer(Extension(callbacks.clone())),
             callbacks,
             topology,
         }
@@ -61,22 +65,20 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
     }
 
     // Set a callback triggered on new peer connections.
-    pub fn on_peer_connected<F, Fut>(self, callback: F) -> Self
+    pub fn on_peer_connected<F>(mut self, callback: F) -> Self
     where
-        F: FnOnce() -> Fut + 'static,
-        Fut: Future<Output = ()> + 'static + Send,
+        F: Fn(()) -> () + 'static,
     {
-        self.callbacks.try_lock().unwrap().on_peer_connected = Box::pin(callback());
+        self.callbacks.on_peer_connected = Callback::from(callback);
         self
     }
 
     // Set a callback triggered on peer disconnections.
-    pub fn on_peer_disconnected<F, Fut>(self, callback: F) -> Self
+    pub fn on_peer_disconnected<F>(mut self, callback: F) -> Self
     where
-        F: FnOnce() -> Fut + 'static + Send + Sync,
-        Fut: Future<Output = ()> + 'static + Send,
+        F: Fn(()) -> () + 'static,
     {
-        self.callbacks.try_lock().unwrap().on_peer_disconnected = Box::pin(callback());
+        self.callbacks.on_peer_disconnected = Callback::from(callback);
         self
     }
 
@@ -127,7 +129,7 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
 impl SignalingServerBuilder<ClientServer> {
     pub fn on_host_connected<F, Fut>(self, callback: F) -> Self
     where
-        F: FnOnce() -> Fut + 'static,
+        F: Fn() -> Fut + 'static,
         Fut: Future<Output = ()> + 'static + Send,
     {
         todo!()
@@ -135,7 +137,7 @@ impl SignalingServerBuilder<ClientServer> {
 
     pub fn on_host_disconnected<F, Fut>(self, callback: F) -> Self
     where
-        F: FnOnce() -> Fut + 'static,
+        F: Fn() -> Fut + 'static,
         Fut: Future<Output = ()> + 'static + Send,
     {
         todo!()

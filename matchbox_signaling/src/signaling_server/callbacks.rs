@@ -1,5 +1,7 @@
 use std::{fmt, rc::Rc};
 
+use matchbox_protocol::{JsonPeerRequest, PeerId, PeerRequest};
+
 /// Universal callback wrapper.
 ///
 /// An `Rc` wrapper is used to make it cloneable.
@@ -53,11 +55,11 @@ impl<IN> Default for Callback<IN> {
 #[derive(Default, Debug, Clone)]
 pub struct Callbacks {
     /// Triggered on peer requests to the signalling server
-    pub(crate) on_signal: Callback<(), ()>,
+    pub(crate) on_signal: Callback<JsonPeerRequest, ()>,
     /// Triggered on a new connection to the signalling server
-    pub(crate) on_peer_connected: Callback<(), ()>,
+    pub(crate) on_peer_connected: Callback<PeerId, ()>,
     /// Triggered on a disconnection to the signalling server
-    pub(crate) on_peer_disconnected: Callback<(), ()>,
+    pub(crate) on_peer_disconnected: Callback<PeerId, ()>,
 }
 
 #[allow(unsafe_code)]

@@ -5,6 +5,7 @@ use crate::{
 };
 use axum::{routing::get, Extension, Router};
 use futures::{lock::Mutex, Future};
+use matchbox_protocol::{JsonPeerRequest, PeerId};
 use std::{net::SocketAddr, sync::Arc};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -63,30 +64,30 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
         self
     }
 
-    // Set a callback triggered on new peer connections.
+    /// Set a callback triggered on signals.
     pub fn on_signal<F>(mut self, callback: F) -> Self
     where
-        F: Fn(()) -> () + 'static,
+        F: Fn(JsonPeerRequest) + 'static,
     {
         self.callbacks.on_signal = Callback::from(callback);
         self
     }
 
-    // Set a callback triggered on new peer connections. In client-server architecture contexts,
-    // this is the same as "client."
+    /// Set a callback triggered on new peer connections. In client-server architecture contexts,
+    /// this is the same as "client."
     pub fn on_peer_connected<F>(mut self, callback: F) -> Self
     where
-        F: Fn(()) -> () + 'static,
+        F: Fn(PeerId) + 'static,
     {
         self.callbacks.on_peer_connected = Callback::from(callback);
         self
     }
 
-    // Set a callback triggered on peer disconnections. In client-server architecture contexts,
-    // this is the same as "client."
+    /// Set a callback triggered on peer disconnections. In client-server architecture contexts,
+    /// this is the same as "client."
     pub fn on_peer_disconnected<F>(mut self, callback: F) -> Self
     where
-        F: Fn(()) -> () + 'static,
+        F: Fn(PeerId) + 'static,
     {
         self.callbacks.on_peer_disconnected = Callback::from(callback);
         self

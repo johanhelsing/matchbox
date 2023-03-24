@@ -10,14 +10,14 @@ use uuid::Uuid;
 pub struct PeerId(pub Uuid);
 
 /// Requests go from peer to signalling server
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerRequest<S> {
     Signal { receiver: PeerId, data: S },
     KeepAlive,
 }
 
 /// Events go from signalling server to peer
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerEvent<S> {
     IdAssigned(PeerId),
     NewPeer(PeerId),

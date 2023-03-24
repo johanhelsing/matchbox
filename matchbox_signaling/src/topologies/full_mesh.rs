@@ -27,7 +27,7 @@ impl SignalingTopology for FullMesh {
 
         let peer_uuid = uuid::Uuid::new_v4().into();
         // Lifecycle event: On Connected
-        callbacks.on_peer_connected.emit(());
+        callbacks.on_peer_connected.emit(peer_uuid);
         {
             let mut add_peer_state = state.lock().await;
             let peers = add_peer_state.add_peer(Peer {
@@ -80,7 +80,7 @@ impl SignalingTopology for FullMesh {
             info!("{:?} <- {:?}", peer_uuid, request);
 
             // Lifecycle event: On Signal
-            callbacks.on_signal.emit(());
+            callbacks.on_signal.emit(request.clone());
             match request {
                 PeerRequest::Signal { receiver, data } => {
                     let event = Message::Text(
@@ -107,7 +107,7 @@ impl SignalingTopology for FullMesh {
         }
 
         // Lifecycle event: On Connected
-        callbacks.on_peer_disconnected.emit(());
+        callbacks.on_peer_disconnected.emit(peer_uuid);
         // Peer disconnected or otherwise ended communication.
         let mut state = state.lock().await;
         if let Some(removed_peer) = state.remove_peer(&peer_uuid) {

@@ -76,9 +76,7 @@ impl Default for RtcIceServerConfig {
 /// Builder for [`WebRtcSocket`]s.
 ///
 /// Begin with [`WebRtcSocketBuilder::new`] and add at least one channel with
-/// [`WebRtcSocketBuilder::add_channel`],
-/// [`WebRtcSocketBuilder::add_reliable_channel`], or
-/// [`WebRtcSocketBuilder::add_unreliable_channel`] before calling
+/// [`WebRtcSocketBuilder::add_channel`] before calling
 /// [`WebRtcSocketBuilder::build`] to produce the desired [`WebRtcSocket`].
 #[derive(Debug, Clone)]
 pub struct WebRtcSocketBuilder<C = ()> {
@@ -107,10 +105,8 @@ impl WebRtcSocketBuilder {
     /// Creates a new builder for a connection to a given room with the default ICE
     /// server configuration, and three reconnection attempts.
     ///
-    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`],
-    /// [`WebRtcSocketBuilder::add_reliable_channel`], or
-    /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
-    /// [`WebRtcSocket`]
+    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`]
+    /// before you can build the [`WebRtcSocket`]
     pub fn new(room_url: impl Into<String>) -> Self {
         Self {
             room_url: room_url.into(),
@@ -300,10 +296,8 @@ impl WebRtcSocket {
     /// Creates a new builder for a connection to a given room with a given number of
     /// re-connection attempts.
     ///
-    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`],
-    /// [`WebRtcSocketBuilder::add_reliable_channel`], or
-    /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
-    /// [`WebRtcSocket`]
+    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`]
+    /// before you can build the [`WebRtcSocket`]
     pub fn builder(room_url: impl Into<String>) -> WebRtcSocketBuilder {
         WebRtcSocketBuilder::new(room_url)
     }
@@ -342,13 +336,13 @@ impl WebRtcSocket {
     ///
     /// Constructed using [`WebRtcSocketBuilder`].
     ///
-    /// Update the set of peers used by [`connected_peers`],
-    /// [`disconnected_peers`], and [`broadcast_on_channel`].
+    /// Update the set of peers used by [`WebRtcSocket::connected_peers`] and
+    /// [`WebRtcSocket::disconnected_peers`].
     ///
     /// Returns the peers that connected or disconnected since the last time
     /// this method was called.
     ///
-    /// See also: [`PeerSate`]
+    /// See also: [`PeerState`]
     pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
         let mut changes = Vec::new();
         while let Ok(Some((id, state))) = self.peer_state_rx.try_next() {
@@ -362,7 +356,7 @@ impl WebRtcSocket {
 
     /// Returns an iterator of the ids of the connected peers.
     ///
-    /// Note: You have to call [`update_peers`] for this list to be accurate.
+    /// Note: You have to call [`WebRtcSocket::update_peers`] for this list to be accurate.
     ///
     /// See also: [`WebRtcSocket::disconnected_peers`]
     pub fn connected_peers(&'_ self) -> impl std::iter::Iterator<Item = PeerId> + '_ {
@@ -377,7 +371,8 @@ impl WebRtcSocket {
 
     /// Returns an iterator of the ids of peers that are no longer connected.
     ///
-    /// Note: You have to call [`update_peers`] for this list to be accurate.
+    /// Note: You have to call [`WebRtcSocket::update_peers`] for this list to be
+    /// accurate.
     ///
     /// See also: [`WebRtcSocket::connected_peers`]
     pub fn disconnected_peers(&self) -> impl std::iter::Iterator<Item = &PeerId> {

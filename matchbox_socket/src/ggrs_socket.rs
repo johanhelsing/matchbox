@@ -2,7 +2,8 @@ use ggrs::{Message, PlayerType};
 use matchbox_protocol::PeerId;
 
 use crate::{
-    ChannelConfig, MessageLoopFuture, Packet, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
+    ChannelConfig, MessageLoopFuture, Packet, SingleChannel, WebRtcChannel, WebRtcSocket,
+    WebRtcSocketBuilder,
 };
 
 impl ChannelConfig {
@@ -22,7 +23,7 @@ impl WebRtcSocket {
     /// Please use the [`WebRtcSocketBuilder`] to create non-trivial sockets.
     pub fn new_ggrs(
         room_url: impl Into<String>,
-    ) -> (WebRtcSocket<WebRtcChannel>, MessageLoopFuture) {
+    ) -> (WebRtcSocket<SingleChannel>, MessageLoopFuture) {
         WebRtcSocketBuilder::new(room_url)
             .add_channel(ChannelConfig::ggrs())
             .build()
@@ -65,7 +66,7 @@ fn deserialize_packet(message: (PeerId, Packet)) -> (PeerId, Message) {
     (message.0, bincode::deserialize(&message.1).unwrap())
 }
 
-impl ggrs::NonBlockingSocket<PeerId> for WebRtcSocket<WebRtcChannel> {
+impl ggrs::NonBlockingSocket<PeerId> for WebRtcSocket<SingleChannel> {
     fn send_to(&mut self, msg: &Message, addr: &PeerId) {
         self.send(build_packet(msg), *addr);
     }

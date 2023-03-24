@@ -3,6 +3,7 @@ mod messages;
 mod signal_peer;
 mod socket;
 
+use self::error::{MessagingError, SignallingError};
 use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
@@ -15,11 +16,10 @@ use matchbox_protocol::PeerId;
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
 pub use socket::{
-    ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
+    ChannelConfig, ChannelPlurality, MultipleChannels, NoChannels, PeerState, RtcIceServerConfig,
+    SingleChannel, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
 use std::{collections::HashMap, pin::Pin, time::Duration};
-
-use self::error::{MessagingError, SignallingError};
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -126,7 +126,7 @@ trait Messenger {
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
 }
 
-async fn message_loop<M: Messenger, C>(
+async fn message_loop<M: Messenger, C: ChannelPlurality>(
     id_tx: crossbeam_channel::Sender<PeerId>,
     config: WebRtcSocketBuilder<C>,
     channels: MessageLoopChannels,

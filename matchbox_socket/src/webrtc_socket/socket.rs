@@ -166,13 +166,7 @@ impl WebRtcSocketBuilder<WebRtcChannels> {
     /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
     pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<WebRtcChannels> {
         self.channels.push(config);
-        WebRtcSocketBuilder {
-            room_url: self.room_url,
-            ice_server: self.ice_server,
-            channels: self.channels,
-            attempts: self.attempts,
-            channel_plurality: PhantomData::default(),
-        }
+        self
     }
 }
 

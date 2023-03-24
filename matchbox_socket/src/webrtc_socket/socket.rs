@@ -277,7 +277,7 @@ type WebRtcChannels = Vec<Option<WebRtcChannel>>;
 
 /// Contains a set of web rtc channels and some connection metadata.
 #[derive(Debug)]
-pub struct WebRtcSocket<C> {
+pub struct WebRtcSocket<C = WebRtcChannel> {
     id: once_cell::race::OnceBox<PeerId>,
     id_rx: crossbeam_channel::Receiver<PeerId>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,

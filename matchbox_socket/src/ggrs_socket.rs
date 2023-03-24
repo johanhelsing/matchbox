@@ -5,7 +5,7 @@ use crate::{
     ChannelConfig, MessageLoopFuture, Packet, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
 
-impl<C> WebRtcSocket<C> {
+impl WebRtcSocket {
     /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] for a
     /// socket with a single channel configured correctly for usage with GGRS.
     ///
@@ -20,7 +20,9 @@ impl<C> WebRtcSocket<C> {
             .add_ggrs_channel()
             .build()
     }
+}
 
+impl<C> WebRtcSocket<C> {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     pub fn players(&self) -> Vec<PlayerType<PeerId>> {
         let Some(our_id) = self.id() else {

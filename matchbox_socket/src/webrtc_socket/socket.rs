@@ -81,7 +81,7 @@ impl Default for RtcIceServerConfig {
 /// [`WebRtcSocketBuilder::add_unreliable_channel`] before calling
 /// [`WebRtcSocketBuilder::build`] to produce the desired [`WebRtcSocket`].
 #[derive(Debug, Clone)]
-pub struct WebRtcSocketBuilder<C = WebRtcChannel> {
+pub struct WebRtcSocketBuilder<C = ()> {
     /// The url for the room to connect to
     ///
     /// This is a websocket url, starting with `ws://` or `wss://` followed by
@@ -133,29 +133,46 @@ impl WebRtcSocketBuilder {
         self.attempts = attempts;
         self
     }
+}
 
+impl WebRtcSocketBuilder<()> {
     /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
-    pub fn add_channel(mut self, config: ChannelConfig) -> Self {
+    pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<WebRtcChannel> {
         self.channels.push(config);
-        self
+        WebRtcSocketBuilder {
+            room_url: self.room_url,
+            ice_server: self.ice_server,
+            channels: self.channels,
+            attempts: self.attempts,
+            channel_plurality: PhantomData::default(),
+        }
     }
+}
 
-    /// Adds a new reliable channel to the [`WebRtcSocket`].
-    ///
-    /// Messages sent via a reliable channel are guaranteed to arrive in order and will be resent
-    /// until they arrive
-    pub fn add_reliable_channel(mut self) -> Self {
-        self.channels.push(ChannelConfig::reliable());
-        self
+impl WebRtcSocketBuilder<WebRtcChannel> {
+    /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
+    pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<WebRtcChannels> {
+        self.channels.push(config);
+        WebRtcSocketBuilder {
+            room_url: self.room_url,
+            ice_server: self.ice_server,
+            channels: self.channels,
+            attempts: self.attempts,
+            channel_plurality: PhantomData::default(),
+        }
     }
-
-    /// Adds a new unreliable channel to the [`WebRtcSocket`].
-    ///
-    /// Messages sent via an unreliable channel may arrive in any order or not at all, but arrive as
-    /// quickly as possible
-    pub fn add_unreliable_channel(mut self) -> Self {
-        self.channels.push(ChannelConfig::unreliable());
-        self
+}
+impl WebRtcSocketBuilder<WebRtcChannels> {
+    /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
+    pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<WebRtcChannels> {
+        self.channels.push(config);
+        WebRtcSocketBuilder {
+            room_url: self.room_url,
+            ice_server: self.ice_server,
+            channels: self.channels,
+            attempts: self.attempts,
+            channel_plurality: PhantomData::default(),
+        }
     }
 }
 
@@ -308,7 +325,7 @@ impl WebRtcSocket {
         room_url: impl Into<String>,
     ) -> (WebRtcSocket<WebRtcChannel>, MessageLoopFuture) {
         WebRtcSocketBuilder::new(room_url)
-            .add_unreliable_channel()
+            .add_channel(ChannelConfig::unreliable())
             .build()
     }
 
@@ -323,7 +340,7 @@ impl WebRtcSocket {
         room_url: impl Into<String>,
     ) -> (WebRtcSocket<WebRtcChannel>, MessageLoopFuture) {
         WebRtcSocketBuilder::new(room_url)
-            .add_reliable_channel()
+            .add_channel(ChannelConfig::reliable())
             .build()
     }
 
@@ -525,13 +542,13 @@ async fn run_socket<C>(
 
 #[cfg(test)]
 mod test {
-    use crate::{webrtc_socket::error::SignallingError, Error, WebRtcChannel, WebRtcSocketBuilder};
+    use crate::{webrtc_socket::error::SignallingError, ChannelConfig, Error, WebRtcSocketBuilder};
 
     #[futures_test::test]
     async fn unreachable_server() {
         // .invalid is a reserved tld for testing and documentation
         let (_socket, fut) = WebRtcSocketBuilder::new("wss://example.invalid")
-            .add_reliable_channel()
+            .add_channel(ChannelConfig::unreliable())
             .build();
 
         let result = fut.await;
@@ -541,11 +558,10 @@ mod test {
 
     #[futures_test::test]
     async fn test_signalling_attempts() {
-        let (_socket, loop_fut) =
-            WebRtcSocketBuilder::<WebRtcChannel>::new("wss://example.invalid/")
-                .reconnect_attempts(Some(3))
-                .add_reliable_channel()
-                .build();
+        let (_socket, loop_fut) = WebRtcSocketBuilder::new("wss://example.invalid/")
+            .reconnect_attempts(Some(3))
+            .add_channel(ChannelConfig::reliable())
+            .build();
 
         let result = loop_fut.await;
         assert!(result.is_err());

@@ -5,6 +5,13 @@ use crate::{
     ChannelConfig, MessageLoopFuture, Packet, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
 
+impl ChannelConfig {
+    /// Creates a [`ChannelConfig`] suitable for use with GGRS.
+    pub fn ggrs() -> Self {
+        Self::unreliable()
+    }
+}
+
 impl WebRtcSocket {
     /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] for a
     /// socket with a single channel configured correctly for usage with GGRS.
@@ -16,8 +23,8 @@ impl WebRtcSocket {
     pub fn new_ggrs(
         room_url: impl Into<String>,
     ) -> (WebRtcSocket<WebRtcChannel>, MessageLoopFuture) {
-        WebRtcSocketBuilder::<WebRtcChannel>::new(room_url)
-            .add_ggrs_channel()
+        WebRtcSocketBuilder::new(room_url)
+            .add_channel(ChannelConfig::ggrs())
             .build()
     }
 }
@@ -74,13 +81,5 @@ impl ggrs::NonBlockingSocket<PeerId> for WebRtcChannel {
 
     fn receive_all_messages(&mut self) -> Vec<(PeerId, Message)> {
         self.receive().into_iter().map(deserialize_packet).collect()
-    }
-}
-
-impl<C> WebRtcSocketBuilder<C> {
-    /// Adds a new channel configured correctly for usage with GGRS to the [`WebRtcSocket`].
-    pub fn add_ggrs_channel(mut self) -> Self {
-        self.channels.push(ChannelConfig::unreliable());
-        self
     }
 }

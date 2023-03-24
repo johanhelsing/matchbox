@@ -275,10 +275,6 @@ impl WebRtcChannel {
 
 type WebRtcChannels = Vec<Option<WebRtcChannel>>;
 
-trait ChannelSend {
-    fn send(&mut self, packet: Packet, peer: PeerId);
-}
-
 /// Contains a set of web rtc channels and some connection metadata.
 #[derive(Debug)]
 pub struct WebRtcSocket<C> {

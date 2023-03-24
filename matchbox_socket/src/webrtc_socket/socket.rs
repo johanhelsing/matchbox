@@ -98,13 +98,8 @@ pub struct MultipleChannels;
 impl ChannelPlurality for MultipleChannels {}
 impl BuildablePlurality for MultipleChannels {}
 
-/// Builder for [`WebRtcSocket`]s.
-///
-/// Begin with [`WebRtcSocketBuilder::new`] and add at least one channel with
-/// [`WebRtcSocketBuilder::add_channel`] before calling
-/// [`WebRtcSocketBuilder::build`] to produce the desired [`WebRtcSocket`].
 #[derive(Debug, Clone)]
-pub struct WebRtcSocketBuilder<C: ChannelPlurality = NoChannels> {
+pub(crate) struct SocketConfig {
     /// The url for the room to connect to
     ///
     /// This is a websocket url, starting with `ws://` or `wss://` followed by
@@ -123,6 +118,16 @@ pub struct WebRtcSocketBuilder<C: ChannelPlurality = NoChannels> {
     pub(crate) channels: Vec<ChannelConfig>,
     /// The amount of attempts to initiate connection
     pub(crate) attempts: Option<u16>,
+}
+
+/// Builder for [`WebRtcSocket`]s.
+///
+/// Begin with [`WebRtcSocketBuilder::new`] and add at least one channel with
+/// [`WebRtcSocketBuilder::add_channel`] before calling
+/// [`WebRtcSocketBuilder::build`] to produce the desired [`WebRtcSocket`].
+#[derive(Debug, Clone)]
+pub struct WebRtcSocketBuilder<C: ChannelPlurality = NoChannels> {
+    pub(crate) config: SocketConfig,
     channel_plurality: PhantomData<C>,
 }
 
@@ -134,24 +139,26 @@ impl WebRtcSocketBuilder {
     /// before you can build the [`WebRtcSocket`]
     pub fn new(room_url: impl Into<String>) -> Self {
         Self {
-            room_url: room_url.into(),
-            ice_server: RtcIceServerConfig::default(),
-            channels: Vec::default(),
-            attempts: Some(3),
+            config: SocketConfig {
+                room_url: room_url.into(),
+                ice_server: RtcIceServerConfig::default(),
+                channels: Vec::default(),
+                attempts: Some(3),
+            },
             channel_plurality: PhantomData::default(),
         }
     }
 
     /// Sets the socket ICE server configuration.
     pub fn ice_server(mut self, ice_server: RtcIceServerConfig) -> Self {
-        self.ice_server = ice_server;
+        self.config.ice_server = ice_server;
         self
     }
 
     /// Sets the number of attempts to make at reconnecting to the signalling server,
     /// if `None` the socket will attempt to connect indefinitely.
     pub fn reconnect_attempts(mut self, attempts: Option<u16>) -> Self {
-        self.attempts = attempts;
+        self.config.attempts = attempts;
         self
     }
 }
@@ -159,12 +166,9 @@ impl WebRtcSocketBuilder {
 impl WebRtcSocketBuilder<NoChannels> {
     /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
     pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<SingleChannel> {
-        self.channels.push(config);
+        self.config.channels.push(config);
         WebRtcSocketBuilder {
-            room_url: self.room_url,
-            ice_server: self.ice_server,
-            channels: self.channels,
-            attempts: self.attempts,
+            config: self.config,
             channel_plurality: PhantomData::default(),
         }
     }
@@ -173,12 +177,9 @@ impl WebRtcSocketBuilder<NoChannels> {
 impl WebRtcSocketBuilder<SingleChannel> {
     /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
     pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<MultipleChannels> {
-        self.channels.push(config);
+        self.config.channels.push(config);
         WebRtcSocketBuilder {
-            room_url: self.room_url,
-            ice_server: self.ice_server,
-            channels: self.channels,
-            attempts: self.attempts,
+            config: self.config,
             channel_plurality: PhantomData::default(),
         }
     }
@@ -186,7 +187,7 @@ impl WebRtcSocketBuilder<SingleChannel> {
 impl WebRtcSocketBuilder<MultipleChannels> {
     /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
     pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<MultipleChannels> {
-        self.channels.push(config);
+        self.config.channels.push(config);
         self
     }
 }
@@ -196,16 +197,16 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
     ///
     /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and received.
     pub fn build(self) -> (WebRtcSocket<C>, MessageLoopFuture) {
-        if self.channels.is_empty() {
+        if self.config.channels.is_empty() {
             panic!("You need to configure at least one channel in WebRtcSocketBuilder");
         }
 
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
 
         let (messages_from_peers_tx, messages_from_peers_rx) =
-            new_senders_and_receivers(&self.channels);
+            new_senders_and_receivers(&self.config.channels);
         let (peer_messages_out_tx, peer_messages_out_rx) =
-            new_senders_and_receivers(&self.channels);
+            new_senders_and_receivers(&self.config.channels);
         let channels = messages_from_peers_rx
             .into_iter()
             .zip(peer_messages_out_tx.into_iter())
@@ -225,10 +226,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
             },
             Box::pin(run_socket(
                 id_tx,
-                self.attempts,
-                self.room_url,
-                self.ice_server,
-                self.channels,
+                self.config,
                 peer_messages_out_rx,
                 peer_state_tx,
                 messages_from_peers_tx,
@@ -505,10 +503,7 @@ pub struct MessageLoopChannels {
 
 async fn run_socket(
     id_tx: crossbeam_channel::Sender<PeerId>,
-    attempts: Option<u16>,
-    room_url: String,
-    ice_server_config: RtcIceServerConfig,
-    channel_configs: Vec<ChannelConfig>,
+    config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
@@ -518,8 +513,12 @@ async fn run_socket(
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
-    let signalling_loop_fut =
-        signalling_loop::<UseSignaller>(attempts, room_url, requests_receiver, events_sender);
+    let signalling_loop_fut = signalling_loop::<UseSignaller>(
+        config.attempts,
+        config.room_url,
+        requests_receiver,
+        events_sender,
+    );
 
     let channels = MessageLoopChannels {
         requests_sender,
@@ -529,7 +528,7 @@ async fn run_socket(
         messages_from_peers_tx,
     };
     let message_loop_fut =
-        message_loop::<UseMessenger>(id_tx, &ice_server_config, &channel_configs, channels);
+        message_loop::<UseMessenger>(id_tx, &config.ice_server, &config.channels, channels);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());

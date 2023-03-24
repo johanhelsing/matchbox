@@ -31,7 +31,7 @@ async fn main() {
 
 async fn async_main() {
     info!("Connecting to matchbox");
-    let (mut socket, loop_fut) = WebRtcSocket::<()>::new_reliable("ws://localhost:3536/");
+    let (mut socket, loop_fut) = WebRtcSocket::new_reliable("ws://localhost:3536/");
 
     let loop_fut = loop_fut.fuse();
     futures::pin_mut!(loop_fut);

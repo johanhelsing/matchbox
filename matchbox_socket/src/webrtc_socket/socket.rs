@@ -396,33 +396,7 @@ impl WebRtcSocket {
             None
         }
     }
-}
 
-impl WebRtcSocket<SingleChannel> {
-    /// Call this where you want to handle new received messages.
-    ///
-    /// Messages are removed from the socket when called.
-    pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
-        self.channels
-            .get_mut(0)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .receive()
-    }
-
-    /// Send a packet to the given peer.
-    pub fn send(&mut self, packet: Packet, peer: PeerId) {
-        self.channels
-            .get_mut(0)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .send(packet, peer)
-    }
-}
-
-impl WebRtcSocket<MultipleChannels> {
     /// Gets a reference to the [`WebRtcChannel`] of a given id.
     ///
     /// ```
@@ -464,6 +438,30 @@ impl WebRtcSocket<MultipleChannels> {
             .ok_or(ChannelError::ChannelNotFound)?
             .take()
             .ok_or(ChannelError::ChannelTaken)
+    }
+}
+
+impl WebRtcSocket<SingleChannel> {
+    /// Call this where you want to handle new received messages.
+    ///
+    /// Messages are removed from the socket when called.
+    pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
+        self.channels
+            .get_mut(0)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .receive()
+    }
+
+    /// Send a packet to the given peer.
+    pub fn send(&mut self, packet: Packet, peer: PeerId) {
+        self.channels
+            .get_mut(0)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .send(packet, peer)
     }
 }
 

@@ -20,8 +20,8 @@ enum AppState {
 
 const SKY_COLOR: Color = Color::rgb(0.69, 0.69, 0.69);
 
-#[derive(Default, Resource)]
-struct SocketResource(Option<WebRtcSocket>);
+#[derive(Debug, Resource, Deref, DerefMut)]
+struct SocketResource(WebRtcSocket);
 
 fn main() {
     // read query string or command line arguments
@@ -98,7 +98,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     let task_pool = IoTaskPool::get();
     task_pool.spawn(message_loop).detach();
 
-    commands.insert_resource(SocketResource(Some(socket)));
+    commands.insert_resource(SocketResource(socket));
 }
 
 // Marker components for UI
@@ -160,7 +160,7 @@ fn lobby_system(
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {
     // regularly call update_peers to update the list of connected peers
-    for (peer, new_state) in socket.0.as_mut().unwrap().update_peers() {
+    for (peer, new_state) in socket.update_peers() {
         // you can also handle the specific dis(connections) as they occur:
         match new_state {
             PeerState::Connected => info!("peer {peer:?} connected"),
@@ -168,7 +168,7 @@ fn lobby_system(
         }
     }
 
-    let connected_peers = socket.0.as_ref().unwrap().connected_peers().count();
+    let connected_peers = socket.connected_peers().count();
     let remaining = args.players - (connected_peers + 1);
     query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);
     if remaining > 0 {
@@ -178,7 +178,7 @@ fn lobby_system(
     info!("All peers have joined, going in-game");
 
     // extract final player list
-    let players = socket.0.as_mut().unwrap().players();
+    let players = socket.players();
 
     let max_prediction = 12;
 
@@ -197,7 +197,7 @@ fn lobby_system(
     }
 
     // consume the channel (required because ggrs takes ownership of its socket)
-    let channel = socket.0.as_mut().unwrap().take_channel(0).unwrap();
+    let channel = socket.take_channel(0).unwrap();
 
     // start the GGRS session
     let sess = sess_build

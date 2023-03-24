@@ -328,7 +328,9 @@ impl WebRtcSocket {
             .add_channel(ChannelConfig::reliable())
             .build()
     }
+}
 
+impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// Handle peers connecting or disconnecting
     ///
     /// Constructed using [`WebRtcSocketBuilder`].

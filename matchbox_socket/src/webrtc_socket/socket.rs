@@ -256,7 +256,8 @@ pub enum PeerState {
     /// - The peer left the signalling server
     Disconnected,
 }
-/// Used to send and recieve packets on a given web rtc channel
+/// Used to send and recieve packets on a given web rtc channel. Must be created as part of a
+/// [`WebRtcSocket`].
 #[derive(Debug)]
 pub struct WebRtcChannel {
     tx: UnboundedSender<(PeerId, Packet)>,
@@ -416,8 +417,6 @@ impl WebRtcSocket<WebRtcChannel> {
 impl WebRtcSocket<WebRtcChannels> {
     /// Gets a reference to the [`WebRtcChannel`] of a given id.
     ///
-    /// # Examples
-    ///
     /// ```
     /// use matchbox_socket::*;
     ///
@@ -425,8 +424,7 @@ impl WebRtcSocket<WebRtcChannels> {
     ///     .add_channel(ChannelConfig::reliable())
     ///     .add_channel(ChannelConfig::unreliable())
     ///     .build();
-    /// let reliable_channel = socket.take_channel(0).unwrap();
-    /// let unreliable_channel = socket.take_channel(1).unwrap();
+    /// let reliable_channel_messages = socket.channel(0).unwrap().receive();
     /// ```
     ///
     /// See also: [`WebRtcSocket::take_channel`]
@@ -439,6 +437,17 @@ impl WebRtcSocket<WebRtcChannels> {
     }
 
     /// Takes the [`WebRtcChannel`] of a given id.
+    ///
+    /// ```
+    /// use matchbox_socket::*;
+    ///
+    /// let (mut socket, message_loop) = WebRtcSocketBuilder::new("wss://example.invalid/")
+    ///     .add_channel(ChannelConfig::reliable())
+    ///     .add_channel(ChannelConfig::unreliable())
+    ///     .build();
+    /// let reliable_channel = socket.take_channel(0).unwrap();
+    /// let unreliable_channel = socket.take_channel(1).unwrap();
+    /// ```
     ///
     /// See also: [`WebRtcSocket::channel`]
     pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, ChannelError> {

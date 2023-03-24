@@ -81,7 +81,7 @@ impl Default for RtcIceServerConfig {
 /// [`WebRtcSocketBuilder::add_unreliable_channel`] before calling
 /// [`WebRtcSocketBuilder::build`] to produce the desired [`WebRtcSocket`].
 #[derive(Debug, Clone)]
-pub struct WebRtcSocketBuilder<C> {
+pub struct WebRtcSocketBuilder<C = WebRtcChannel> {
     /// The url for the room to connect to
     ///
     /// This is a websocket url, starting with `ws://` or `wss://` followed by
@@ -103,7 +103,7 @@ pub struct WebRtcSocketBuilder<C> {
     channel_plurality: PhantomData<C>,
 }
 
-impl<C> WebRtcSocketBuilder<C> {
+impl WebRtcSocketBuilder {
     /// Creates a new builder for a connection to a given room with the default ICE
     /// server configuration, and three reconnection attempts.
     ///
@@ -285,7 +285,7 @@ pub struct WebRtcSocket<C = WebRtcChannel> {
     channels: C,
 }
 
-impl<C> WebRtcSocket<C> {
+impl WebRtcSocket {
     /// Creates a new builder for a connection to a given room with a given number of
     /// re-connection attempts.
     ///
@@ -293,7 +293,7 @@ impl<C> WebRtcSocket<C> {
     /// [`WebRtcSocketBuilder::add_reliable_channel`], or
     /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
     /// [`WebRtcSocket`]
-    pub fn builder(room_url: impl Into<String>) -> WebRtcSocketBuilder<C> {
+    pub fn builder(room_url: impl Into<String>) -> WebRtcSocketBuilder {
         WebRtcSocketBuilder::new(room_url)
     }
 
@@ -307,7 +307,7 @@ impl<C> WebRtcSocket<C> {
     pub fn new_unreliable(
         room_url: impl Into<String>,
     ) -> (WebRtcSocket<WebRtcChannel>, MessageLoopFuture) {
-        WebRtcSocketBuilder::<WebRtcChannel>::new(room_url)
+        WebRtcSocketBuilder::new(room_url)
             .add_unreliable_channel()
             .build()
     }
@@ -322,7 +322,7 @@ impl<C> WebRtcSocket<C> {
     pub fn new_reliable(
         room_url: impl Into<String>,
     ) -> (WebRtcSocket<WebRtcChannel>, MessageLoopFuture) {
-        WebRtcSocketBuilder::<WebRtcChannel>::new(room_url)
+        WebRtcSocketBuilder::new(room_url)
             .add_reliable_channel()
             .build()
     }
@@ -530,7 +530,7 @@ mod test {
     #[futures_test::test]
     async fn unreachable_server() {
         // .invalid is a reserved tld for testing and documentation
-        let (_socket, fut) = WebRtcSocketBuilder::<WebRtcChannel>::new("wss://example.invalid")
+        let (_socket, fut) = WebRtcSocketBuilder::new("wss://example.invalid")
             .add_reliable_channel()
             .build();
 

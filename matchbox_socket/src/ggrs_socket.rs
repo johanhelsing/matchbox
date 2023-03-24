@@ -22,7 +22,7 @@ impl WebRtcSocket {
     }
 }
 
-impl<C> WebRtcSocket<C> {
+impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     pub fn players(&self) -> Vec<PlayerType<PeerId>> {
         let Some(our_id) = self.id() else {

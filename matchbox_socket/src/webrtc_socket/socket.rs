@@ -421,6 +421,19 @@ impl WebRtcSocket<WebRtcChannel> {
 impl WebRtcSocket<WebRtcChannels> {
     /// Gets a reference to the [`WebRtcChannel`] of a given id.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// use matchbox_socket::*;
+    ///
+    /// let (mut socket, message_loop) = WebRtcSocketBuilder::new("wss://example.invalid/")
+    ///     .add_channel(ChannelConfig::reliable())
+    ///     .add_channel(ChannelConfig::unreliable())
+    ///     .build();
+    /// let reliable_channel = socket.take_channel(0).unwrap();
+    /// let unreliable_channel = socket.take_channel(1).unwrap();
+    /// ```
+    ///
     /// See also: [`WebRtcSocket::take_channel`]
     pub fn channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, ChannelError> {
         self.channels

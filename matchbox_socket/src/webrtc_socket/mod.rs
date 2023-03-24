@@ -126,9 +126,9 @@ trait Messenger {
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
 }
 
-async fn message_loop<M: Messenger>(
+async fn message_loop<M: Messenger, C>(
     id_tx: crossbeam_channel::Sender<PeerId>,
-    config: WebRtcSocketBuilder,
+    config: WebRtcSocketBuilder<C>,
     channels: MessageLoopChannels,
 ) {
     let MessageLoopChannels {

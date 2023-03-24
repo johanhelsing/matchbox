@@ -1,7 +1,7 @@
 use bevy::{log::LogPlugin, prelude::*, tasks::IoTaskPool};
 use bevy_ggrs::{GGRSPlugin, Session};
 use ggrs::SessionBuilder;
-use matchbox_socket::{PeerState, WebRtcSocket};
+use matchbox_socket::{PeerState, WebRtcChannel, WebRtcSocket};
 
 mod args;
 mod box_game;
@@ -21,7 +21,7 @@ enum AppState {
 const SKY_COLOR: Color = Color::rgb(0.69, 0.69, 0.69);
 
 #[derive(Debug, Resource, Deref, DerefMut)]
-struct SocketResource(WebRtcSocket);
+struct SocketResource<C>(Option<WebRtcSocket<C>>);
 
 fn main() {
     // read query string or command line arguments
@@ -91,14 +91,14 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcSocket::new_ggrs(room_url);
+    let (socket, message_loop) = WebRtcSocket::<WebRtcChannel>::new_ggrs(room_url);
 
     // The message loop needs to be awaited, or nothing will happen.
     // We do this here using bevy's task system.
     let task_pool = IoTaskPool::get();
     task_pool.spawn(message_loop).detach();
 
-    commands.insert_resource(SocketResource(socket));
+    commands.insert_resource(SocketResource(Some(socket)));
 }
 
 // Marker components for UI
@@ -155,12 +155,12 @@ fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
 fn lobby_system(
     mut app_state: ResMut<State<AppState>>,
     args: Res<Args>,
-    mut socket: ResMut<SocketResource>,
+    mut socket: ResMut<SocketResource<WebRtcChannel>>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {
     // regularly call update_peers to update the list of connected peers
-    for (peer, new_state) in socket.update_peers() {
+    for (peer, new_state) in socket.0.as_mut().unwrap().update_peers() {
         // you can also handle the specific dis(connections) as they occur:
         match new_state {
             PeerState::Connected => info!("peer {peer:?} connected"),
@@ -168,7 +168,7 @@ fn lobby_system(
         }
     }
 
-    let connected_peers = socket.connected_peers().count();
+    let connected_peers = socket.0.as_ref().unwrap().connected_peers().count();
     let remaining = args.players - (connected_peers + 1);
     query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);
     if remaining > 0 {
@@ -178,7 +178,7 @@ fn lobby_system(
     info!("All peers have joined, going in-game");
 
     // extract final player list
-    let players = socket.players();
+    let players = socket.0.as_ref().unwrap().players();
 
     let max_prediction = 12;
 
@@ -196,12 +196,9 @@ fn lobby_system(
             .expect("failed to add player");
     }
 
-    // consume the channel (required because ggrs takes ownership of its socket)
-    let channel = socket.take_channel(0).unwrap();
-
     // start the GGRS session
     let sess = sess_build
-        .start_p2p_session(channel)
+        .start_p2p_session(socket.0.take().unwrap())
         .expect("failed to start session");
 
     commands.insert_resource(Session::P2PSession(sess));

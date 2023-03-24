@@ -31,7 +31,7 @@ async fn main() {
 
 async fn async_main() {
     info!("Connecting to matchbox");
-    let (mut socket, loop_fut) = WebRtcSocket::new_reliable("ws://localhost:3536/");
+    let (mut socket, loop_fut) = WebRtcSocket::<()>::new_reliable("ws://localhost:3536/");
 
     let loop_fut = loop_fut.fuse();
     futures::pin_mut!(loop_fut);
@@ -46,7 +46,7 @@ async fn async_main() {
                 PeerState::Connected => {
                     info!("Peer joined: {:?}", peer);
                     let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
-                    socket.channel(0).unwrap().send(packet, peer);
+                    socket.send(packet, peer);
                 }
                 PeerState::Disconnected => {
                     info!("Peer left: {peer:?}");
@@ -55,7 +55,7 @@ async fn async_main() {
         }
 
         // Accept any messages incoming
-        for (peer, packet) in socket.channel(0).unwrap().receive() {
+        for (peer, packet) in socket.receive() {
             let message = String::from_utf8_lossy(&packet);
             info!("Message from {peer:?}: {message:?}");
         }

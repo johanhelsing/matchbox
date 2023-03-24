@@ -15,21 +15,24 @@ pub struct ClientServer;
 pub use client_server::ClientServerState;
 
 #[derive(Clone)]
-pub struct SignalingStateMachine<State>(
-    pub Arc<Box<dyn Fn(WsStateMeta<State>) -> BoxFuture<'static, ()> + Send + Sync>>,
+pub struct SignalingStateMachine<S>(
+    pub Arc<Box<dyn Fn(WsStateMeta<S>) -> BoxFuture<'static, ()> + Send + Sync>>,
 );
 
-impl<State> SignalingStateMachine<State> {
-    pub fn from_topology<T>(_: T) -> Self
+impl<S> SignalingStateMachine<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    pub fn from_topology<Topology>(_: Topology) -> Self
     where
-        T: SignalingTopology,
+        Topology: SignalingTopology<S>,
     {
-        Self::new(|ws| <T as SignalingTopology>::state_machine(ws))
+        Self::new(|ws| <Topology as SignalingTopology<S>>::state_machine(ws))
     }
 
     pub fn new<F, Fut>(callback: F) -> Self
     where
-        F: Fn(WsStateMeta<State>) -> Fut + 'static + Send + Sync,
+        F: Fn(WsStateMeta<S>) -> Fut + 'static + Send + Sync,
         Fut: Future<Output = ()> + 'static + Send,
     {
         Self(Arc::new(Box::new(move |ws| Box::pin(callback(ws)))))
@@ -37,7 +40,10 @@ impl<State> SignalingStateMachine<State> {
 }
 
 #[async_trait]
-pub trait SignalingTopology {
+pub trait SignalingTopology<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     /// A run-to-completion state machine, spawned once for every websocket.
-    async fn state_machine<State>(upgrade: WsStateMeta<State>);
+    async fn state_machine(upgrade: WsStateMeta<S>);
 }

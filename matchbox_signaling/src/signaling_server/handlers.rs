@@ -14,7 +14,7 @@ use tracing::info;
 pub struct WsStateMeta<State> {
     pub ws: WebSocket,
     pub upgrade_meta: WsUpgradeMeta,
-    pub state: Arc<Mutex<State>>,
+    pub state: State,
     pub callbacks: Callbacks,
 }
 
@@ -31,11 +31,14 @@ pub(crate) async fn ws_handler<S>(
     ws: WebSocketUpgrade,
     path: Option<Path<String>>,
     Query(params): Query<HashMap<String, String>>,
-    State(state): State<Arc<Mutex<S>>>,
+    Extension(state): Extension<S>,
     Extension(callbacks): Extension<Callbacks>,
     Extension(state_machine): Extension<SignalingStateMachine<S>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-) -> impl IntoResponse {
+) -> impl IntoResponse
+where
+    S: Clone + Send + Sync + 'static,
+{
     info!("`{addr}` connected.");
 
     let path = path.map(|path| path.0);

@@ -7,21 +7,21 @@ use crate::{
 };
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
-use futures::{channel::mpsc::UnboundedSender, stream::SplitSink, StreamExt};
+use futures::{stream::SplitSink, SinkExt, StreamExt, TryFutureExt};
 use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
 use std::{collections::HashMap, str::FromStr};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};
 
 #[async_trait]
-impl SignalingTopology for FullMesh {
+impl SignalingTopology<FullMeshState> for FullMesh {
     /// One of these handlers is spawned for every web socket.
     async fn state_machine(upgrade: WsStateMeta<FullMeshState>) {
         let WsStateMeta {
             ws,
             upgrade_meta,
-            state,
+            mut state,
             callbacks,
         } = upgrade;
 
@@ -32,13 +32,12 @@ impl SignalingTopology for FullMesh {
         // Lifecycle event: On Connected
         callbacks.on_peer_connected.emit(peer_uuid);
         {
-            let mut add_peer_state = state.lock().await;
-            let peers = add_peer_state.add_peer(peer_uuid, sender.clone());
+            let peers = state.add_peer(peer_uuid, sender.clone());
 
             let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
             let event = Message::Text(event_text.clone());
 
-            if let Err(e) = add_peer_state.try_send(peer_uuid, event) {
+            if let Err(e) = state.try_send(peer_uuid, event) {
                 error!("error sending to {peer_uuid:?}: {e:?}");
             } else {
                 info!("{:?} -> {:?}", peer_uuid, event_text);
@@ -49,7 +48,7 @@ impl SignalingTopology for FullMesh {
 
             for (peer_id, _) in peers {
                 // Tell everyone about this new peer
-                if let Err(e) = add_peer_state.try_send(peer_id, event.clone()) {
+                if let Err(e) = state.try_send(peer_id, event.clone()) {
                     error!("error sending to {peer_id:?}: {e:?}");
                 } else {
                     info!("{:?} -> {:?}", peer_id, event_text);
@@ -90,9 +89,8 @@ impl SignalingTopology for FullMesh {
                         }
                         .to_string(),
                     );
-                    let state = state.lock().await;
                     if let Some(peer) = state.peers.get(&receiver) {
-                        if let Err(e) = peer.sender.send(Ok(event)) {
+                        if let Err(e) = peer.send(Ok(event)) {
                             error!("error sending: {:?}", e);
                         }
                     } else {
@@ -109,10 +107,9 @@ impl SignalingTopology for FullMesh {
         // Lifecycle event: On Connected
         callbacks.on_peer_disconnected.emit(peer_uuid);
         // Peer disconnected or otherwise ended communication.
-        let mut state = state.lock().await;
-        if let Some(removed_peer) = state.remove_peer(&peer_uuid) {
+        if let Some((removed_peer, _sender)) = state.remove_peer(&peer_uuid) {
             // Tell each connected peer about the disconnected peer.
-            let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer.uuid).to_string());
+            let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer).to_string());
             for (peer_id, _) in state.peers.iter() {
                 match state.try_send(*peer_id, event.clone()) {
                     Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
@@ -148,29 +145,34 @@ fn spawn_sender_task(
 /// Contains the signaling server state
 #[derive(Default, Debug, Clone)]
 pub struct FullMeshState {
-    pub(crate) peers: HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>>,
+    pub peers: HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>>,
 }
 
 impl FullMeshState {
     /// Add a peer, returning peers that already existed
-    pub(crate) fn add_peer(
+    pub fn add_peer(
         &mut self,
         peer: PeerId,
         sender: UnboundedSender<Result<Message, axum::Error>>,
     ) -> HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>> {
         let prior_peers = self.peers.clone();
-        self.peers.insert(peer.uuid, peer);
+        self.peers.insert(peer, sender);
         prior_peers
     }
 
     /// Remove a peer from the state if it existed, returning the peer removed.
     #[must_use]
-    pub(crate) fn remove_peer(&mut self, peer_id: &PeerId) -> Option<PeerId> {
-        self.peers.remove(peer_id)
+    pub fn remove_peer(
+        &mut self,
+        peer_id: &PeerId,
+    ) -> Option<(PeerId, UnboundedSender<Result<Message, axum::Error>>)> {
+        self.peers
+            .remove(peer_id)
+            .map(|sender| (peer_id.to_owned(), sender))
     }
 
     /// Send a message to a peer without blocking.
-    pub(crate) fn try_send(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
+    pub fn try_send(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
         let peer = self.peers.get(&id);
         let peer = match peer {
             Some(peer) => peer,
@@ -178,7 +180,6 @@ impl FullMeshState {
                 return Err(SignalingError::UnknownPeer);
             }
         };
-
-        peer.sender.send(Ok(message)).map_err(SignalingError::from)
+        peer.send(Ok(message)).map_err(SignalingError::from)
     }
 }

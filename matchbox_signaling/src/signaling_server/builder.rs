@@ -1,11 +1,15 @@
+use super::{
+    callbacks::{Callback, Callbacks},
+    handlers::ws_handler,
+};
 use crate::{
     topologies::{ClientServer, SignalingStateMachine, SignalingTopology},
     SignalingServer,
 };
 use axum::{routing::get, Extension, Router};
-use futures::{lock::Mutex, Future};
+use futures::Future;
 use matchbox_protocol::{JsonPeerRequest, PeerId};
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
@@ -13,16 +17,15 @@ use tower_http::{
 };
 use tracing::Level;
 
-use super::{
-    callbacks::{Callback, Callbacks},
-    handlers::ws_handler,
-};
-
 /// Builder for [`SignalingServer`]s.
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
 /// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
-pub struct SignalingServerBuilder<Topology: SignalingTopology, State> {
+pub struct SignalingServerBuilder<Topology, S>
+where
+    Topology: SignalingTopology<S>,
+    S: Clone + Send + Sync + 'static,
+{
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
 
@@ -35,17 +38,21 @@ pub struct SignalingServerBuilder<Topology: SignalingTopology, State> {
     /// The state machine that runs a websocket to completion, also where topology is implemented
     pub(crate) topology: Topology,
 
-    pub(crate) state: axum::extract::State<State>,
+    /// Arbitrary state accompanying a server
+    pub(crate) state: S,
 }
 
-impl<Topology: SignalingTopology, State> SignalingServerBuilder<Topology, State> {
+impl<Topology, S> SignalingServerBuilder<Topology, S>
+where
+    Topology: SignalingTopology<S>,
+    S: Clone + Send + Sync + 'static,
+{
     /// Creates a new builder for a [`SignalingServer`].
-    pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology, state: State) -> Self {
-        let state = Arc::new(Mutex::new(state));
+    pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology, state: S) -> Self {
         let callbacks = Callbacks::default();
         Self {
             socket_addr: socket_addr.into(),
-            router: Router::new().route("/:path", get(ws_handler)),
+            router: Router::new().route("/:path", get(ws_handler::<S>)),
             callbacks,
             topology,
             state,
@@ -123,12 +130,13 @@ impl<Topology: SignalingTopology, State> SignalingServerBuilder<Topology, State>
     /// This method will panic if the socket address requested cannot be bound.
     pub fn build(mut self) -> SignalingServer {
         // Insert topology
-        let state_machine = SignalingStateMachine::from_topology(self.topology);
+        let state_machine: SignalingStateMachine<S> =
+            SignalingStateMachine::from_topology(self.topology);
         self.router = self
             .router
             .layer(Extension(state_machine))
             .layer(Extension(self.callbacks))
-            .with_state(self.state);
+            .layer(Extension(self.state));
         let server = axum::Server::bind(&self.socket_addr).serve(
             self.router
                 .into_make_service_with_connect_info::<SocketAddr>(),
@@ -141,7 +149,11 @@ impl<Topology: SignalingTopology, State> SignalingServerBuilder<Topology, State>
     }
 }
 
-impl<State> SignalingServerBuilder<ClientServer, State> {
+impl<Topology, S> SignalingServerBuilder<Topology, S>
+where
+    Topology: SignalingTopology<S>,
+    S: Clone + Send + Sync + 'static,
+{
     pub fn on_host_connected<F, Fut>(self, callback: F) -> Self
     where
         F: Fn() -> Fut + 'static,

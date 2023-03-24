@@ -1,12 +1,15 @@
 use crate::{
-    signaling_server::{error::ClientRequestError, handlers::WsUpgrade, state::Peer},
+    signaling_server::{
+        error::{ClientRequestError, SignalingError},
+        handlers::WsStateMeta,
+    },
     topologies::{FullMesh, SignalingTopology},
 };
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
-use futures::{stream::SplitSink, StreamExt};
-use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerRequest};
-use std::str::FromStr;
+use futures::{channel::mpsc::UnboundedSender, stream::SplitSink, StreamExt};
+use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
+use std::{collections::HashMap, str::FromStr};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};
@@ -14,13 +17,13 @@ use tracing::{error, info, warn};
 #[async_trait]
 impl SignalingTopology for FullMesh {
     /// One of these handlers is spawned for every web socket.
-    async fn state_machine(ws_upgrade: WsUpgrade) {
-        let WsUpgrade {
+    async fn state_machine(upgrade: WsStateMeta<FullMeshState>) {
+        let WsStateMeta {
             ws,
-            extract,
+            upgrade_meta,
             state,
             callbacks,
-        } = ws_upgrade;
+        } = upgrade;
 
         let (ws_sender, mut ws_receiver) = ws.split();
         let sender = spawn_sender_task(ws_sender);
@@ -30,10 +33,7 @@ impl SignalingTopology for FullMesh {
         callbacks.on_peer_connected.emit(peer_uuid);
         {
             let mut add_peer_state = state.lock().await;
-            let peers = add_peer_state.add_peer(Peer {
-                uuid: peer_uuid,
-                sender: sender.clone(),
-            });
+            let peers = add_peer_state.add_peer(peer_uuid, sender.clone());
 
             let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
             let event = Message::Text(event_text.clone());
@@ -143,4 +143,42 @@ fn spawn_sender_task(
     let (client_sender, receiver) = mpsc::unbounded_channel();
     tokio::task::spawn(UnboundedReceiverStream::new(receiver).forward(sender));
     client_sender
+}
+
+/// Contains the signaling server state
+#[derive(Default, Debug, Clone)]
+pub struct FullMeshState {
+    pub(crate) peers: HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>>,
+}
+
+impl FullMeshState {
+    /// Add a peer, returning peers that already existed
+    pub(crate) fn add_peer(
+        &mut self,
+        peer: PeerId,
+        sender: UnboundedSender<Result<Message, axum::Error>>,
+    ) -> HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>> {
+        let prior_peers = self.peers.clone();
+        self.peers.insert(peer.uuid, peer);
+        prior_peers
+    }
+
+    /// Remove a peer from the state if it existed, returning the peer removed.
+    #[must_use]
+    pub(crate) fn remove_peer(&mut self, peer_id: &PeerId) -> Option<PeerId> {
+        self.peers.remove(peer_id)
+    }
+
+    /// Send a message to a peer without blocking.
+    pub(crate) fn try_send(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
+        let peer = self.peers.get(&id);
+        let peer = match peer {
+            Some(peer) => peer,
+            None => {
+                return Err(SignalingError::UnknownPeer);
+            }
+        };
+
+        peer.sender.send(Ok(message)).map_err(SignalingError::from)
+    }
 }

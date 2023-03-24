@@ -1,5 +1,5 @@
 use super::builder::SignalingServerBuilder;
-use crate::topologies::{ClientServer, FullMesh};
+use crate::topologies::{ClientServer, ClientServerState, FullMesh, FullMeshState};
 use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router, Server};
 use hyper::server::conn::AddrIncoming;
 use std::net::SocketAddr;
@@ -19,15 +19,15 @@ impl SignalingServer {
     /// Creates a new builder for a [`SignalingServer`] with full-mesh topology.
     pub fn full_mesh_builder(
         socket_addr: impl Into<SocketAddr>,
-    ) -> SignalingServerBuilder<FullMesh> {
-        SignalingServerBuilder::new(socket_addr, FullMesh)
+    ) -> SignalingServerBuilder<FullMesh, FullMeshState> {
+        SignalingServerBuilder::new(socket_addr, FullMesh, FullMeshState::default())
     }
 
     /// Creates a new builder for a [`SignalingServer`] with client-server topology.
     pub fn client_server_builder(
         socket_addr: impl Into<SocketAddr>,
-    ) -> SignalingServerBuilder<ClientServer> {
-        SignalingServerBuilder::new(socket_addr, ClientServer)
+    ) -> SignalingServerBuilder<ClientServer, ClientServerState> {
+        SignalingServerBuilder::new(socket_addr, ClientServer, ClientServerState::default())
     }
 
     /// Returns the local address this server is bound to

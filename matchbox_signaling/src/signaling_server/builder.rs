@@ -1,5 +1,4 @@
 use crate::{
-    signaling_server::state::SignalingState,
     topologies::{ClientServer, SignalingStateMachine, SignalingTopology},
     SignalingServer,
 };
@@ -23,7 +22,7 @@ use super::{
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
 /// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
-pub struct SignalingServerBuilder<Topology: SignalingTopology> {
+pub struct SignalingServerBuilder<Topology: SignalingTopology, State> {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
 
@@ -35,25 +34,26 @@ pub struct SignalingServerBuilder<Topology: SignalingTopology> {
 
     /// The state machine that runs a websocket to completion, also where topology is implemented
     pub(crate) topology: Topology,
+
+    pub(crate) state: axum::extract::State<State>,
 }
 
-impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
+impl<Topology: SignalingTopology, State> SignalingServerBuilder<Topology, State> {
     /// Creates a new builder for a [`SignalingServer`].
-    pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology) -> Self {
-        let state = Arc::new(Mutex::new(SignalingState::default()));
+    pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology, state: State) -> Self {
+        let state = Arc::new(Mutex::new(state));
         let callbacks = Callbacks::default();
         Self {
             socket_addr: socket_addr.into(),
-            router: Router::new()
-                .route("/:path", get(ws_handler))
-                .with_state(state),
+            router: Router::new().route("/:path", get(ws_handler)),
             callbacks,
             topology,
+            state,
         }
     }
 
-    /// Modify the router.
-    pub fn router(mut self, mut alter: impl FnMut(&mut Router)) -> Self {
+    /// Modify the router. This is where one may apply middleware or other layers to the Router.
+    pub fn router_map(mut self, mut alter: impl FnMut(&mut Router)) -> Self {
         alter(&mut self.router);
         self
     }
@@ -127,7 +127,8 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
         self.router = self
             .router
             .layer(Extension(state_machine))
-            .layer(Extension(self.callbacks));
+            .layer(Extension(self.callbacks))
+            .with_state(self.state);
         let server = axum::Server::bind(&self.socket_addr).serve(
             self.router
                 .into_make_service_with_connect_info::<SocketAddr>(),
@@ -140,7 +141,7 @@ impl<Topology: SignalingTopology> SignalingServerBuilder<Topology> {
     }
 }
 
-impl SignalingServerBuilder<ClientServer> {
+impl<State> SignalingServerBuilder<ClientServer, State> {
     pub fn on_host_connected<F, Fut>(self, callback: F) -> Self
     where
         F: Fn() -> Fut + 'static,

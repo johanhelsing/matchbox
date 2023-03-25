@@ -75,7 +75,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
 
         // Check whether the socket is host
         let is_host = {
-            let host = state.host.lock().unwrap();
+            let host = state.host.try_lock().unwrap();
             host.as_ref().is_some() && {
                 let (id, _sender) = host.as_ref().unwrap();
                 *id == peer_uuid
@@ -184,7 +184,7 @@ impl SignalingState for ClientServerState {}
 impl ClientServerState {
     /// Check if the host is available to take
     pub fn is_host_available(&mut self) -> bool {
-        self.host.lock().as_ref().unwrap().is_none()
+        self.host.try_lock().as_ref().unwrap().is_none()
     }
 
     /// Set host
@@ -193,7 +193,11 @@ impl ClientServerState {
         peer: PeerId,
         sender: UnboundedSender<Result<Message, axum::Error>>,
     ) {
-        self.host.lock().as_mut().unwrap().replace((peer, sender));
+        self.host
+            .try_lock()
+            .as_mut()
+            .unwrap()
+            .replace((peer, sender));
     }
 
     /// Add a client
@@ -202,7 +206,11 @@ impl ClientServerState {
         peer: PeerId,
         sender: UnboundedSender<Result<Message, axum::Error>>,
     ) {
-        self.clients.lock().as_mut().unwrap().insert(peer, sender);
+        self.clients
+            .try_lock()
+            .as_mut()
+            .unwrap()
+            .insert(peer, sender);
     }
 
     /// Remove a client from the state if it existed.
@@ -217,7 +225,7 @@ impl ClientServerState {
                 error!("Failure sending peer remove to host: {e:?}")
             }
         }
-        self.clients.lock().as_mut().unwrap().remove(peer_id);
+        self.clients.try_lock().as_mut().unwrap().remove(peer_id);
     }
 
     /// Send a message to a channel without blocking.
@@ -232,7 +240,7 @@ impl ClientServerState {
     /// Send a message to a peer without blocking.
     pub fn try_send_to_client(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
         self.clients
-            .lock()
+            .try_lock()
             .as_mut()
             .unwrap()
             .get(&id)
@@ -243,7 +251,7 @@ impl ClientServerState {
     /// Send a message to the host without blocking.
     pub fn try_send_to_host(&self, message: Message) -> Result<(), SignalingError> {
         self.host
-            .lock()
+            .try_lock()
             .as_mut()
             .unwrap()
             .as_ref()
@@ -252,10 +260,10 @@ impl ClientServerState {
     }
 
     pub fn reset(&mut self) {
-        if let Some((host_id, _)) = self.host.lock().as_mut().unwrap().take() {
+        if let Some((host_id, _)) = self.host.try_lock().as_mut().unwrap().take() {
             // Tell each connected peer about the disconnected host.
             let event = Message::Text(JsonPeerEvent::PeerLeft(host_id).to_string());
-            let clients = { self.clients.lock().unwrap().clone() };
+            let clients = { self.clients.try_lock().unwrap().clone() };
             clients.keys().for_each(|peer_id| {
                 match self.try_send_to_client(*peer_id, event.clone()) {
                     Ok(()) => {
@@ -267,6 +275,6 @@ impl ClientServerState {
                 }
             });
         }
-        self.clients.lock().as_mut().unwrap().clear();
+        self.clients.try_lock().as_mut().unwrap().clear();
     }
 }

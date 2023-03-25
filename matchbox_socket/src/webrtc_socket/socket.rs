@@ -253,7 +253,7 @@ pub enum PeerState {
     /// - The peer left the signalling server
     Disconnected,
 }
-/// Used to send and recieve packets on a given web rtc channel. Must be created as part of a
+/// Used to send and receive packets on a given WebRTC channel. Must be created as part of a
 /// [`WebRtcSocket`].
 #[derive(Debug)]
 pub struct WebRtcChannel {

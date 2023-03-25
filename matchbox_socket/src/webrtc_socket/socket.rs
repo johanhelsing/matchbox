@@ -1,3 +1,4 @@
+use super::error::GetChannelError;
 use crate::{
     webrtc_socket::{
         message_loop, signalling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
@@ -9,7 +10,7 @@ use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
-use std::{collections::HashMap, pin::Pin};
+use std::{collections::HashMap, marker::PhantomData, pin::Pin};
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
@@ -72,15 +73,33 @@ impl Default for RtcIceServerConfig {
     }
 }
 
-/// Builder for [`WebRtcSocket`]s.
-///
-/// Begin with [`WebRtcSocketBuilder::new`] and add at least one channel with
-/// [`WebRtcSocketBuilder::add_channel`],
-/// [`WebRtcSocketBuilder::add_reliable_channel`], or
-/// [`WebRtcSocketBuilder::add_unreliable_channel`] before calling
-/// [`WebRtcSocketBuilder::build`] to produce the desired [`WebRtcSocket`].
+/// Tags types which are used to indicate the number of [`WebRtcChannel`]s or
+/// [`ChannelConfig`]s in a [`WebRtcSocket`] or [`WebRtcSocketBuilder`] respectively.
+pub trait ChannelPlurality {}
+
+/// Tags types which are used to indicate a quantity of [`ChannelConfig`]s which can be
+/// used to build a [`WebRtcSocket`].
+pub trait BuildablePlurality: ChannelPlurality {}
+
+/// Indicates that the type has no [`WebRtcChannel`]s or [`ChannelConfig`]s.
+#[derive(Debug)]
+pub struct NoChannels;
+impl ChannelPlurality for NoChannels {}
+
+/// Indicates that the type has exactly one [`WebRtcChannel`] or [`ChannelConfig`].
+#[derive(Debug)]
+pub struct SingleChannel;
+impl ChannelPlurality for SingleChannel {}
+impl BuildablePlurality for SingleChannel {}
+
+/// Indicates that the type has more than one [`WebRtcChannel`]s or [`ChannelConfig`]s.
+#[derive(Debug)]
+pub struct MultipleChannels;
+impl ChannelPlurality for MultipleChannels {}
+impl BuildablePlurality for MultipleChannels {}
+
 #[derive(Debug, Clone)]
-pub struct WebRtcSocketBuilder {
+pub(crate) struct SocketConfig {
     /// The url for the room to connect to
     ///
     /// This is a websocket url, starting with `ws://` or `wss://` followed by
@@ -101,73 +120,98 @@ pub struct WebRtcSocketBuilder {
     pub(crate) attempts: Option<u16>,
 }
 
+/// Builder for [`WebRtcSocket`]s.
+///
+/// Begin with [`WebRtcSocketBuilder::new`] and add at least one channel with
+/// [`WebRtcSocketBuilder::add_channel`] before calling
+/// [`WebRtcSocketBuilder::build`] to produce the desired [`WebRtcSocket`].
+#[derive(Debug, Clone)]
+pub struct WebRtcSocketBuilder<C: ChannelPlurality = NoChannels> {
+    pub(crate) config: SocketConfig,
+    channel_plurality: PhantomData<C>,
+}
+
 impl WebRtcSocketBuilder {
     /// Creates a new builder for a connection to a given room with the default ICE
     /// server configuration, and three reconnection attempts.
     ///
-    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`],
-    /// [`WebRtcSocketBuilder::add_reliable_channel`], or
-    /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
-    /// [`WebRtcSocket`]
+    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`]
+    /// before you can build the [`WebRtcSocket`]
     pub fn new(room_url: impl Into<String>) -> Self {
         Self {
-            room_url: room_url.into(),
-            ice_server: RtcIceServerConfig::default(),
-            channels: Vec::default(),
-            attempts: Some(3),
+            config: SocketConfig {
+                room_url: room_url.into(),
+                ice_server: RtcIceServerConfig::default(),
+                channels: Vec::default(),
+                attempts: Some(3),
+            },
+            channel_plurality: PhantomData::default(),
         }
     }
 
     /// Sets the socket ICE server configuration.
     pub fn ice_server(mut self, ice_server: RtcIceServerConfig) -> Self {
-        self.ice_server = ice_server;
+        self.config.ice_server = ice_server;
         self
     }
 
     /// Sets the number of attempts to make at reconnecting to the signalling server,
     /// if `None` the socket will attempt to connect indefinitely.
     pub fn reconnect_attempts(mut self, attempts: Option<u16>) -> Self {
-        self.attempts = attempts;
+        self.config.attempts = attempts;
         self
     }
+}
 
+impl WebRtcSocketBuilder<NoChannels> {
     /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
-    pub fn add_channel(mut self, config: ChannelConfig) -> Self {
-        self.channels.push(config);
+    pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<SingleChannel> {
+        self.config.channels.push(config);
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
+}
+
+impl WebRtcSocketBuilder<SingleChannel> {
+    /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
+    pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<MultipleChannels> {
+        self.config.channels.push(config);
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
+}
+impl WebRtcSocketBuilder<MultipleChannels> {
+    /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
+    pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<MultipleChannels> {
+        self.config.channels.push(config);
         self
     }
+}
 
-    /// Adds a new reliable channel to the [`WebRtcSocket`].
-    ///
-    /// Messages sent via a reliable channel are guaranteed to arrive in order and will be resent
-    /// until they arrive
-    pub fn add_reliable_channel(mut self) -> Self {
-        self.channels.push(ChannelConfig::reliable());
-        self
-    }
-
-    /// Adds a new unreliable channel to the [`WebRtcSocket`].
-    ///
-    /// Messages sent via an unreliable channel may arrive in any order or not at all, but arrive as
-    /// quickly as possible
-    pub fn add_unreliable_channel(mut self) -> Self {
-        self.channels.push(ChannelConfig::unreliable());
-        self
-    }
-
+impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
     /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] according to the configuration supplied.
     ///
     /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and received.
-    pub fn build(self) -> (WebRtcSocket, MessageLoopFuture) {
-        if self.channels.is_empty() {
-            panic!("You need to configure at least one channel in WebRtcSocketConfig");
+    pub fn build(self) -> (WebRtcSocket<C>, MessageLoopFuture) {
+        if self.config.channels.is_empty() {
+            unreachable!();
         }
 
-        let (messages_from_peers_tx, messages_from_peers) =
-            new_senders_and_receivers(&self.channels);
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
+
+        let (messages_from_peers_tx, messages_from_peers_rx) =
+            new_senders_and_receivers(&self.config.channels);
         let (peer_messages_out_tx, peer_messages_out_rx) =
-            new_senders_and_receivers(&self.channels);
+            new_senders_and_receivers(&self.config.channels);
+        let channels = messages_from_peers_rx
+            .into_iter()
+            .zip(peer_messages_out_tx.into_iter())
+            .map(|(rx, tx)| Some(WebRtcChannel { rx, tx }))
+            .collect();
 
         let (id_tx, id_rx) = crossbeam_channel::bounded(1);
 
@@ -175,14 +219,14 @@ impl WebRtcSocketBuilder {
             WebRtcSocket {
                 id: Default::default(),
                 id_rx,
-                messages_from_peers,
-                peer_messages_out: peer_messages_out_tx,
                 peer_state_rx,
                 peers: Default::default(),
+                channels,
+                channel_plurality: PhantomData::default(),
             },
             Box::pin(run_socket(
                 id_tx,
-                self,
+                self.config,
                 peer_messages_out_rx,
                 peer_state_tx,
                 messages_from_peers_tx,
@@ -209,28 +253,48 @@ pub enum PeerState {
     /// - The peer left the signalling server
     Disconnected,
 }
-
-/// Contains the interface end of a full-mesh web rtc connection
-///
-/// Used to send and receive messages from other peers
+/// Used to send and receive packets on a given WebRTC channel. Must be created as part of a
+/// [`WebRtcSocket`].
 #[derive(Debug)]
-pub struct WebRtcSocket {
+pub struct WebRtcChannel {
+    tx: UnboundedSender<(PeerId, Packet)>,
+    rx: UnboundedReceiver<(PeerId, Packet)>,
+}
+
+impl WebRtcChannel {
+    /// Call this where you want to handle new received messages.
+    ///
+    /// Messages are removed from the socket when called.
+    pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
+        std::iter::repeat_with(|| self.rx.try_next())
+            .map_while(Result::ok)
+            .flatten()
+            .collect()
+    }
+
+    /// Send a packet to the given peer.
+    pub fn send(&mut self, packet: Packet, peer: PeerId) {
+        self.tx.unbounded_send((peer, packet)).expect("Send failed");
+    }
+}
+
+/// Contains a set of [`WebRtcChannel`]s and connection metadata.
+#[derive(Debug)]
+pub struct WebRtcSocket<C: ChannelPlurality = SingleChannel> {
     id: once_cell::race::OnceBox<PeerId>,
     id_rx: crossbeam_channel::Receiver<PeerId>,
-    messages_from_peers: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
-    peer_messages_out: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
     peers: HashMap<PeerId, PeerState>,
+    channels: Vec<Option<WebRtcChannel>>,
+    channel_plurality: PhantomData<C>,
 }
 
 impl WebRtcSocket {
     /// Creates a new builder for a connection to a given room with a given number of
     /// re-connection attempts.
     ///
-    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`],
-    /// [`WebRtcSocketBuilder::add_reliable_channel`], or
-    /// [`WebRtcSocketBuilder::add_unreliable_channel`] before you can build the
-    /// [`WebRtcSocket`]
+    /// You must add at least one channel with [`WebRtcSocketBuilder::add_channel`]
+    /// before you can build the [`WebRtcSocket`]
     pub fn builder(room_url: impl Into<String>) -> WebRtcSocketBuilder {
         WebRtcSocketBuilder::new(room_url)
     }
@@ -242,9 +306,11 @@ impl WebRtcSocket {
     /// be sent and received.
     ///
     /// Please use the [`WebRtcSocketBuilder`] to create non-trivial sockets.
-    pub fn new_unreliable(room_url: impl Into<String>) -> (WebRtcSocket, MessageLoopFuture) {
+    pub fn new_unreliable(
+        room_url: impl Into<String>,
+    ) -> (WebRtcSocket<SingleChannel>, MessageLoopFuture) {
         WebRtcSocketBuilder::new(room_url)
-            .add_unreliable_channel()
+            .add_channel(ChannelConfig::unreliable())
             .build()
     }
 
@@ -255,23 +321,27 @@ impl WebRtcSocket {
     /// be sent and received.
     ///
     /// Please use the [`WebRtcSocketBuilder`] to create non-trivial sockets.
-    pub fn new_reliable(room_url: impl Into<String>) -> (WebRtcSocket, MessageLoopFuture) {
+    pub fn new_reliable(
+        room_url: impl Into<String>,
+    ) -> (WebRtcSocket<SingleChannel>, MessageLoopFuture) {
         WebRtcSocketBuilder::new(room_url)
-            .add_reliable_channel()
+            .add_channel(ChannelConfig::reliable())
             .build()
     }
+}
 
+impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// Handle peers connecting or disconnecting
     ///
     /// Constructed using [`WebRtcSocketBuilder`].
     ///
-    /// Update the set of peers used by [`connected_peers`],
-    /// [`disconnected_peers`], and [`broadcast_on_channel`].
+    /// Update the set of peers used by [`WebRtcSocket::connected_peers`] and
+    /// [`WebRtcSocket::disconnected_peers`].
     ///
     /// Returns the peers that connected or disconnected since the last time
     /// this method was called.
     ///
-    /// See also: [`PeerSate`]
+    /// See also: [`PeerState`]
     pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
         let mut changes = Vec::new();
         while let Ok(Some((id, state))) = self.peer_state_rx.try_next() {
@@ -285,7 +355,7 @@ impl WebRtcSocket {
 
     /// Returns an iterator of the ids of the connected peers.
     ///
-    /// Note: You have to call [`update_peers`] for this list to be accurate.
+    /// Note: You have to call [`WebRtcSocket::update_peers`] for this list to be accurate.
     ///
     /// See also: [`WebRtcSocket::disconnected_peers`]
     pub fn connected_peers(&'_ self) -> impl std::iter::Iterator<Item = PeerId> + '_ {
@@ -300,7 +370,8 @@ impl WebRtcSocket {
 
     /// Returns an iterator of the ids of peers that are no longer connected.
     ///
-    /// Note: You have to call [`update_peers`] for this list to be accurate.
+    /// Note: You have to call [`WebRtcSocket::update_peers`] for this list to be
+    /// accurate.
     ///
     /// See also: [`WebRtcSocket::connected_peers`]
     pub fn disconnected_peers(&self) -> impl std::iter::Iterator<Item = &PeerId> {
@@ -311,77 +382,6 @@ impl WebRtcSocket {
                 None
             }
         })
-    }
-
-    /// Call this where you want to handle new received messages from the default channel (with
-    /// index 0) which will be the only channel if you didn't configure any explicitly
-    ///
-    /// messages are removed from the socket when called
-    ///
-    /// See also: [`WebRtcSocket::receive_on_channel`]
-    pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
-        self.receive_on_channel(0)
-    }
-
-    /// Call this where you want to handle new received messages from a specific channel as
-    /// configured in [`WebRtcSocketConfig::channels`]. The index of a channel is its index in
-    /// the vec [`WebRtcSocketConfig::channels`] as you configured it before (or 0 for the
-    /// default channel if you use the default configuration).
-    ///
-    /// messages are removed from the socket when called
-    pub fn receive_on_channel(&mut self, index: usize) -> Vec<(PeerId, Packet)> {
-        std::iter::repeat_with(|| {
-            self.messages_from_peers
-                .get_mut(index)
-                .unwrap_or_else(|| panic!("no data channel with index: {index}"))
-                .try_next()
-        })
-        // errors mean the other end of messages_from_peers was dropped
-        // or we are disconnecting, in any case it means there are no messages
-        // for us to handle.
-        .map_while(Result::ok)
-        .flatten()
-        .collect()
-    }
-
-    /// Send a packet to the given peer on the default channel (with index 0) which will be the only
-    /// channel if you didn't configure any explicitly
-    ///
-    /// See also [`WebRtcSocket::send_on_channel`]
-    pub fn send<T: Into<PeerId>>(&mut self, packet: Packet, id: T) {
-        self.send_on_channel(packet, id, 0);
-    }
-
-    /// Send a packet to the given peer on a specific channel as configured in
-    /// [`WebRtcSocketConfig::channels`].
-    ///
-    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] as you
-    /// configured it before (or 0 for the default channel if you use the default
-    /// configuration).
-    pub fn send_on_channel<T: Into<PeerId>>(&mut self, packet: Packet, id: T, index: usize) {
-        self.peer_messages_out
-            .get(index)
-            .unwrap_or_else(|| panic!("No data channel with index {index}"))
-            .unbounded_send((id.into(), packet))
-            .expect("send_to failed");
-    }
-
-    /// Send a packet to all connected peers on a specific channel as configured in
-    /// [`WebRtcSocketConfig::channels`].
-    ///
-    /// The index of a channel is its index in the vec [`WebRtcSocketConfig::channels`] on socket
-    /// creation.
-    pub fn broadcast_on_channel(&mut self, packet: Packet, index: usize) {
-        let sender = self
-            .peer_messages_out
-            .get(index)
-            .unwrap_or_else(|| panic!("No data channel with index {index}"));
-
-        for peer_id in self.connected_peers() {
-            sender
-                .unbounded_send((peer_id, packet.clone()))
-                .expect("send_to failed");
-        }
     }
 
     /// Returns the id of this peer, this may be `None` if an id has not yet
@@ -395,6 +395,73 @@ impl WebRtcSocket {
         } else {
             None
         }
+    }
+
+    /// Gets a mutable reference to the [`WebRtcChannel`] of a given id.
+    ///
+    /// ```
+    /// use matchbox_socket::*;
+    ///
+    /// let (mut socket, message_loop) = WebRtcSocketBuilder::new("wss://example.invalid/")
+    ///     .add_channel(ChannelConfig::reliable())
+    ///     .add_channel(ChannelConfig::unreliable())
+    ///     .build();
+    /// let reliable_channel_messages = socket.channel(0).unwrap().receive();
+    /// ```
+    ///
+    /// See also: [`WebRtcSocket::take_channel`]
+    pub fn channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, GetChannelError> {
+        self.channels
+            .get_mut(channel)
+            .ok_or(GetChannelError::NotFound)?
+            .as_mut()
+            .ok_or(GetChannelError::Taken)
+    }
+
+    /// Takes the [`WebRtcChannel`] of a given id.
+    ///
+    /// ```
+    /// use matchbox_socket::*;
+    ///
+    /// let (mut socket, message_loop) = WebRtcSocketBuilder::new("wss://example.invalid/")
+    ///     .add_channel(ChannelConfig::reliable())
+    ///     .add_channel(ChannelConfig::unreliable())
+    ///     .build();
+    /// let reliable_channel = socket.take_channel(0).unwrap();
+    /// let unreliable_channel = socket.take_channel(1).unwrap();
+    /// ```
+    ///
+    /// See also: [`WebRtcSocket::channel`]
+    pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, GetChannelError> {
+        self.channels
+            .get_mut(channel)
+            .ok_or(GetChannelError::NotFound)?
+            .take()
+            .ok_or(GetChannelError::Taken)
+    }
+}
+
+impl WebRtcSocket<SingleChannel> {
+    /// Call this where you want to handle new received messages.
+    ///
+    /// Messages are removed from the socket when called.
+    pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
+        self.channels
+            .get_mut(0)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .receive()
+    }
+
+    /// Send a packet to the given peer.
+    pub fn send(&mut self, packet: Packet, peer: PeerId) {
+        self.channels
+            .get_mut(0)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .send(packet, peer)
     }
 }
 
@@ -438,7 +505,7 @@ pub struct MessageLoopChannels {
 
 async fn run_socket(
     id_tx: crossbeam_channel::Sender<PeerId>,
-    config: WebRtcSocketBuilder,
+    config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
@@ -450,7 +517,7 @@ async fn run_socket(
 
     let signalling_loop_fut = signalling_loop::<UseSignaller>(
         config.attempts,
-        config.room_url.clone(),
+        config.room_url,
         requests_receiver,
         events_sender,
     );
@@ -462,7 +529,8 @@ async fn run_socket(
         peer_state_tx,
         messages_from_peers_tx,
     };
-    let message_loop_fut = message_loop::<UseMessenger>(id_tx, config, channels);
+    let message_loop_fut =
+        message_loop::<UseMessenger>(id_tx, &config.ice_server, &config.channels, channels);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());
@@ -492,13 +560,13 @@ async fn run_socket(
 
 #[cfg(test)]
 mod test {
-    use crate::{webrtc_socket::error::SignallingError, Error, WebRtcSocketBuilder};
+    use crate::{webrtc_socket::error::SignallingError, ChannelConfig, Error, WebRtcSocketBuilder};
 
     #[futures_test::test]
     async fn unreachable_server() {
         // .invalid is a reserved tld for testing and documentation
         let (_socket, fut) = WebRtcSocketBuilder::new("wss://example.invalid")
-            .add_reliable_channel()
+            .add_channel(ChannelConfig::unreliable())
             .build();
 
         let result = fut.await;
@@ -510,7 +578,7 @@ mod test {
     async fn test_signalling_attempts() {
         let (_socket, loop_fut) = WebRtcSocketBuilder::new("wss://example.invalid/")
             .reconnect_attempts(Some(3))
-            .add_reliable_channel()
+            .add_channel(ChannelConfig::reliable())
             .build();
 
         let result = loop_fut.await;

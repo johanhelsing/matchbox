@@ -255,7 +255,8 @@ impl ClientServerState {
         if let Some((host_id, _)) = self.host.lock().as_mut().unwrap().take() {
             // Tell each connected peer about the disconnected host.
             let event = Message::Text(JsonPeerEvent::PeerLeft(host_id).to_string());
-            for peer_id in self.clients.lock().as_ref().unwrap().keys() {
+            let clients = { self.clients.lock().unwrap().clone() };
+            clients.keys().for_each(|peer_id| {
                 match self.try_send_to_client(*peer_id, event.clone()) {
                     Ok(()) => {
                         info!("Sent host peer remove to: {peer_id:?}")
@@ -264,7 +265,7 @@ impl ClientServerState {
                         error!("Failure sending host peer remove to {peer_id:?}: {e:?}")
                     }
                 }
-            }
+            });
         }
         self.clients.lock().as_mut().unwrap().clear();
     }

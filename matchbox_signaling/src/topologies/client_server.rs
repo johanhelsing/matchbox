@@ -48,29 +48,27 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
             info!("{peer_uuid:?} -> {event_text}");
         };
 
-        {
-            // TODO: Make some real way to validate hosts, authentication?
-            // Currently, the first person to connect becomes host.
-            if state.is_host_available() {
-                // Set host
-                state.set_host(peer_uuid, sender.clone());
-                // Lifecycle event: On Host Connected
-                callbacks.on_host_connected.emit(peer_uuid);
-            } else {
-                // Alert server of new user
-                let event = Message::Text(JsonPeerEvent::NewPeer(peer_uuid).to_string());
-                // Tell host about this new client
-                match state.try_send_to_host(event) {
-                    Ok(_) => {
-                        // Add peer to state
-                        state.add_client(peer_uuid, sender.clone());
-                        // Lifecycle event: On Client Connected
-                        callbacks.on_client_connected.emit(peer_uuid);
-                    }
-                    Err(e) => {
-                        error!("error sending peer {peer_uuid:?} to host: {e:?}");
-                        return;
-                    }
+        // TODO: Make some real way to validate hosts, authentication?
+        // Currently, the first person to connect becomes host.
+        if state.is_host_available() {
+            // Set host
+            state.set_host(peer_uuid, sender.clone());
+            // Lifecycle event: On Host Connected
+            callbacks.on_host_connected.emit(peer_uuid);
+        } else {
+            // Alert server of new user
+            let event = Message::Text(JsonPeerEvent::NewPeer(peer_uuid).to_string());
+            // Tell host about this new client
+            match state.try_send_to_host(event) {
+                Ok(_) => {
+                    // Add peer to state
+                    state.add_client(peer_uuid, sender.clone());
+                    // Lifecycle event: On Client Connected
+                    callbacks.on_client_connected.emit(peer_uuid);
+                }
+                Err(e) => {
+                    error!("error sending peer {peer_uuid:?} to host: {e:?}");
+                    return;
                 }
             }
         }

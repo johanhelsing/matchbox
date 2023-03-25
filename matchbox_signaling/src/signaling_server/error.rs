@@ -11,7 +11,7 @@ pub enum ClientRequestError {
     #[error("Json error")]
     Json(#[from] serde_json::Error),
     #[error("Unsupported message type")]
-    UnsupportedType,
+    UnsupportedType(Message),
 }
 
 /// An error in server logic.

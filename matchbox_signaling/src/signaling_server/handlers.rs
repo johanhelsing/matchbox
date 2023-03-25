@@ -1,15 +1,13 @@
-use crate::{
-    signaling_server::callbacks::Callbacks,
-    topologies::{SignalingStateMachine, SignalingTopology},
-};
+use crate::{signaling_server::callbacks::Callbacks, topologies::SignalingStateMachine};
 use axum::{
-    extract::{ws::WebSocket, ConnectInfo, Path, Query, State, WebSocketUpgrade},
+    extract::{ws::WebSocket, ConnectInfo, Path, Query, WebSocketUpgrade},
     response::IntoResponse,
     Extension,
 };
-use futures::{future::BoxFuture, lock::Mutex, Future};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr};
 use tracing::info;
+
+use super::server::SignalingState;
 
 pub struct WsStateMeta<State> {
     pub ws: WebSocket,
@@ -37,7 +35,7 @@ pub(crate) async fn ws_handler<S>(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse
 where
-    S: Clone + Send + Sync + 'static,
+    S: SignalingState + 'static,
 {
     info!("`{addr}` connected.");
 

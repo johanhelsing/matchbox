@@ -1,8 +1,12 @@
-use super::builder::SignalingServerBuilder;
-use crate::topologies::{ClientServer, ClientServerState, FullMesh, FullMeshState};
+use crate::{
+    signaling_server::builder::SignalingServerBuilder,
+    topologies::{ClientServer, ClientServerState, FullMesh, FullMeshState},
+};
 use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router, Server};
 use hyper::server::conn::AddrIncoming;
 use std::net::SocketAddr;
+
+pub trait SignalingState: Clone + Send + Sync + 'static {}
 
 /// Contains the interface end of a signaling server
 #[derive(Debug)]

@@ -1,6 +1,5 @@
+use matchbox_protocol::{JsonPeerRequest, PeerId};
 use std::{fmt, rc::Rc};
-
-use matchbox_protocol::{JsonPeerRequest, PeerId, PeerRequest};
 
 /// Universal callback wrapper.
 ///

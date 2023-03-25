@@ -1,8 +1,9 @@
-use super::{
-    callbacks::{Callback, Callbacks},
-    handlers::ws_handler,
-};
 use crate::{
+    signaling_server::{
+        callbacks::{Callback, Callbacks},
+        handlers::ws_handler,
+        server::SignalingState,
+    },
     topologies::{ClientServer, ClientServerState, SignalingStateMachine, SignalingTopology},
     SignalingServer,
 };
@@ -24,7 +25,7 @@ use tracing::Level;
 pub struct SignalingServerBuilder<Topology, S>
 where
     Topology: SignalingTopology<S>,
-    S: Clone + Send + Sync + 'static,
+    S: SignalingState + 'static,
 {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
@@ -45,7 +46,7 @@ where
 impl<Topology, S> SignalingServerBuilder<Topology, S>
 where
     Topology: SignalingTopology<S>,
-    S: Clone + Send + Sync + 'static,
+    S: SignalingState + 'static,
 {
     /// Creates a new builder for a [`SignalingServer`].
     pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology, state: S) -> Self {

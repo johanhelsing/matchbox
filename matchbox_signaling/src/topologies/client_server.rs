@@ -1,15 +1,17 @@
-use super::{ClientServer, SignalingTopology};
-use crate::signaling_server::{
-    error::{ClientRequestError, SignalingError},
-    handlers::WsStateMeta,
+use crate::{
+    signaling_server::{
+        error::{ClientRequestError, SignalingError},
+        handlers::WsStateMeta,
+        server::SignalingState,
+    },
+    topologies::{parse_request, spawn_sender_task, ClientServer, SignalingTopology},
 };
 use async_trait::async_trait;
-use axum::extract::ws::{Message, WebSocket};
-use futures::{stream::SplitSink, StreamExt};
-use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerEvent, PeerId, PeerRequest};
-use std::{collections::HashMap, str::FromStr};
-use tokio::sync::mpsc::{self, UnboundedSender};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use axum::extract::ws::Message;
+use futures::StreamExt;
+use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
+use std::collections::HashMap;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, info, warn};
 
 #[async_trait]
@@ -30,11 +32,12 @@ impl SignalingTopology<ClientServerState> for ClientServer {
         // Lifecycle event: On Connected
         callbacks.on_peer_connected.emit(peer_uuid);
         {
+            // Add peer to state
             state.add_client(peer_uuid, sender.clone());
 
+            // Send ID to peer
             let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
             let event = Message::Text(event_text.clone());
-
             if let Err(e) = state.try_send(peer_uuid, event) {
                 error!("error sending to {peer_uuid:?}: {e:?}");
                 return;
@@ -47,40 +50,42 @@ impl SignalingTopology<ClientServerState> for ClientServer {
             if state.host.is_none() {
                 // Set host
                 state.host.replace((peer_uuid, sender.clone()));
-                info!("SET HOST: {peer_uuid:?}");
             } else {
-                // Set client
-                let event_text = JsonPeerEvent::NewPeer(peer_uuid).to_string();
-                let event = Message::Text(event_text.clone());
-
+                // Alert server of new user
+                let event = Message::Text(JsonPeerEvent::NewPeer(peer_uuid).to_string());
                 // Tell host about this new client
                 if let Err(e) = state.try_send_to_host(event) {
                     error!("error sending peer {peer_uuid:?} to host: {e:?}");
+                    // Lifecycle event: On Disonnected
+                    callbacks.on_peer_disconnected.emit(peer_uuid);
+                    _ = state.remove_client(&peer_uuid);
                     return;
-                } else {
-                    info!("{peer_uuid:?} -> {event_text}");
                 }
             }
         }
 
         // The state machine for the data channel established for this websocket.
         while let Some(request) = ws_receiver.next().await {
-            // Parse the message
             let request = match parse_request(request.map_err(ClientRequestError::from)) {
                 Ok(request) => request,
-                Err(ClientRequestError::Axum(e)) => {
-                    // Most likely a ConnectionReset or similar.
-                    error!("Axum error while receiving request: {:?}", e);
-                    warn!("Severing connection with {peer_uuid:?}");
-                    break; // give up on this peer.
-                }
-                Err(ClientRequestError::Close) => {
-                    info!("Received websocket close from {peer_uuid:?}");
-                    break;
-                }
                 Err(e) => {
-                    error!("Error untangling request: {:?}", e);
-                    continue;
+                    match e {
+                        ClientRequestError::Axum(_) => {
+                            // Most likely a ConnectionReset or similar.
+                            warn!("Unrecoverable error with {peer_uuid:?}: {e:?}");
+                        }
+                        ClientRequestError::Close => {
+                            info!("Connection closed by {peer_uuid:?}");
+                        }
+                        ClientRequestError::Json(_) | ClientRequestError::UnsupportedType(_) => {
+                            error!("Error with request: {:?}", e);
+                            continue; // Recoverable error
+                        }
+                    };
+                    // Lifecycle event: On Disonnected
+                    callbacks.on_peer_disconnected.emit(peer_uuid);
+                    _ = state.remove_client(&peer_uuid);
+                    break;
                 }
             };
 
@@ -88,7 +93,6 @@ impl SignalingTopology<ClientServerState> for ClientServer {
             callbacks.on_signal.emit(request.clone());
             match request {
                 PeerRequest::Signal { receiver, data } => {
-                    info!("<-- {peer_uuid:?}: {data:?}");
                     let event = Message::Text(
                         JsonPeerEvent::Signal {
                             sender: peer_uuid,
@@ -105,13 +109,13 @@ impl SignalingTopology<ClientServerState> for ClientServer {
                     }
                 }
                 PeerRequest::KeepAlive => {
-                    // Do nothing. KeepAlive packets are used to protect against
-                    // users' browsers disconnecting idle websocket connections.
+                    // Do nothing. KeepAlive packets are used to protect against users' browsers
+                    // disconnecting idle websocket connections.
                 }
             }
         }
 
-        // Lifecycle event: On Connected
+        // Lifecycle event: On Disonnected
         callbacks.on_peer_disconnected.emit(peer_uuid);
         // Peer disconnected or otherwise ended communication.
         let is_host = state.host.is_some() && {
@@ -152,34 +156,13 @@ impl SignalingTopology<ClientServerState> for ClientServer {
     }
 }
 
-fn parse_request(
-    request: Result<Message, ClientRequestError>,
-) -> Result<JsonPeerRequest, ClientRequestError> {
-    let request = request?;
-
-    let request = match request {
-        Message::Text(text) => JsonPeerRequest::from_str(&text)?,
-        Message::Close(_) => return Err(ClientRequestError::Close),
-        _ => return Err(ClientRequestError::UnsupportedType),
-    };
-
-    Ok(request)
-}
-
-fn spawn_sender_task(
-    sender: SplitSink<WebSocket, Message>,
-) -> mpsc::UnboundedSender<Result<Message, axum::Error>> {
-    let (client_sender, receiver) = mpsc::unbounded_channel();
-    tokio::task::spawn(UnboundedReceiverStream::new(receiver).forward(sender));
-    client_sender
-}
-
 /// Contains the signaling server state
 #[derive(Default, Debug, Clone)]
 pub struct ClientServerState {
     pub(crate) host: Option<(PeerId, UnboundedSender<Result<Message, axum::Error>>)>,
     pub(crate) clients: HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>>,
 }
+impl SignalingState for ClientServerState {}
 
 impl ClientServerState {
     /// Add a peer, returning peers that already existed

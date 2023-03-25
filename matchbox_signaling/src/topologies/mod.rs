@@ -1,7 +1,13 @@
-use crate::signaling_server::handlers::WsStateMeta;
+use crate::signaling_server::{
+    error::ClientRequestError, handlers::WsStateMeta, server::SignalingState,
+};
 use async_trait::async_trait;
-use futures::{future::BoxFuture, Future};
-use std::sync::Arc;
+use axum::extract::ws::{Message, WebSocket};
+use futures::{future::BoxFuture, stream::SplitSink, Future, StreamExt};
+use matchbox_protocol::JsonPeerRequest;
+use std::{str::FromStr, sync::Arc};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 mod client_server;
 mod full_mesh;
@@ -21,7 +27,7 @@ pub struct SignalingStateMachine<S>(
 
 impl<S> SignalingStateMachine<S>
 where
-    S: Clone + Send + Sync + 'static,
+    S: SignalingState + 'static,
 {
     pub fn from_topology<Topology>(_: Topology) -> Self
     where
@@ -42,8 +48,27 @@ where
 #[async_trait]
 pub trait SignalingTopology<S>
 where
-    S: Clone + Send + Sync + 'static,
+    S: SignalingState + 'static,
 {
     /// A run-to-completion state machine, spawned once for every websocket.
     async fn state_machine(upgrade: WsStateMeta<S>);
+}
+
+pub(crate) fn parse_request(
+    request: Result<Message, ClientRequestError>,
+) -> Result<JsonPeerRequest, ClientRequestError> {
+    match request? {
+        Message::Text(text) => Ok(JsonPeerRequest::from_str(&text)?),
+        Message::Close(_) => Err(ClientRequestError::Close),
+        m => Err(ClientRequestError::UnsupportedType(m)),
+    }
+}
+
+/// Common helper method to spawn a sender
+pub(crate) fn spawn_sender_task(
+    sender: SplitSink<WebSocket, Message>,
+) -> mpsc::UnboundedSender<Result<Message, axum::Error>> {
+    let (client_sender, receiver) = mpsc::unbounded_channel();
+    tokio::task::spawn(UnboundedReceiverStream::new(receiver).forward(sender));
+    client_sender
 }

@@ -10,7 +10,8 @@ license = "MIT OR Apache-2.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = [
-    "Document", "Location", # for getting args from query string
+  "Document",
+  "Location", # for getting args from query string
 ] }
 serde_qs = "0.12"
 wasm-bindgen = "0.2"
@@ -23,10 +24,10 @@ bevy = { version = "0.9", default-features = false, features = [
   "bevy_winit",
   "render",
   "png",
-  "x11" # gh actions runners don't like wayland
+  "x11",        # gh actions runners don't like wayland
 ] }
 ggrs = "0.9"
 bevy_ggrs = "0.11"
-bytemuck = { version = "1.7", features=["derive"]}
+bytemuck = { version = "1.7", features = ["derive"] }
 clap = { version = "4.0", features = ["derive"] }
 serde = "1.0"

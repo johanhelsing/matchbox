@@ -4,7 +4,7 @@ use crate::signaling_server::error::SignalingError;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// An error occurring during the signalling loop.
-    #[error("An unrecoverable error in the signalling loop")]
+    #[error("An unrecoverable error in the signaling loop")]
     Signaling(#[from] SignalingError),
 
     /// An error occurring from hyper

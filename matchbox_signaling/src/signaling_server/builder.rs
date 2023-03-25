@@ -3,7 +3,7 @@ use super::{
     handlers::ws_handler,
 };
 use crate::{
-    topologies::{ClientServer, SignalingStateMachine, SignalingTopology},
+    topologies::{ClientServer, ClientServerState, SignalingStateMachine, SignalingTopology},
     SignalingServer,
 };
 use axum::{routing::get, Extension, Router};
@@ -59,8 +59,9 @@ where
         }
     }
 
-    /// Modify the router. This is where one may apply middleware or other layers to the Router.
-    pub fn router_map(mut self, mut alter: impl FnMut(&mut Router)) -> Self {
+    /// Modify the router with a mutable closure. This is where one may apply middleware or other
+    /// layers to the Router.
+    pub fn middleware(mut self, mut alter: impl FnMut(&mut Router)) -> Self {
         alter(&mut self.router);
         self
     }
@@ -80,8 +81,7 @@ where
         self
     }
 
-    /// Set a callback triggered on new peer connections. In client-server architecture contexts,
-    /// this is the same as "client."
+    /// Set a callback triggered on all websocket connections.
     pub fn on_peer_connected<F>(mut self, callback: F) -> Self
     where
         F: Fn(PeerId) + 'static,
@@ -90,8 +90,7 @@ where
         self
     }
 
-    /// Set a callback triggered on peer disconnections. In client-server architecture contexts,
-    /// this is the same as "client."
+    /// Set a callback triggered on all websocket disconnections.
     pub fn on_peer_disconnected<F>(mut self, callback: F) -> Self
     where
         F: Fn(PeerId) + 'static,
@@ -149,11 +148,7 @@ where
     }
 }
 
-impl<Topology, S> SignalingServerBuilder<Topology, S>
-where
-    Topology: SignalingTopology<S>,
-    S: Clone + Send + Sync + 'static,
-{
+impl SignalingServerBuilder<ClientServer, ClientServerState> {
     pub fn on_host_connected<F, Fut>(self, callback: F) -> Self
     where
         F: Fn() -> Fut + 'static,

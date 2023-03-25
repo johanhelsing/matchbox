@@ -7,7 +7,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
-use futures::{stream::SplitSink, SinkExt, StreamExt, TryFutureExt};
+use futures::{stream::SplitSink, StreamExt};
 use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
 use std::{collections::HashMap, str::FromStr};
 use tokio::sync::mpsc::{self, UnboundedSender};
@@ -75,8 +75,6 @@ impl SignalingTopology<FullMeshState> for FullMesh {
                     continue;
                 }
             };
-
-            info!("{:?} <- {:?}", peer_uuid, request);
 
             // Lifecycle event: On Signal
             callbacks.on_signal.emit(request.clone());

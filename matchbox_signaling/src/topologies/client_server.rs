@@ -5,7 +5,7 @@ use crate::signaling_server::{
 };
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
-use futures::{stream::SplitSink, SinkExt, StreamExt, TryFutureExt};
+use futures::{stream::SplitSink, StreamExt};
 use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerEvent, PeerId, PeerRequest};
 use std::{collections::HashMap, str::FromStr};
 use tokio::sync::mpsc::{self, UnboundedSender};
@@ -27,6 +27,8 @@ impl SignalingTopology<ClientServerState> for ClientServer {
 
         // Generate a UUID for the user
         let peer_uuid = uuid::Uuid::new_v4().into();
+        // Lifecycle event: On Connected
+        callbacks.on_peer_connected.emit(peer_uuid);
         {
             state.add_client(peer_uuid, sender.clone());
 
@@ -82,16 +84,17 @@ impl SignalingTopology<ClientServerState> for ClientServer {
                 }
             };
 
-            // Handle the message
+            // Lifecycle event: On Signal
+            callbacks.on_signal.emit(request.clone());
             match request {
                 PeerRequest::Signal { receiver, data } => {
                     info!("<-- {peer_uuid:?}: {data:?}");
                     let event = Message::Text(
-                        serde_json::to_string(&PeerEvent::Signal {
+                        JsonPeerEvent::Signal {
                             sender: peer_uuid,
                             data,
-                        })
-                        .expect("error serializing message"),
+                        }
+                        .to_string(),
                     );
                     if let Some(peer) = state.clients.get(&receiver) {
                         if let Err(e) = peer.send(Ok(event)) {
@@ -108,16 +111,12 @@ impl SignalingTopology<ClientServerState> for ClientServer {
             }
         }
 
+        // Lifecycle event: On Connected
+        callbacks.on_peer_disconnected.emit(peer_uuid);
         // Peer disconnected or otherwise ended communication.
-        info!("Removing peer: {:?}", peer_uuid);
-
         let is_host = state.host.is_some() && {
             let (id, _sender) = state.host.as_ref().unwrap();
-            if *id == peer_uuid {
-                true
-            } else {
-                false
-            }
+            *id == peer_uuid
         };
         if is_host {
             let (host_id, _host_sender) = state.host.as_ref().unwrap();
@@ -134,7 +133,8 @@ impl SignalingTopology<ClientServerState> for ClientServer {
                 }
             }
             state.reset();
-        } else if let Some((removed_peer_id, removed_peer_sender)) = state.remove_client(&peer_uuid)
+        } else if let Some((removed_peer_id, _removed_peer_sender)) =
+            state.remove_client(&peer_uuid)
         {
             if state.host.is_some() {
                 // Tell host about disconnected clent

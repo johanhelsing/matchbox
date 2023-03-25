@@ -397,7 +397,7 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
         }
     }
 
-    /// Gets a reference to the [`WebRtcChannel`] of a given id.
+    /// Gets a mutable reference to the [`WebRtcChannel`] of a given id.
     ///
     /// ```
     /// use matchbox_socket::*;

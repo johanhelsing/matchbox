@@ -64,7 +64,7 @@ mod tests {
             .await
             .expect("handshake");
 
-        // Give adaquete time for the callback to trigger
+        // Give adequate time for the callback to trigger
         let fetch = Delay::new(Duration::from_millis(1)).fuse();
         let timeout = Delay::new(Duration::from_millis(100)).fuse();
         pin_mut!(timeout, fetch);

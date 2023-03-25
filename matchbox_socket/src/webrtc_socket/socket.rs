@@ -198,7 +198,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
     /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and received.
     pub fn build(self) -> (WebRtcSocket<C>, MessageLoopFuture) {
         if self.config.channels.is_empty() {
-            panic!("You need to configure at least one channel in WebRtcSocketBuilder");
+            unreachable!();
         }
 
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();

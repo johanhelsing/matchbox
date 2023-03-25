@@ -1,6 +1,6 @@
 use crate::signaling_server::error::SignalingError;
 
-/// Errors that can happen when using a signaling server.
+/// Errors that can occur in the lifetime of a signaling server.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// An error occurring during the signalling loop.

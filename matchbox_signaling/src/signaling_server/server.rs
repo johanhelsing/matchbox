@@ -1,12 +1,13 @@
 use crate::{
     signaling_server::builder::SignalingServerBuilder,
-    topologies::{ClientServer, ClientServerState, FullMesh, FullMeshState},
+    topologies::{
+        client_server::{ClientServer, ClientServerCallbacks, ClientServerState},
+        full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
+    },
 };
 use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router, Server};
 use hyper::server::conn::AddrIncoming;
 use std::net::SocketAddr;
-
-pub trait SignalingState: Clone + Send + Sync + 'static {}
 
 /// Contains the interface end of a signaling server
 #[derive(Debug)]
@@ -23,14 +24,14 @@ impl SignalingServer {
     /// Creates a new builder for a [`SignalingServer`] with full-mesh topology.
     pub fn full_mesh_builder(
         socket_addr: impl Into<SocketAddr>,
-    ) -> SignalingServerBuilder<FullMesh, FullMeshState> {
+    ) -> SignalingServerBuilder<FullMesh, FullMeshCallbacks, FullMeshState> {
         SignalingServerBuilder::new(socket_addr, FullMesh, FullMeshState::default())
     }
 
     /// Creates a new builder for a [`SignalingServer`] with client-server topology.
     pub fn client_server_builder(
         socket_addr: impl Into<SocketAddr>,
-    ) -> SignalingServerBuilder<ClientServer, ClientServerState> {
+    ) -> SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState> {
         SignalingServerBuilder::new(socket_addr, ClientServer, ClientServerState::default())
     }
 

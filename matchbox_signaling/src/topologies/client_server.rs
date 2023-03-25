@@ -2,21 +2,25 @@ use crate::{
     signaling_server::{
         error::{ClientRequestError, SignalingError},
         handlers::WsStateMeta,
-        server::SignalingState,
+        SignalingState,
     },
-    topologies::{parse_request, spawn_sender_task, ClientServer, SignalingTopology},
+    topologies::{parse_request, spawn_sender_task, SignalingTopology},
+    Callback, SignalingCallbacks,
 };
 use async_trait::async_trait;
 use axum::extract::ws::Message;
 use futures::StreamExt;
-use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
+use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
 use std::collections::HashMap;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, info, warn};
 
+#[derive(Debug, Default)]
+pub struct ClientServer;
+
 #[async_trait]
-impl SignalingTopology<ClientServerState> for ClientServer {
-    async fn state_machine(upgrade: WsStateMeta<ClientServerState>) {
+impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServer {
+    async fn state_machine(upgrade: WsStateMeta<ClientServerCallbacks, ClientServerState>) {
         let WsStateMeta {
             ws,
             upgrade_meta,
@@ -29,16 +33,11 @@ impl SignalingTopology<ClientServerState> for ClientServer {
 
         // Generate a UUID for the user
         let peer_uuid = uuid::Uuid::new_v4().into();
-        // Lifecycle event: On Connected
-        callbacks.on_peer_connected.emit(peer_uuid);
         {
-            // Add peer to state
-            state.add_client(peer_uuid, sender.clone());
-
             // Send ID to peer
             let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
             let event = Message::Text(event_text.clone());
-            if let Err(e) = state.try_send(peer_uuid, event) {
+            if let Err(e) = state.try_send(&sender, event) {
                 error!("error sending to {peer_uuid:?}: {e:?}");
                 return;
             } else {
@@ -50,19 +49,32 @@ impl SignalingTopology<ClientServerState> for ClientServer {
             if state.host.is_none() {
                 // Set host
                 state.host.replace((peer_uuid, sender.clone()));
+                // Lifecycle event: On Host Connected
+                callbacks.on_host_connected.emit(peer_uuid);
             } else {
                 // Alert server of new user
                 let event = Message::Text(JsonPeerEvent::NewPeer(peer_uuid).to_string());
                 // Tell host about this new client
-                if let Err(e) = state.try_send_to_host(event) {
-                    error!("error sending peer {peer_uuid:?} to host: {e:?}");
-                    // Lifecycle event: On Disonnected
-                    callbacks.on_peer_disconnected.emit(peer_uuid);
-                    _ = state.remove_client(&peer_uuid);
-                    return;
+                match state.try_send_to_host(event) {
+                    Ok(_) => {
+                        // Add peer to state
+                        state.add_client(peer_uuid, sender.clone());
+                        // Lifecycle event: On Client Connected
+                        callbacks.on_client_connected.emit(peer_uuid);
+                    }
+                    Err(e) => {
+                        error!("error sending peer {peer_uuid:?} to host: {e:?}");
+                        return;
+                    }
                 }
             }
         }
+
+        // Check whether the socket is host
+        let is_host = state.host.is_some() && {
+            let (id, _sender) = state.host.as_ref().unwrap();
+            *id == peer_uuid
+        };
 
         // The state machine for the data channel established for this websocket.
         while let Some(request) = ws_receiver.next().await {
@@ -82,16 +94,20 @@ impl SignalingTopology<ClientServerState> for ClientServer {
                             continue; // Recoverable error
                         }
                     };
-                    // Lifecycle event: On Disonnected
-                    callbacks.on_peer_disconnected.emit(peer_uuid);
-                    _ = state.remove_client(&peer_uuid);
+                    if is_host {
+                        state.reset();
+                        // Lifecycle event: On Host Disonnected
+                        callbacks.on_host_disconnected.emit(peer_uuid);
+                    } else {
+                        state.remove_client(&peer_uuid);
+                        // Lifecycle event: On Client Disonnected
+                        callbacks.on_client_disconnected.emit(peer_uuid);
+                    }
                     break;
                 }
             };
 
-            // Lifecycle event: On Signal
-            callbacks.on_signal.emit(request.clone());
-            match request {
+            match request.clone() {
                 PeerRequest::Signal { receiver, data } => {
                     let event = Message::Text(
                         JsonPeerEvent::Signal {
@@ -100,12 +116,14 @@ impl SignalingTopology<ClientServerState> for ClientServer {
                         }
                         .to_string(),
                     );
-                    if let Some(peer) = state.clients.get(&receiver) {
-                        if let Err(e) = peer.send(Ok(event)) {
-                            error!("error sending: {e:?}");
+                    if let Err(e) = {
+                        if is_host {
+                            state.try_send_to_client(receiver, event)
+                        } else {
+                            state.try_send_to_host(event)
                         }
-                    } else {
-                        warn!("peer not found ({receiver:?}), ignoring signal");
+                    } {
+                        error!("error sending: {:?}", e);
                     }
                 }
                 PeerRequest::KeepAlive => {
@@ -113,50 +131,43 @@ impl SignalingTopology<ClientServerState> for ClientServer {
                     // disconnecting idle websocket connections.
                 }
             }
+            // Lifecycle event: On Signal
+            callbacks.on_signal.emit(request);
         }
 
-        // Lifecycle event: On Disonnected
-        callbacks.on_peer_disconnected.emit(peer_uuid);
-        // Peer disconnected or otherwise ended communication.
-        let is_host = state.host.is_some() && {
-            let (id, _sender) = state.host.as_ref().unwrap();
-            *id == peer_uuid
-        };
         if is_host {
-            let (host_id, _host_sender) = state.host.as_ref().unwrap();
-            // Tell each connected peer about the disconnected host.
-            let event = Message::Text(JsonPeerEvent::PeerLeft(*host_id).to_string());
-            for peer_id in state.clients.keys().filter(|id| *id != host_id) {
-                match state.try_send(*peer_id, event.clone()) {
-                    Ok(()) => {
-                        info!("Sent host peer remove to: {peer_id:?}")
-                    }
-                    Err(e) => {
-                        error!("Failure sending host peer remove to {peer_id:?}: {e:?}")
-                    }
-                }
-            }
             state.reset();
-        } else if let Some((removed_peer_id, _removed_peer_sender)) =
-            state.remove_client(&peer_uuid)
-        {
-            if state.host.is_some() {
-                // Tell host about disconnected clent
-                let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer_id).to_string());
-                match state.try_send_to_host(event) {
-                    Ok(()) => {
-                        info!("Notified host of peer remove: {:?}", removed_peer_id)
-                    }
-                    Err(e) => {
-                        error!("Failure sending peer remove to host: {e:?}")
-                    }
-                }
-            }
+            // Lifecycle event: On Host Disonnected
+            callbacks.on_host_disconnected.emit(peer_uuid);
+        } else {
+            state.remove_client(&peer_uuid);
+            // Lifecycle event: On Client Disonnected
+            callbacks.on_client_disconnected.emit(peer_uuid);
         }
     }
 }
 
-/// Contains the signaling server state
+/// Signaling callbacks for client/server topologies
+#[derive(Default, Debug, Clone)]
+pub struct ClientServerCallbacks {
+    /// Triggered on peer requests to the signalling server
+    pub(crate) on_signal: Callback<JsonPeerRequest>,
+    /// Triggered on a new client connection to the signalling server
+    pub(crate) on_client_connected: Callback<PeerId>,
+    /// Triggered on a client disconnection to the signalling server
+    pub(crate) on_client_disconnected: Callback<PeerId>,
+    /// Triggered on host connection to the signalling server
+    pub(crate) on_host_connected: Callback<PeerId>,
+    /// Triggered on host disconnection to the signalling server
+    pub(crate) on_host_disconnected: Callback<PeerId>,
+}
+impl SignalingCallbacks for ClientServerCallbacks {}
+#[allow(unsafe_code)]
+unsafe impl Send for ClientServerCallbacks {}
+#[allow(unsafe_code)]
+unsafe impl Sync for ClientServerCallbacks {}
+
+/// Signaling server state for client/server topologies
 #[derive(Default, Debug, Clone)]
 pub struct ClientServerState {
     pub(crate) host: Option<(PeerId, UnboundedSender<Result<Message, axum::Error>>)>,
@@ -165,7 +176,7 @@ pub struct ClientServerState {
 impl SignalingState for ClientServerState {}
 
 impl ClientServerState {
-    /// Add a peer, returning peers that already existed
+    /// Add a client
     pub fn add_client(
         &mut self,
         peer: PeerId,
@@ -176,42 +187,67 @@ impl ClientServerState {
         prior_peers
     }
 
-    /// Remove a peer from the state if it existed, returning the peer removed.
-    #[must_use]
-    pub fn remove_client(
-        &mut self,
-        peer_id: &PeerId,
-    ) -> Option<(PeerId, UnboundedSender<Result<Message, axum::Error>>)> {
-        self.clients
-            .remove(peer_id)
-            .map(|sender| (peer_id.to_owned(), sender))
+    /// Remove a client from the state if it existed.
+    pub fn remove_client(&mut self, peer_id: &PeerId) {
+        // Tell host about disconnected clent
+        let event = Message::Text(JsonPeerEvent::PeerLeft(*peer_id).to_string());
+        match self.try_send_to_host(event) {
+            Ok(()) => {
+                info!("Notified host of peer remove: {:?}", peer_id)
+            }
+            Err(e) => {
+                error!("Failure sending peer remove to host: {e:?}")
+            }
+        }
+        self.clients.remove(peer_id);
+    }
+
+    /// Send a message to a channel without blocking.
+    pub fn try_send(
+        &self,
+        sender: &UnboundedSender<Result<Message, axum::Error>>,
+        message: Message,
+    ) -> Result<(), SignalingError> {
+        sender.send(Ok(message)).map_err(SignalingError::from)
     }
 
     /// Send a message to a peer without blocking.
-    pub fn try_send(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
-        let peer = self.clients.get(&id);
-        let peer = match peer {
+    pub fn try_send_to_client(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
+        let sender = match self.clients.get(&id) {
             Some(peer) => peer,
             None => {
                 return Err(SignalingError::UnknownPeer);
             }
         };
-        peer.send(Ok(message)).map_err(SignalingError::from)
+        self.try_send(sender, message)
     }
 
     /// Send a message to the host without blocking.
     pub fn try_send_to_host(&self, message: Message) -> Result<(), SignalingError> {
-        let peer = &self.host;
-        let (_id, sender) = match peer {
+        let (_id, sender) = match &self.host {
             Some(peer) => peer,
             None => {
                 return Err(SignalingError::UnknownPeer);
             }
         };
-        sender.send(Ok(message)).map_err(SignalingError::from)
+        self.try_send(sender, message)
     }
 
     pub fn reset(&mut self) {
+        if let Some((host_id, _)) = self.host.take() {
+            // Tell each connected peer about the disconnected host.
+            let event = Message::Text(JsonPeerEvent::PeerLeft(host_id).to_string());
+            for peer_id in self.clients.keys() {
+                match self.try_send_to_client(*peer_id, event.clone()) {
+                    Ok(()) => {
+                        info!("Sent host peer remove to: {peer_id:?}")
+                    }
+                    Err(e) => {
+                        error!("Failure sending host peer remove to {peer_id:?}: {e:?}")
+                    }
+                }
+            }
+        }
         self.host = None;
         self.clients.clear();
     }

@@ -2,22 +2,26 @@ use crate::{
     signaling_server::{
         error::{ClientRequestError, SignalingError},
         handlers::WsStateMeta,
-        server::SignalingState,
+        SignalingState,
     },
-    topologies::{parse_request, spawn_sender_task, FullMesh, SignalingTopology},
+    topologies::{parse_request, spawn_sender_task, SignalingTopology},
+    Callback, SignalingCallbacks,
 };
 use async_trait::async_trait;
 use axum::extract::ws::Message;
 use futures::StreamExt;
-use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
+use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
 use std::collections::HashMap;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, info, warn};
 
+#[derive(Debug, Default)]
+pub struct FullMesh;
+
 #[async_trait]
-impl SignalingTopology<FullMeshState> for FullMesh {
+impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
     /// One of these handlers is spawned for every web socket.
-    async fn state_machine(upgrade: WsStateMeta<FullMeshState>) {
+    async fn state_machine(upgrade: WsStateMeta<FullMeshCallbacks, FullMeshState>) {
         let WsStateMeta {
             ws,
             upgrade_meta,
@@ -29,28 +33,20 @@ impl SignalingTopology<FullMeshState> for FullMesh {
         let sender = spawn_sender_task(ws_sender);
 
         let peer_uuid = uuid::Uuid::new_v4().into();
-        // Lifecycle event: On Connected
-        callbacks.on_peer_connected.emit(peer_uuid);
         {
-            // Add peer to state
-            let peers = state.add_peer(peer_uuid, sender.clone());
-
             // Send ID to peer
             let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
             let event = Message::Text(event_text.clone());
-            if let Err(e) = state.try_send(peer_uuid, event) {
+            if let Err(e) = state.try_send(&sender, event) {
                 error!("error sending to {peer_uuid:?}: {e:?}");
             } else {
                 info!("{:?} -> {:?}", peer_uuid, event_text);
             };
 
-            // Alert all peers of new user
-            let event = Message::Text(JsonPeerEvent::NewPeer(peer_uuid).to_string());
-            peers.into_iter().for_each(|(peer_id, _)| {
-                if let Err(e) = state.try_send(peer_id, event.clone()) {
-                    error!("error sending to {peer_id:?}: {e:?}");
-                }
-            });
+            // Add peer to state
+            state.add_peer(peer_uuid, sender.clone());
+            // Lifecycle event: On Connected
+            callbacks.on_peer_connected.emit(peer_uuid);
         }
 
         // The state machine for the data channel established for this websocket.
@@ -71,16 +67,14 @@ impl SignalingTopology<FullMeshState> for FullMesh {
                             continue; // Recoverable error
                         }
                     };
+                    state.remove_peer(&peer_uuid);
                     // Lifecycle event: On Disonnected
                     callbacks.on_peer_disconnected.emit(peer_uuid);
-                    _ = state.remove_peer(&peer_uuid);
                     break;
                 }
             };
 
-            // Lifecycle event: On Signal
-            callbacks.on_signal.emit(request.clone());
-            match request {
+            match request.clone() {
                 PeerRequest::Signal { receiver, data } => {
                     let event = Message::Text(
                         JsonPeerEvent::Signal {
@@ -89,12 +83,8 @@ impl SignalingTopology<FullMeshState> for FullMesh {
                         }
                         .to_string(),
                     );
-                    if let Some(peer) = state.peers.get(&receiver) {
-                        if let Err(e) = peer.send(Ok(event)) {
-                            error!("error sending: {:?}", e);
-                        }
-                    } else {
-                        warn!("peer not found ({receiver:?}), ignoring signal");
+                    if let Err(e) = state.try_send_to_peer(receiver, event) {
+                        error!("error sending: {:?}", e);
                     }
                 }
                 PeerRequest::KeepAlive => {
@@ -102,25 +92,34 @@ impl SignalingTopology<FullMeshState> for FullMesh {
                     // disconnecting idle websocket connections.
                 }
             }
+            // Lifecycle event: On Signal
+            callbacks.on_signal.emit(request);
         }
 
-        // Lifecycle event: On Connected
-        callbacks.on_peer_disconnected.emit(peer_uuid);
         // Peer disconnected or otherwise ended communication.
-        if let Some((removed_peer, _sender)) = state.remove_peer(&peer_uuid) {
-            // Tell each connected peer about the disconnected peer.
-            let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer).to_string());
-            for (peer_id, _) in state.peers.iter() {
-                match state.try_send(*peer_id, event.clone()) {
-                    Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
-                    Err(e) => error!("Failure sending peer remove: {e:?}"),
-                }
-            }
-        }
+        state.remove_peer(&peer_uuid);
+        // Lifecycle event: On Disconnected
+        callbacks.on_peer_disconnected.emit(peer_uuid);
     }
 }
 
-/// Contains the signaling server state
+/// Signaling callbacks for full mesh topologies
+#[derive(Default, Debug, Clone)]
+pub struct FullMeshCallbacks {
+    /// Triggered on peer requests to the signalling server
+    pub(crate) on_signal: Callback<JsonPeerRequest>,
+    /// Triggered on a new connection to the signalling server
+    pub(crate) on_peer_connected: Callback<PeerId>,
+    /// Triggered on a disconnection to the signalling server
+    pub(crate) on_peer_disconnected: Callback<PeerId>,
+}
+impl SignalingCallbacks for FullMeshCallbacks {}
+#[allow(unsafe_code)]
+unsafe impl Send for FullMeshCallbacks {}
+#[allow(unsafe_code)]
+unsafe impl Sync for FullMeshCallbacks {}
+
+/// Signaling server state for full mesh topologies
 #[derive(Default, Debug, Clone)]
 pub struct FullMeshState {
     pub peers: HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>>,
@@ -133,32 +132,49 @@ impl FullMeshState {
         &mut self,
         peer: PeerId,
         sender: UnboundedSender<Result<Message, axum::Error>>,
-    ) -> HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>> {
-        let prior_peers = self.peers.clone();
+    ) {
+        // Alert all peers of new user
+        let event = Message::Text(JsonPeerEvent::NewPeer(peer).to_string());
+        self.peers.iter().for_each(|(peer_id, _)| {
+            if let Err(e) = self.try_send_to_peer(*peer_id, event.clone()) {
+                error!("error sending to {peer_id:?}: {e:?}");
+            }
+        });
         self.peers.insert(peer, sender);
-        prior_peers
     }
 
     /// Remove a peer from the state if it existed, returning the peer removed.
-    #[must_use]
-    pub fn remove_peer(
-        &mut self,
-        peer_id: &PeerId,
-    ) -> Option<(PeerId, UnboundedSender<Result<Message, axum::Error>>)> {
-        self.peers
-            .remove(peer_id)
-            .map(|sender| (peer_id.to_owned(), sender))
+    pub fn remove_peer(&mut self, peer_id: &PeerId) {
+        let removed_peer = self.peers.remove(peer_id).map(|sender| (*peer_id, sender));
+        if let Some((peer_id, _sender)) = removed_peer {
+            // Tell each connected peer about the disconnected peer.
+            let event = Message::Text(JsonPeerEvent::PeerLeft(peer_id).to_string());
+            for (peer_id, _) in self.peers.iter() {
+                match self.try_send_to_peer(*peer_id, event.clone()) {
+                    Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
+                    Err(e) => error!("Failure sending peer remove: {e:?}"),
+                }
+            }
+        }
+    }
+
+    /// Send a message to a channel without blocking.
+    pub fn try_send(
+        &self,
+        sender: &UnboundedSender<Result<Message, axum::Error>>,
+        message: Message,
+    ) -> Result<(), SignalingError> {
+        sender.send(Ok(message)).map_err(SignalingError::from)
     }
 
     /// Send a message to a peer without blocking.
-    pub fn try_send(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
-        let peer = self.peers.get(&id);
-        let peer = match peer {
+    pub fn try_send_to_peer(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
+        let sender = match self.peers.get(&id) {
             Some(peer) => peer,
             None => {
                 return Err(SignalingError::UnknownPeer);
             }
         };
-        peer.send(Ok(message)).map_err(SignalingError::from)
+        self.try_send(sender, message)
     }
 }

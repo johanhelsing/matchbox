@@ -1,4 +1,4 @@
-use crate::{signaling_server::callbacks::Callbacks, topologies::SignalingStateMachine};
+use crate::{topologies::SignalingStateMachine, SignalingCallbacks};
 use axum::{
     extract::{ws::WebSocket, ConnectInfo, Path, Query, WebSocketUpgrade},
     response::IntoResponse,
@@ -7,13 +7,13 @@ use axum::{
 use std::{collections::HashMap, net::SocketAddr};
 use tracing::info;
 
-use super::server::SignalingState;
+use super::SignalingState;
 
-pub struct WsStateMeta<State> {
+pub struct WsStateMeta<Cb, S> {
     pub ws: WebSocket,
     pub upgrade_meta: WsUpgradeMeta,
-    pub state: State,
-    pub callbacks: Callbacks,
+    pub callbacks: Cb,
+    pub state: S,
 }
 
 /// Metadata generated at the time of websocket upgrade
@@ -25,17 +25,18 @@ pub struct WsUpgradeMeta {
 
 /// The handler for the HTTP request to upgrade to WebSockets.
 /// This is the last point where we can extract metadata such as IP address of the client.
-pub(crate) async fn ws_handler<S>(
+pub(crate) async fn ws_handler<Cb, S>(
     ws: WebSocketUpgrade,
     path: Option<Path<String>>,
     Query(params): Query<HashMap<String, String>>,
+    Extension(callbacks): Extension<Cb>,
     Extension(state): Extension<S>,
-    Extension(callbacks): Extension<Callbacks>,
-    Extension(state_machine): Extension<SignalingStateMachine<S>>,
+    Extension(state_machine): Extension<SignalingStateMachine<Cb, S>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse
 where
-    S: SignalingState + 'static,
+    Cb: SignalingCallbacks,
+    S: SignalingState,
 {
     info!("`{addr}` connected.");
 
@@ -52,8 +53,8 @@ where
         let upgrade = WsStateMeta {
             ws,
             upgrade_meta: extract,
-            state,
             callbacks,
+            state,
         };
         (*state_machine.0)(upgrade)
     })

@@ -51,11 +51,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ws_on_connect_callback() {
+    async fn ws_on_host_connect_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .on_peer_connected({
+            .on_host_connected({
                 let success = success.clone();
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })
@@ -84,11 +84,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ws_on_disconnect_callback() {
+    async fn ws_on_host_disconnect_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .on_peer_disconnected({
+            .on_host_disconnected({
                 let success = success.clone();
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })

@@ -1,5 +1,5 @@
 use crate::signaling_server::{
-    error::ClientRequestError, handlers::WsStateMeta, server::SignalingState,
+    error::ClientRequestError, handlers::WsStateMeta, SignalingCallbacks, SignalingState,
 };
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
@@ -9,36 +9,29 @@ use std::{str::FromStr, sync::Arc};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-mod client_server;
-mod full_mesh;
-
-#[derive(Debug, Default)]
-pub struct FullMesh;
-pub use full_mesh::FullMeshState;
-
-#[derive(Debug, Default)]
-pub struct ClientServer;
-pub use client_server::ClientServerState;
+pub mod client_server;
+pub mod full_mesh;
 
 #[derive(Clone)]
-pub struct SignalingStateMachine<S>(
-    pub Arc<Box<dyn Fn(WsStateMeta<S>) -> BoxFuture<'static, ()> + Send + Sync>>,
+pub struct SignalingStateMachine<Cb, S>(
+    pub Arc<Box<dyn Fn(WsStateMeta<Cb, S>) -> BoxFuture<'static, ()> + Send + Sync>>,
 );
 
-impl<S> SignalingStateMachine<S>
+impl<Cb, S> SignalingStateMachine<Cb, S>
 where
-    S: SignalingState + 'static,
+    Cb: SignalingCallbacks,
+    S: SignalingState,
 {
     pub fn from_topology<Topology>(_: Topology) -> Self
     where
-        Topology: SignalingTopology<S>,
+        Topology: SignalingTopology<Cb, S>,
     {
-        Self::new(|ws| <Topology as SignalingTopology<S>>::state_machine(ws))
+        Self::new(|ws| <Topology as SignalingTopology<Cb, S>>::state_machine(ws))
     }
 
     pub fn new<F, Fut>(callback: F) -> Self
     where
-        F: Fn(WsStateMeta<S>) -> Fut + 'static + Send + Sync,
+        F: Fn(WsStateMeta<Cb, S>) -> Fut + 'static + Send + Sync,
         Fut: Future<Output = ()> + 'static + Send,
     {
         Self(Arc::new(Box::new(move |ws| Box::pin(callback(ws)))))
@@ -46,12 +39,13 @@ where
 }
 
 #[async_trait]
-pub trait SignalingTopology<S>
+pub trait SignalingTopology<Cb, S>
 where
-    S: SignalingState + 'static,
+    Cb: SignalingCallbacks,
+    S: SignalingState,
 {
     /// A run-to-completion state machine, spawned once for every websocket.
-    async fn state_machine(upgrade: WsStateMeta<S>);
+    async fn state_machine(upgrade: WsStateMeta<Cb, S>);
 }
 
 pub(crate) fn parse_request(

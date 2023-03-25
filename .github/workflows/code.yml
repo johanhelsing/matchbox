@@ -2,7 +2,7 @@ on:
   push:
   pull_request:
 
-name: ci
+name: Code
 
 jobs:
   check-native:
@@ -127,22 +127,6 @@ jobs:
         with:
           command: clippy
           args: --target wasm32-unknown-unknown -p matchbox_socket -p bevy_ggrs_example -p simple_example -- -D warnings
-
-  markdownlint:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          # full git history is needed to get a proper list of changed files within `super-linter`
-          fetch-depth: 0
-      - name: Run Markdown Lint
-        uses: docker://ghcr.io/github/super-linter:slim-v4
-        env:
-          MULTI_STATUS: false
-          VALIDATE_ALL_CODEBASE: false
-          VALIDATE_MARKDOWN: true
-          DEFAULT_BRANCH: main
 
   server-container:
     name: Build & Push Server Container

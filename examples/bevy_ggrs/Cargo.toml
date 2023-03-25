@@ -24,7 +24,8 @@ bevy = { version = "0.9", default-features = false, features = [
   "bevy_winit",
   "render",
   "png",
-  "x11",        # gh actions runners don't like wayland
+  # gh actions runners don't like wayland
+  "x11",
 ] }
 ggrs = "0.9"
 bevy_ggrs = "0.11"

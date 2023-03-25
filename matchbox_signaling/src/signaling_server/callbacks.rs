@@ -3,18 +3,18 @@ use std::{fmt, rc::Rc};
 /// Universal callback wrapper.
 ///
 /// An `Rc` wrapper is used to make it cloneable.
-pub struct Callback<IN, OUT = ()> {
+pub struct Callback<In, Out = ()> {
     /// A callback which can be called multiple times
-    pub(crate) cb: Rc<dyn Fn(IN) -> OUT>,
+    pub(crate) cb: Rc<dyn Fn(In) -> Out>,
 }
 
-impl<IN, OUT, F: Fn(IN) -> OUT + 'static> From<F> for Callback<IN, OUT> {
+impl<In, Out, F: Fn(In) -> Out + 'static> From<F> for Callback<In, Out> {
     fn from(func: F) -> Self {
         Callback { cb: Rc::new(func) }
     }
 }
 
-impl<IN, OUT> Clone for Callback<IN, OUT> {
+impl<In, Out> Clone for Callback<In, Out> {
     fn clone(&self) -> Self {
         Self {
             cb: self.cb.clone(),
@@ -22,20 +22,20 @@ impl<IN, OUT> Clone for Callback<IN, OUT> {
     }
 }
 
-impl<IN, OUT> fmt::Debug for Callback<IN, OUT> {
+impl<In, Out> fmt::Debug for Callback<In, Out> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Callback<_>")
     }
 }
 
-impl<IN, OUT> Callback<IN, OUT> {
+impl<In, Out> Callback<In, Out> {
     /// This method calls the callback's function.
-    pub fn emit(&self, value: IN) -> OUT {
+    pub fn emit(&self, value: In) -> Out {
         (*self.cb)(value)
     }
 }
 
-impl<IN> Callback<IN> {
+impl<In> Callback<In> {
     /// Creates a "no-op" callback which can be used when it is not suitable to use an
     /// `Option<Callback>`.
     pub fn noop() -> Self {
@@ -43,7 +43,7 @@ impl<IN> Callback<IN> {
     }
 }
 
-impl<IN> Default for Callback<IN> {
+impl<In> Default for Callback<In> {
     fn default() -> Self {
         Self::noop()
     }

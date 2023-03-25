@@ -16,11 +16,7 @@ mod tests {
     async fn recv_peer_event(
         client: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
     ) -> JsonPeerEvent {
-        let message: Message = client
-            .next()
-            .await
-            .expect("some message")
-            .expect("socket message");
+        let message: Message = client.next().await.unwrap().unwrap();
         JsonPeerEvent::from_str(&message.to_string()).expect("json peer event")
     }
 

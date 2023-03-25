@@ -51,7 +51,7 @@ where
 }
 
 pub(crate) fn parse_request(
-    request: Result<Message, ClientRequestError>,
+    request: Result<Message, axum::Error>,
 ) -> Result<JsonPeerRequest, ClientRequestError> {
     match request? {
         Message::Text(text) => Ok(JsonPeerRequest::from_str(&text)?),

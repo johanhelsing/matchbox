@@ -52,7 +52,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
         // The state machine for the data channel established for this websocket.
         while let Some(request) = ws_receiver.next().await {
             info!("RX {request:?}");
-            let request = match parse_request(request.map_err(ClientRequestError::from)) {
+            let request = match parse_request(request) {
                 Ok(request) => request,
                 Err(e) => {
                     match e {

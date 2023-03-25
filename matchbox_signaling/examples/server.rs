@@ -4,7 +4,19 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), matchbox_signaling::Error> {
-    // Setup logging
+    setup_logging();
+
+    let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 3536))
+        .on_peer_connected(|id| info!("Joined: {id:?}"))
+        .on_peer_disconnected(|id| info!("Left: {id:?}"))
+        .on_signal(|s| info!("Signal: {s:?}"))
+        .cors()
+        .trace()
+        .build();
+    server.serve().await
+}
+
+fn setup_logging() {
     use tracing_subscriber::prelude::*;
     tracing_subscriber::registry()
         .with(
@@ -13,15 +25,4 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
-
-    let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 3536))
-        .on_host_connected(|id| info!("Host joined: {id:?}"))
-        .on_host_disconnected(|id| info!("Host left: {id:?}"))
-        .on_client_connected(|id| info!("Client joined: {id:?}"))
-        .on_client_disconnected(|id| info!("Client left: {id:?}"))
-        .on_signal(|s| info!("Signal: {s:?}"))
-        .cors()
-        .trace()
-        .build();
-    server.serve().await
 }

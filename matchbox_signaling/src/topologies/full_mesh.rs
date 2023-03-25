@@ -51,6 +51,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
 
         // The state machine for the data channel established for this websocket.
         while let Some(request) = ws_receiver.next().await {
+            info!("RX {request:?}");
             let request = match parse_request(request.map_err(ClientRequestError::from)) {
                 Ok(request) => request,
                 Err(e) => {
@@ -70,7 +71,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                     state.remove_peer(&peer_uuid);
                     // Lifecycle event: On Disonnected
                     callbacks.on_peer_disconnected.emit(peer_uuid);
-                    break;
+                    return;
                 }
             };
 
@@ -169,12 +170,9 @@ impl FullMeshState {
 
     /// Send a message to a peer without blocking.
     pub fn try_send_to_peer(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
-        let sender = match self.peers.get(&id) {
-            Some(peer) => peer,
-            None => {
-                return Err(SignalingError::UnknownPeer);
-            }
-        };
-        self.try_send(sender, message)
+        self.peers
+            .get(&id)
+            .ok_or_else(|| SignalingError::UnknownPeer)
+            .and_then(|sender| self.try_send(sender, message))
     }
 }

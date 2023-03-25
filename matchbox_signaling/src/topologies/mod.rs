@@ -1,5 +1,6 @@
 use crate::signaling_server::{
-    error::ClientRequestError, handlers::WsStateMeta, SignalingCallbacks, SignalingState,
+    error::ClientRequestError, handlers::WsStateMeta, NoOpCallouts, NoState, SignalingCallbacks,
+    SignalingState,
 };
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
@@ -14,7 +15,8 @@ pub mod full_mesh;
 
 #[derive(Clone)]
 pub struct SignalingStateMachine<Cb, S>(
-    pub Arc<Box<dyn Fn(WsStateMeta<Cb, S>) -> BoxFuture<'static, ()> + Send + Sync>>,
+    #[allow(clippy::type_complexity)]
+    pub  Arc<Box<dyn Fn(WsStateMeta<Cb, S>) -> BoxFuture<'static, ()> + Send + Sync>>,
 );
 
 impl<Cb, S> SignalingStateMachine<Cb, S>
@@ -39,7 +41,7 @@ where
 }
 
 #[async_trait]
-pub trait SignalingTopology<Cb, S>
+pub trait SignalingTopology<Cb = NoOpCallouts, S = NoState>
 where
     Cb: SignalingCallbacks,
     S: SignalingState,

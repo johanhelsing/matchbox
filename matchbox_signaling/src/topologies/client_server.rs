@@ -103,7 +103,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                         // Lifecycle event: On Client Disonnected
                         callbacks.on_client_disconnected.emit(peer_uuid);
                     }
-                    break;
+                    return;
                 }
             };
 
@@ -213,24 +213,18 @@ impl ClientServerState {
 
     /// Send a message to a peer without blocking.
     pub fn try_send_to_client(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
-        let sender = match self.clients.get(&id) {
-            Some(peer) => peer,
-            None => {
-                return Err(SignalingError::UnknownPeer);
-            }
-        };
-        self.try_send(sender, message)
+        self.clients
+            .get(&id)
+            .ok_or_else(|| SignalingError::UnknownPeer)
+            .and_then(|sender| self.try_send(sender, message))
     }
 
     /// Send a message to the host without blocking.
     pub fn try_send_to_host(&self, message: Message) -> Result<(), SignalingError> {
-        let (_id, sender) = match &self.host {
-            Some(peer) => peer,
-            None => {
-                return Err(SignalingError::UnknownPeer);
-            }
-        };
-        self.try_send(sender, message)
+        self.host
+            .as_ref()
+            .ok_or_else(|| SignalingError::UnknownPeer)
+            .and_then(|(_id, sender)| self.try_send(sender, message))
     }
 
     pub fn reset(&mut self) {

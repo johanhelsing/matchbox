@@ -1,5 +1,5 @@
 use crate::{
-    signaling_server::{callbacks::Callback, handlers::ws_handler},
+    signaling_server::{callbacks::Callback, handlers::ws_handler, NoOpCallouts, NoState},
     topologies::{
         client_server::{ClientServer, ClientServerCallbacks, ClientServerState},
         full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
@@ -21,7 +21,7 @@ use tracing::Level;
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
 /// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
-pub struct SignalingServerBuilder<Topology, Cb, S>
+pub struct SignalingServerBuilder<Topology, Cb = NoOpCallouts, S = NoState>
 where
     Topology: SignalingTopology<Cb, S>,
     Cb: SignalingCallbacks,
@@ -53,7 +53,9 @@ where
     pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology, state: S) -> Self {
         Self {
             socket_addr: socket_addr.into(),
-            router: Router::new().route("/:path", get(ws_handler::<Cb, S>)),
+            router: Router::new()
+                .route("/", get(ws_handler::<Cb, S>))
+                .route("/:path", get(ws_handler::<Cb, S>)),
             callbacks: Cb::default(),
             topology,
             state,

@@ -11,3 +11,21 @@ pub trait SignalingState: Clone + Send + Sync + 'static {}
 
 /// Callbacks used by the signaling server
 pub trait SignalingCallbacks: Default + Clone + Send + Sync + 'static {}
+
+/// No-Op signaling callbacks
+#[derive(Default, Debug, Clone)]
+pub struct NoOpCallouts {}
+impl SignalingCallbacks for NoOpCallouts {}
+#[allow(unsafe_code)]
+unsafe impl Send for NoOpCallouts {}
+#[allow(unsafe_code)]
+unsafe impl Sync for NoOpCallouts {}
+
+/// Store no state
+#[derive(Clone)]
+pub struct NoState {}
+impl SignalingState for NoState {}
+#[allow(unsafe_code)]
+unsafe impl Send for NoState {}
+#[allow(unsafe_code)]
+unsafe impl Sync for NoState {}

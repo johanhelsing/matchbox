@@ -92,7 +92,7 @@ pub struct SingleChannel;
 impl ChannelPlurality for SingleChannel {}
 impl BuildablePlurality for SingleChannel {}
 
-/// Inicates that type has more than one [`WebRtcChannel`]s or [`ChannelConfig`]s.
+/// Indicates that the type has more than one [`WebRtcChannel`]s or [`ChannelConfig`]s.
 #[derive(Debug)]
 pub struct MultipleChannels;
 impl ChannelPlurality for MultipleChannels {}

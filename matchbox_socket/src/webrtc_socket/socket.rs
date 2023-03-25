@@ -1,4 +1,4 @@
-use super::error::ChannelError;
+use super::error::GetChannelError;
 use crate::{
     webrtc_socket::{
         message_loop, signalling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
@@ -410,12 +410,12 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// ```
     ///
     /// See also: [`WebRtcSocket::take_channel`]
-    pub fn channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, ChannelError> {
+    pub fn channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, GetChannelError> {
         self.channels
             .get_mut(channel)
-            .ok_or(ChannelError::ChannelNotFound)?
+            .ok_or(GetChannelError::NotFound)?
             .as_mut()
-            .ok_or(ChannelError::ChannelTaken)
+            .ok_or(GetChannelError::Taken)
     }
 
     /// Takes the [`WebRtcChannel`] of a given id.
@@ -432,12 +432,12 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// ```
     ///
     /// See also: [`WebRtcSocket::channel`]
-    pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, ChannelError> {
+    pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, GetChannelError> {
         self.channels
             .get_mut(channel)
-            .ok_or(ChannelError::ChannelNotFound)?
+            .ok_or(GetChannelError::NotFound)?
             .take()
-            .ok_or(ChannelError::ChannelTaken)
+            .ok_or(GetChannelError::Taken)
     }
 }
 

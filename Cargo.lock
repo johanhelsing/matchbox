@@ -735,6 +735,7 @@ version = "0.5.0"
 dependencies = [
  "bevy",
  "bevy_ggrs",
+ "bevy_matchbox",
  "bytemuck",
  "clap",
  "ggrs",
@@ -862,6 +863,14 @@ dependencies = [
  "quote",
  "syn",
  "toml",
+]
+
+[[package]]
+name = "bevy_matchbox"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "matchbox_socket",
 ]
 
 [[package]]
@@ -2893,7 +2902,6 @@ dependencies = [
  "async-compat",
  "async-trait",
  "async-tungstenite",
- "bevy",
  "bincode",
  "bytes",
  "cfg-if",

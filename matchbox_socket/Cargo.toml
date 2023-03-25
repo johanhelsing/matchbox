@@ -16,7 +16,6 @@ repository = "https://github.com/johanhelsing/matchbox"
 
 [features]
 ggrs-socket = ["dep:bincode", "dep:ggrs"]
-bevy-plugin = ["dep:bevy"]
 
 [dependencies]
 matchbox_protocol = { path = "../matchbox_protocol", default-features = false }
@@ -45,9 +44,6 @@ crossbeam-channel = "0.5"
 # ggrs-socket
 ggrs = { version = "0.9.3", default-features = false, optional = true }
 bincode = { version = "1.3", default-features = false, optional = true }
-
-# bevy-events
-bevy = { version = "0.9.0", default-features = false, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ws_stream_wasm = { version = "0.7", default-features = false }

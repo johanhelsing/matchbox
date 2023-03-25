@@ -3,6 +3,7 @@ members = [
   "matchbox_protocol",
   "matchbox_socket",
   "matchbox_server",
+  "bevy_matchbox",
   "examples/*",
 ]
 resolver = "2" # Important! Bevy/WGPU needs this!

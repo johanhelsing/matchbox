@@ -1,9 +1,8 @@
 use bevy::{log::LogPlugin, prelude::*};
 use bevy_ggrs::{GGRSPlugin, Session};
+use bevy_matchbox::{MatchboxSocket, OpenSocketExt};
 use ggrs::SessionBuilder;
-use matchbox_socket::{
-    ChannelConfig, MatchboxSocket, OpenSocketExt, PeerState, SingleChannel, WebRtcSocketBuilder,
-};
+use matchbox_socket::{ChannelConfig, PeerState, SingleChannel, WebRtcSocketBuilder};
 
 mod args;
 mod box_game;

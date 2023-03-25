@@ -1,16 +1,24 @@
-use std::marker::PhantomData;
+#![warn(missing_docs)]
+#![doc = include_str!("../README.md")]
+#![forbid(unsafe_code)]
 
-use crate::{BuildablePlurality, WebRtcSocket, WebRtcSocketBuilder};
-use bevy::{ecs::system::Command, prelude::*, tasks::IoTaskPool};
+use bevy::{
+    ecs::system::Command,
+    prelude::{Commands, Deref, DerefMut, Resource, World},
+    tasks::IoTaskPool,
+};
+pub use matchbox_socket;
+use matchbox_socket::{BuildablePlurality, WebRtcSocket, WebRtcSocketBuilder};
+use std::marker::PhantomData;
 
 /// A [`Resource`] wrapping [`WebRtcSocket`].
 ///
 /// To create and destroy this resource use the [`OpenSocket`] and [`CloseSocket`] [`Command`]s respectively.
 #[derive(Resource, Debug, Deref, DerefMut)]
-pub struct MatchboxSocket<C: BuildablePlurality>(pub WebRtcSocket<C>);
+pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>);
 
 /// A [`Command`] used to open a [`MatchboxSocket`] and allocate it as a resource.
-pub struct OpenSocket<C: BuildablePlurality>(WebRtcSocketBuilder<C>);
+struct OpenSocket<C: BuildablePlurality>(WebRtcSocketBuilder<C>);
 
 impl<C: BuildablePlurality + 'static> Command for OpenSocket<C> {
     fn write(self, world: &mut World) {
@@ -36,7 +44,7 @@ impl<'w, 's, C: BuildablePlurality + 'static> OpenSocketExt<C> for Commands<'w, 
 }
 
 /// A [`Command`] used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`] resource.
-pub struct CloseSocket<C: BuildablePlurality>(PhantomData<C>);
+struct CloseSocket<C: BuildablePlurality>(PhantomData<C>);
 
 impl<C: BuildablePlurality + 'static> Command for CloseSocket<C> {
     fn write(self, world: &mut World) {

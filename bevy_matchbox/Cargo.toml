@@ -1,0 +1,24 @@
+[package]
+name = "bevy_matchbox"
+version = "0.1.0"
+authors = [
+  "Johan Helsing <johanhelsing@gmail.com>",
+  "Garry O'Donnell <garry.euan.odonnell@ntlworld.com",
+]
+edition = "2021"
+description = "A Bevy extension for Matchbox WebRtc networking"
+license = "MIT OR Apache-2.0"
+keywords = ["bevy", "gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
+categories = [
+  "network-programming",
+  "game-development",
+  "wasm",
+  "web-programming",
+]
+repository = "https://github.com/johanhelsing/matchbox"
+homepage = "https://github.com/johanhelsing/matchbox"
+readme = "../README.md"
+
+[dependencies]
+bevy = { version = "0.9", default-features = false }
+matchbox_socket = { path = "../matchbox_socket" }

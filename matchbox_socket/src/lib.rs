@@ -3,11 +3,11 @@
 #![forbid(unsafe_code)]
 
 mod error;
-mod integrations;
+#[cfg(feature = "ggrs-socket")]
+mod ggrs_socket;
 mod webrtc_socket;
 
 pub use error::Error;
-pub use integrations::*;
 pub use matchbox_protocol::PeerId;
 pub use webrtc_socket::{
     BuildablePlurality, ChannelConfig, ChannelPlurality, MessageLoopFuture, MultipleChannels,

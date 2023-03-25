@@ -65,7 +65,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                             info!("Connection closed by {peer_uuid:?}");
                         }
                         ClientRequestError::Json(_) | ClientRequestError::UnsupportedType(_) => {
-                            error!("Error with request: {:?}", e);
+                            error!("Error with request: {e:?}");
                             continue; // Recoverable error
                         }
                     };

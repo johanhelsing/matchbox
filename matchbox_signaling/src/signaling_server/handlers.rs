@@ -1,6 +1,6 @@
 use crate::{topologies::SignalingStateMachine, SignalingCallbacks};
 use axum::{
-    extract::{ws::WebSocket, ConnectInfo, Path, Query, WebSocketUpgrade},
+    extract::{ws::WebSocket, ConnectInfo, Path, Query, State, WebSocketUpgrade},
     response::IntoResponse,
     Extension,
 };
@@ -30,7 +30,7 @@ pub(crate) async fn ws_handler<Cb, S>(
     path: Option<Path<String>>,
     Query(params): Query<HashMap<String, String>>,
     Extension(callbacks): Extension<Cb>,
-    Extension(state): Extension<S>,
+    State(state): State<S>,
     Extension(state_machine): Extension<SignalingStateMachine<Cb, S>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse

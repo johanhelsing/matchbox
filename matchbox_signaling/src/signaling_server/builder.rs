@@ -9,7 +9,7 @@ use crate::{
 };
 use axum::{routing::get, Extension, Router};
 use matchbox_protocol::{JsonPeerRequest, PeerId};
-use std::net::SocketAddr;
+use std::{marker::PhantomData, net::SocketAddr};
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
@@ -40,7 +40,7 @@ where
     pub(crate) topology: Topology,
 
     /// Arbitrary state accompanying a server
-    pub(crate) state: S,
+    pub(crate) state: PhantomData<S>,
 }
 
 impl<Topology, Cb, S> SignalingServerBuilder<Topology, Cb, S>
@@ -55,10 +55,11 @@ where
             socket_addr: socket_addr.into(),
             router: Router::new()
                 .route("/", get(ws_handler::<Cb, S>))
-                .route("/:path", get(ws_handler::<Cb, S>)),
+                .route("/:path", get(ws_handler::<Cb, S>))
+                .with_state(state),
             callbacks: Cb::default(),
             topology,
-            state,
+            state: PhantomData,
         }
     }
 

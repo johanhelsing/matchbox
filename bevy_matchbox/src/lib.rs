@@ -63,3 +63,11 @@ impl<'w, 's, C: BuildablePlurality + 'static> CloseSocketExt<C> for Commands<'w,
         self.add(CloseSocket::<C>(PhantomData::default()))
     }
 }
+
+/// use `bevy_matchbox::prelude::*;` to import common resources and commands
+pub mod prelude {
+    pub use crate::{CloseSocketExt, MatchboxSocket, OpenSocketExt};
+    pub use matchbox_socket::{
+        ChannelConfig, MultipleChannels, PeerId, PeerState, SingleChannel, WebRtcSocketBuilder,
+    };
+}

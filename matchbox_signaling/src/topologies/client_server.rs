@@ -75,7 +75,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
         // Check whether this connection is host
         let is_host = {
             let host = state.get_host();
-            host.is_some() && host.unwrap() == peer_uuid;
+            host.is_some() && host.unwrap() == peer_uuid
         };
 
         // The state machine for the data channel established for this websocket.
@@ -180,7 +180,11 @@ impl SignalingState for ClientServerState {}
 impl ClientServerState {
     /// Get the host
     pub fn get_host(&mut self) -> Option<PeerId> {
-        self.host.try_lock().as_ref().unwrap().map(|(peer, _)| peer)
+        self.host
+            .try_lock()
+            .unwrap()
+            .as_ref()
+            .map(|(peer, _)| *peer)
     }
 
     /// Set host

@@ -43,7 +43,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
         if let Err(e) = state.try_send(&sender, event) {
             error!("error sending to {peer_uuid:?}: {e:?}");
         } else {
-            info!("{:?} -> {:?}", peer_uuid, event_text);
+            info!("{peer_uuid:?} -> {event_text:?}");
         };
 
         // Add peer to state

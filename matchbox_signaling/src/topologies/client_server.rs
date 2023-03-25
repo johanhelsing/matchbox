@@ -49,7 +49,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
 
         // TODO: Make some real way to validate hosts, authentication?
         // Currently, the first person to connect becomes host.
-        if state.is_host_available() {
+        if state.get_host().is_none() {
             // Set host
             state.set_host(peer_uuid, sender.clone());
             // Lifecycle event: On Host Connected
@@ -72,13 +72,10 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
             }
         }
 
-        // Check whether the socket is host
+        // Check whether this connection is host
         let is_host = {
-            let host = state.host.try_lock().unwrap();
-            host.as_ref().is_some() && {
-                let (id, _sender) = host.as_ref().unwrap();
-                *id == peer_uuid
-            }
+            let host = state.get_host();
+            host.is_some() && host.unwrap() == peer_uuid;
         };
 
         // The state machine for the data channel established for this websocket.
@@ -181,9 +178,9 @@ pub struct ClientServerState {
 impl SignalingState for ClientServerState {}
 
 impl ClientServerState {
-    /// Check if the host is available to take
-    pub fn is_host_available(&mut self) -> bool {
-        self.host.try_lock().as_ref().unwrap().is_none()
+    /// Get the host
+    pub fn get_host(&mut self) -> Option<PeerId> {
+        self.host.try_lock().as_ref().unwrap().map(|(peer, _)| peer)
     }
 
     /// Set host

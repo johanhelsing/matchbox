@@ -2,7 +2,7 @@
 mod tests {
     use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
     use futures_timer::Delay;
-    use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
+    use matchbox_protocol::{JsonPeerEvent, PeerRequest};
     use matchbox_signaling::SignalingServer;
     use std::{
         net::Ipv4Addr,

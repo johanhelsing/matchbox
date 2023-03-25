@@ -13,7 +13,6 @@ use futures::StreamExt;
 use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
 use std::{
     collections::HashMap,
-    rc::Rc,
     sync::{Arc, Mutex},
 };
 use tokio::sync::mpsc::UnboundedSender;

@@ -81,7 +81,7 @@ pub trait ChannelPlurality {}
 /// used to build a [`WebRtcSocket`].
 pub trait BuildablePlurality: ChannelPlurality {}
 
-/// Inicates that type has no [`WebRtcChannel`]s or [`ChannelConfig`]s.
+/// Indicates that the type has no [`WebRtcChannel`]s or [`ChannelConfig`]s.
 #[derive(Debug)]
 pub struct NoChannels;
 impl ChannelPlurality for NoChannels {}

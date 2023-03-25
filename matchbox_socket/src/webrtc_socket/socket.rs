@@ -278,7 +278,7 @@ impl WebRtcChannel {
     }
 }
 
-/// Contains a set of web rtc channels and some connection metadata.
+/// Contains a set of [`WebRtcChannel`]s and connection metadata.
 #[derive(Debug)]
 pub struct WebRtcSocket<C: ChannelPlurality = SingleChannel> {
     id: once_cell::race::OnceBox<PeerId>,

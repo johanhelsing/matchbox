@@ -86,7 +86,7 @@ pub trait BuildablePlurality: ChannelPlurality {}
 pub struct NoChannels;
 impl ChannelPlurality for NoChannels {}
 
-/// Inicates that type has exactly one [`WebRtcChannel`] or [`ChannelConfig`].
+/// Indicates that the type has exactly one [`WebRtcChannel`] or [`ChannelConfig`].
 #[derive(Debug)]
 pub struct SingleChannel;
 impl ChannelPlurality for SingleChannel {}

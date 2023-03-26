@@ -2,7 +2,7 @@
 name = "matchbox_signaling"
 version = "0.5.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>", "Spencer C. Imbleau <spencer@imbleau.com>"]
-description = "Painless WebRTC peer-to-peer signalling socket"
+description = "Painless WebRTC peer-to-peer signaling socket"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]

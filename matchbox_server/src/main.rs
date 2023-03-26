@@ -64,7 +64,7 @@ async fn main() {
     axum::Server::bind(&args.host)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
-        .expect("Unable to run signalling server, is it already running?");
+        .expect("Unable to run signaling server, is it already running?");
 }
 
 pub async fn health_handler() -> impl IntoResponse {

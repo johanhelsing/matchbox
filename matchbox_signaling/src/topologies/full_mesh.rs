@@ -126,9 +126,9 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
 /// Signaling callbacks for full mesh topologies
 #[derive(Default, Debug, Clone)]
 pub struct FullMeshCallbacks {
-    /// Triggered on a new connection to the signalling server
+    /// Triggered on a new connection to the signaling server
     pub(crate) on_peer_connected: Callback<PeerId>,
-    /// Triggered on a disconnection to the signalling server
+    /// Triggered on a disconnection to the signaling server
     pub(crate) on_peer_disconnected: Callback<PeerId>,
 }
 impl SignalingCallbacks for FullMeshCallbacks {}

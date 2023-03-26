@@ -188,13 +188,13 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
 /// Signaling callbacks for client/server topologies
 #[derive(Default, Debug, Clone)]
 pub struct ClientServerCallbacks {
-    /// Triggered on a new client connection to the signalling server
+    /// Triggered on a new client connection to the signaling server
     pub(crate) on_client_connected: Callback<PeerId>,
-    /// Triggered on a client disconnection to the signalling server
+    /// Triggered on a client disconnection to the signaling server
     pub(crate) on_client_disconnected: Callback<PeerId>,
-    /// Triggered on host connection to the signalling server
+    /// Triggered on host connection to the signaling server
     pub(crate) on_host_connected: Callback<PeerId>,
-    /// Triggered on host disconnection to the signalling server
+    /// Triggered on host disconnection to the signaling server
     pub(crate) on_host_disconnected: Callback<PeerId>,
 }
 impl SignalingCallbacks for ClientServerCallbacks {}

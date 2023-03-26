@@ -1,6 +1,6 @@
 use crate::{
     webrtc_socket::{
-        message_loop, signalling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
+        message_loop, signaling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
         UseMessenger, UseSignaller,
     },
     Error,
@@ -124,7 +124,7 @@ impl WebRtcSocketBuilder {
         self
     }
 
-    /// Sets the number of attempts to make at reconnecting to the signalling server,
+    /// Sets the number of attempts to make at reconnecting to the signaling server,
     /// if `None` the socket will attempt to connect indefinitely.
     pub fn reconnect_attempts(mut self, attempts: Option<u16>) -> Self {
         self.attempts = attempts;
@@ -155,9 +155,11 @@ impl WebRtcSocketBuilder {
         self
     }
 
-    /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] according to the configuration supplied.
+    /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] according to the
+    /// configuration supplied.
     ///
-    /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and received.
+    /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and
+    /// received.
     pub fn build(self) -> (WebRtcSocket, MessageLoopFuture) {
         if self.channels.is_empty() {
             panic!("You need to configure at least one channel in WebRtcSocketConfig");
@@ -199,14 +201,14 @@ pub enum PeerState {
     /// This means all of the following should be true:
     ///
     /// - The requested data channels have been established and are healthy
-    /// - The peer hasn't left the signalling server
+    /// - The peer hasn't left the signaling server
     Connected,
     /// We no longer have a connection to this peer:
     ///
     /// This means either:
     ///
     /// - Some of the the data channels got disconnected/closed
-    /// - The peer left the signalling server
+    /// - The peer left the signaling server
     Disconnected,
 }
 
@@ -448,7 +450,7 @@ async fn run_socket(
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
-    let signalling_loop_fut = signalling_loop::<UseSignaller>(
+    let signaling_loop_fut = signaling_loop::<UseSignaller>(
         config.attempts,
         config.room_url.clone(),
         requests_receiver,
@@ -465,7 +467,7 @@ async fn run_socket(
     let message_loop_fut = message_loop::<UseMessenger>(id_tx, config, channels);
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
-    let mut signalling_loop_done = Box::pin(signalling_loop_fut.fuse());
+    let mut signaling_loop_done = Box::pin(signaling_loop_fut.fuse());
     loop {
         select! {
             _ = message_loop_done => {
@@ -473,9 +475,9 @@ async fn run_socket(
                 break;
             }
 
-            sigloop = signalling_loop_done => {
+            sigloop = signaling_loop_done => {
                 match sigloop {
-                    Ok(()) => debug!("Signalling loop completed"),
+                    Ok(()) => debug!("Signaling loop completed"),
                     Err(e) => {
                         // TODO: Reconnect X attempts if configured to reconnect.
                         error!("{e:?}");
@@ -492,7 +494,7 @@ async fn run_socket(
 
 #[cfg(test)]
 mod test {
-    use crate::{webrtc_socket::error::SignallingError, Error, WebRtcSocketBuilder};
+    use crate::{webrtc_socket::error::SignalingError, Error, WebRtcSocketBuilder};
 
     #[futures_test::test]
     async fn unreachable_server() {
@@ -503,11 +505,11 @@ mod test {
 
         let result = fut.await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::Signalling(_)));
+        assert!(matches!(result.unwrap_err(), Error::Signaling(_)));
     }
 
     #[futures_test::test]
-    async fn test_signalling_attempts() {
+    async fn test_signaling_attempts() {
         let (_socket, loop_fut) = WebRtcSocketBuilder::new("wss://example.invalid/")
             .reconnect_attempts(Some(3))
             .add_reliable_channel()
@@ -517,7 +519,7 @@ mod test {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            Error::Signalling(SignallingError::ConnectionFailed(_))
+            Error::Signaling(SignalingError::ConnectionFailed(_))
         ));
     }
 }

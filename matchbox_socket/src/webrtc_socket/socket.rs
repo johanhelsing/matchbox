@@ -188,14 +188,11 @@ impl WebRtcSocketBuilder {
     pub fn basic_authentication(
         mut self,
         username: impl Into<String>,
-        password: Option<impl Into<String>>,
+        password: impl Into<String>,
     ) -> Self {
         let username = username.into();
-        let password = password.map(|p| p.into());
-        let auth = match password {
-            Some(password) => STANDARD.encode(format!("{username}:{password}")),
-            None => STANDARD.encode(username),
-        };
+        let password = password.into();
+        let auth = STANDARD.encode(format!("{username}:{password}"));
         self.config.authentication = Some(format!("Basic {auth}"));
         self
     }

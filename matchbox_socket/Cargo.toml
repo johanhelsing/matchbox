@@ -57,19 +57,19 @@ futures-timer = { version = "3.0", default-features = false, features = [
 js-sys = { version = "0.3", default-features = false }
 web-sys = { version = "0.3.22", default-features = false, features = [
   "MessageEvent",
-  "RtcPeerConnection",
-  "RtcSdpType",
-  "RtcSessionDescription",
-  "RtcSessionDescriptionInit",
-  "RtcIceGatheringState",
-  "RtcIceCandidate",
-  "RtcIceCandidateInit",
-  "RtcPeerConnectionIceEvent",
-  "RtcIceConnectionState",
   "RtcConfiguration",
   "RtcDataChannel",
   "RtcDataChannelInit",
   "RtcDataChannelType",
+  "RtcIceCandidate",
+  "RtcIceCandidateInit",
+  "RtcIceConnectionState",
+  "RtcIceGatheringState",
+  "RtcPeerConnection",
+  "RtcPeerConnectionIceEvent",
+  "RtcSdpType",
+  "RtcSessionDescription",
+  "RtcSessionDescriptionInit",
 ] }
 serde-wasm-bindgen = { version = "0.5" }
 

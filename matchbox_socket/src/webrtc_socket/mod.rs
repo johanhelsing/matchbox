@@ -3,6 +3,7 @@ mod messages;
 mod signal_peer;
 mod socket;
 
+use self::error::{MessagingError, SignalingError};
 use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
@@ -14,10 +15,11 @@ use log::{debug, warn};
 use matchbox_protocol::PeerId;
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
-pub use socket::{ChannelConfig, PeerState, RtcIceServerConfig, WebRtcSocket, WebRtcSocketBuilder};
+pub use socket::{
+    BuildablePlurality, ChannelConfig, ChannelPlurality, MultipleChannels, NoChannels, PeerState,
+    RtcIceServerConfig, SingleChannel, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
+};
 use std::{collections::HashMap, pin::Pin, time::Duration};
-
-use self::error::{MessagingError, SignalingError};
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -126,7 +128,8 @@ trait Messenger {
 
 async fn message_loop<M: Messenger>(
     id_tx: crossbeam_channel::Sender<PeerId>,
-    config: WebRtcSocketBuilder,
+    ice_server_config: &RtcIceServerConfig,
+    channel_configs: &[ChannelConfig],
     channels: MessageLoopChannels,
 ) {
     let MessageLoopChannels {
@@ -170,14 +173,14 @@ async fn message_loop<M: Messenger>(
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid, signal_tx);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), &config.ice_server, &config.channels))
+                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to report peer as disconnected");},
                         PeerEvent::Signal { sender, data } => {
                             handshake_signals.entry(sender).or_insert_with(|| {
                                 let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender, requests_sender.clone());
-                                handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), &config.ice_server, &config.channels));
+                                handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs));
                                 from_peer_tx
                             }).unbounded_send(data).expect("failed to forward signal to handshaker");
                         },

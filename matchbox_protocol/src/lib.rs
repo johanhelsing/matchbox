@@ -19,10 +19,15 @@ pub enum PeerRequest<S> {
 /// Events go from signaling server to peer
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerEvent<S> {
+    /// Sent by the server to the connecting peer, immediately after connection
+    /// before any other events
     IdAssigned(PeerId),
     NewPeer(PeerId),
     PeerLeft(PeerId),
-    Signal { sender: PeerId, data: S },
+    Signal {
+        sender: PeerId,
+        data: S,
+    },
 }
 
 cfg_if! {

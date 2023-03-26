@@ -8,31 +8,25 @@ repository = "https://github.com/johanhelsing/matchbox"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
 license = "MIT OR Apache-2.0"
 
-[features]
-default = [
-  "bevy/bevy_gltf",
-  "bevy/bevy_winit",
-  "bevy/render",
-  "bevy/png",
-]
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = [
     "Document", "Location", # for getting args from query string
 ] }
-console_error_panic_hook = "0.1"
-console_log = "0.2"
 serde_qs = "0.12"
 wasm-bindgen = "0.2"
 ggrs = { version = "0.9", features = ["wasm-bindgen"] }
 
 [dependencies]
 matchbox_socket = { path = "../../matchbox_socket", features = ["ggrs-socket"] }
-bevy = { version = "0.9", default-features = false }
+bevy = { version = "0.9", default-features = false, features = [
+  "bevy_gltf",
+  "bevy_winit",
+  "render",
+  "png",
+  "x11" # gh actions runners don't like wayland
+] }
 ggrs = "0.9"
 bevy_ggrs = "0.11"
 bytemuck = { version = "1.7", features=["derive"]}
 clap = { version = "4.0", features = ["derive"] }
 serde = "1.0"
-winit = "0.27"
-log = "0.4"

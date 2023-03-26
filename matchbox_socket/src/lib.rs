@@ -10,6 +10,7 @@ mod webrtc_socket;
 pub use error::Error;
 pub use matchbox_protocol::PeerId;
 pub use webrtc_socket::{
-    ChannelConfig, MessageLoopFuture, Packet, PeerState, RtcIceServerConfig, WebRtcSocket,
+    BuildablePlurality, ChannelConfig, ChannelPlurality, MessageLoopFuture, MultipleChannels,
+    NoChannels, Packet, PeerState, RtcIceServerConfig, SingleChannel, WebRtcChannel, WebRtcSocket,
     WebRtcSocketBuilder,
 };

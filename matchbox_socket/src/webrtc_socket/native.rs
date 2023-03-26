@@ -13,7 +13,11 @@ use async_compat::CompatExt;
 use async_trait::async_trait;
 use async_tungstenite::{
     async_std::{connect_async, ConnectStream},
-    tungstenite::Message,
+    tungstenite::{
+        handshake::client::{generate_key, Request},
+        http::Uri,
+        Message,
+    },
     WebSocketStream,
 };
 use bytes::Bytes;
@@ -46,9 +50,34 @@ pub(crate) struct NativeSignaller {
 
 #[async_trait]
 impl Signaller for NativeSignaller {
-    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignallingError> {
+    async fn new(
+        mut attempts: Option<u16>,
+        room_url: &str,
+        authentication: Option<&String>,
+    ) -> Result<Self, SignallingError> {
         let websocket_stream = 'signalling: loop {
-            match connect_async(room_url).await.map_err(SignallingError::from) {
+            // Setup connection request
+            let uri = room_url.parse::<Uri>().expect("invalid room url");
+            let authority = uri.authority().expect("no authority in url").as_str();
+            let host = authority
+                .find('@')
+                .map(|idx| authority.split_at(idx + 1).1)
+                .unwrap_or_else(|| authority);
+            let mut request = Request::builder()
+                .uri(room_url)
+                .method("GET")
+                .header("Host", host)
+                .header("Connection", "Upgrade")
+                .header("Upgrade", "websocket")
+                .header("Sec-WebSocket-Version", "13")
+                .header("Sec-WebSocket-Key", generate_key());
+            if let Some(authentication) = authentication {
+                request = request.header("Authorization", authentication);
+            }
+            let request = request.body(()).expect("invalid configuration");
+
+            // Connect
+            match connect_async(request).await.map_err(SignallingError::from) {
                 Ok((wss, _)) => break wss,
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {

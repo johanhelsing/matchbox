@@ -40,6 +40,7 @@ once_cell = { version = "1.17", default-features = false, features = [
   "alloc",
 ] }
 crossbeam-channel = "0.5"
+base64 = "0.21"
 
 # ggrs-socket
 ggrs = { version = "0.9.3", default-features = false, optional = true }

@@ -6,6 +6,7 @@ use crate::{
     },
     Error,
 };
+use base64::{engine::general_purpose::STANDARD, Engine};
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
@@ -120,6 +121,8 @@ pub(crate) struct SocketConfig {
     pub(crate) attempts: Option<u16>,
     /// Interval at which to send empty requests to the signaling server
     pub(crate) keep_alive_interval: Option<Duration>,
+    /// Authentication header to provide on connect
+    pub(crate) authentication: Option<String>,
 }
 
 /// Builder for [`WebRtcSocket`]s.
@@ -147,6 +150,7 @@ impl WebRtcSocketBuilder {
                 channels: Vec::default(),
                 attempts: Some(3),
                 keep_alive_interval: Some(Duration::from_secs(10)),
+                authentication: None,
             },
             channel_plurality: PhantomData::default(),
         }
@@ -177,6 +181,22 @@ impl WebRtcSocketBuilder {
     /// The defaults is 10 seconds.
     pub fn signaling_keep_alive_interval(mut self, interval: Option<Duration>) -> Self {
         self.config.keep_alive_interval = interval;
+        self
+    }
+
+    /// Sets authentication on request to the signaling server.
+    pub fn basic_authentication(
+        mut self,
+        username: impl Into<String>,
+        password: Option<impl Into<String>>,
+    ) -> Self {
+        let username = username.into();
+        let password = password.map(|p| p.into());
+        let auth = match password {
+            Some(password) => STANDARD.encode(format!("{username}:{password}")),
+            None => STANDARD.encode(username),
+        };
+        self.config.authentication = Some(format!("Basic {auth}"));
         self
     }
 }
@@ -211,9 +231,11 @@ impl WebRtcSocketBuilder<MultipleChannels> {
 }
 
 impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
-    /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] according to the configuration supplied.
+    /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] according to the
+    /// configuration supplied.
     ///
-    /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and received.
+    /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and
+    /// received.
     pub fn build(self) -> (WebRtcSocket<C>, MessageLoopFuture) {
         if self.config.channels.is_empty() {
             unreachable!();
@@ -536,6 +558,7 @@ async fn run_socket(
     let signalling_loop_fut = signalling_loop::<UseSignaller>(
         config.attempts,
         config.room_url,
+        config.authentication,
         requests_receiver,
         events_sender,
     );

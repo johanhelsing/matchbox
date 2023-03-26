@@ -11,10 +11,7 @@ use crate::webrtc_socket::{
 };
 use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
-use futures_channel::{
-    mpsc::Receiver,
-    mpsc::{UnboundedReceiver, UnboundedSender},
-};
+use futures_channel::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 use futures_util::select;
 use js_sys::{Function, Reflect};
 use log::{debug, error, trace, warn};
@@ -35,8 +32,18 @@ pub(crate) struct WasmSignaller {
 
 #[async_trait(?Send)]
 impl Signaller for WasmSignaller {
-    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignallingError> {
+    async fn new(
+        mut attempts: Option<u16>,
+        room_url: &str,
+        authentication: Option<&String>,
+    ) -> Result<Self, SignallingError> {
         let websocket_stream = 'signalling: loop {
+            // Setup connection request
+            if authentication.is_some() {
+                todo!("authentication is not yet implemented on wasm");
+            }
+
+            // Connect
             match WsMeta::connect(room_url, None)
                 .await
                 .map_err(SignallingError::from)

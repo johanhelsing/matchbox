@@ -214,29 +214,17 @@ impl SignalingState for ClientServerState {}
 impl ClientServerState {
     /// Get the host
     pub fn get_host(&mut self) -> Option<PeerId> {
-        self.host
-            .try_lock()
-            .unwrap()
-            .as_ref()
-            .map(|(peer, _)| *peer)
+        self.host.lock().unwrap().as_ref().map(|(peer, _)| *peer)
     }
 
     /// Set host
     pub fn set_host(&mut self, peer: PeerId, sender: SignalingChannel) {
-        self.host
-            .try_lock()
-            .as_mut()
-            .unwrap()
-            .replace((peer, sender));
+        self.host.lock().as_mut().unwrap().replace((peer, sender));
     }
 
     /// Add a client
     pub fn add_client(&mut self, peer: PeerId, sender: SignalingChannel) {
-        self.clients
-            .try_lock()
-            .as_mut()
-            .unwrap()
-            .insert(peer, sender);
+        self.clients.lock().as_mut().unwrap().insert(peer, sender);
     }
 
     /// Remove a client from the state if it existed.
@@ -251,13 +239,13 @@ impl ClientServerState {
                 error!("Failure sending peer remove to host: {e:?}")
             }
         }
-        self.clients.try_lock().as_mut().unwrap().remove(peer_id);
+        self.clients.lock().as_mut().unwrap().remove(peer_id);
     }
 
     /// Send a message to a peer without blocking.
     pub fn try_send_to_client(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
         self.clients
-            .try_lock()
+            .lock()
             .as_mut()
             .unwrap()
             .get(&id)
@@ -268,7 +256,7 @@ impl ClientServerState {
     /// Send a message to the host without blocking.
     pub fn try_send_to_host(&self, message: Message) -> Result<(), SignalingError> {
         self.host
-            .try_lock()
+            .lock()
             .as_mut()
             .unwrap()
             .as_ref()
@@ -277,10 +265,20 @@ impl ClientServerState {
     }
 
     pub fn reset(&mut self) {
-        if let Some((host_id, _)) = self.host.try_lock().as_mut().unwrap().take() {
+        // Safety: Lock must be scoped/dropped to ensure no deadlock with next section
+        let host_id = {
+            self.host
+                .lock()
+                .as_mut()
+                .unwrap()
+                .take()
+                .map(|(peer_id, _sender)| peer_id)
+        };
+        if let Some(host_id) = host_id {
             // Tell each connected peer about the disconnected host.
             let event = Message::Text(JsonPeerEvent::PeerLeft(host_id).to_string());
-            let clients = { self.clients.try_lock().unwrap().clone() };
+            // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
+            let clients = { self.clients.lock().unwrap().clone() };
             clients.keys().for_each(|peer_id| {
                 match self.try_send_to_client(*peer_id, event.clone()) {
                     Ok(()) => {
@@ -292,6 +290,7 @@ impl ClientServerState {
                 }
             });
         }
-        self.clients.try_lock().as_mut().unwrap().clear();
+        // Safety: All prior locks in this method must be freed prior to this call
+        self.clients.lock().as_mut().unwrap().clear();
     }
 }

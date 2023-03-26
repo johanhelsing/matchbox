@@ -149,20 +149,22 @@ impl FullMeshState {
     pub fn add_peer(&mut self, peer: PeerId, sender: SignalingChannel) {
         // Alert all peers of new user
         let event = Message::Text(JsonPeerEvent::NewPeer(peer).to_string());
-        let peers = { self.peers.try_lock().unwrap().clone() };
+        // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
+        let peers = { self.peers.lock().unwrap().clone() };
         peers.keys().for_each(|peer_id| {
             if let Err(e) = self.try_send_to_peer(*peer_id, event.clone()) {
                 error!("error sending to {peer_id:?}: {e:?}");
             }
         });
-        self.peers.try_lock().as_mut().unwrap().insert(peer, sender);
+        // Safety: All prior locks in this method must be freed prior to this call
+        self.peers.lock().as_mut().unwrap().insert(peer, sender);
     }
 
     /// Remove a peer from the state if it existed, returning the peer removed.
     pub fn remove_peer(&mut self, peer_id: &PeerId) {
         let removed_peer = self
             .peers
-            .try_lock()
+            .lock()
             .as_mut()
             .unwrap()
             .remove(peer_id)
@@ -170,7 +172,8 @@ impl FullMeshState {
         if let Some((peer_id, _sender)) = removed_peer {
             // Tell each connected peer about the disconnected peer.
             let event = Message::Text(JsonPeerEvent::PeerLeft(peer_id).to_string());
-            let peers = { self.peers.try_lock().unwrap().clone() };
+            // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
+            let peers = { self.peers.lock().unwrap().clone() };
             peers.keys().for_each(
                 |peer_id| match self.try_send_to_peer(*peer_id, event.clone()) {
                     Ok(()) => info!("Sent peer remove to: {peer_id:?}"),
@@ -183,7 +186,7 @@ impl FullMeshState {
     /// Send a message to a peer without blocking.
     pub fn try_send_to_peer(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
         self.peers
-            .try_lock()
+            .lock()
             .unwrap()
             .get(&id)
             .ok_or_else(|| SignalingError::UnknownPeer)

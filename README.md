@@ -1,4 +1,4 @@
-# [![Matchbox](matchbox_logo.png)](https://github.com/johanhelsing/matchbox)
+# [![Matchbox](images/matchbox_logo.png)](https://github.com/johanhelsing/matchbox)
 
 [![crates.io](https://img.shields.io/crates/v/matchbox_socket.svg)](https://crates.io/crates/matchbox_socket)
 ![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)
@@ -28,6 +28,9 @@ The Matchbox project contains:
   - Live 4-player demo: <https://helsing.studio/box_game/?players=4>
 
 ## How it works
+
+![Connection](images/connection.light.excalidraw.svg#gh-light-mode-only)
+![Connection](images/connection.dark.excalidraw.svg#gh-dark-mode-only)
 
 WebRTC allows direct connections between peers, but in order to establish those connections, some kind of signaling service is needed. `matchbox_server` is such a service. Once the connections are established, however, data will flow directly between peers, and no traffic will go through the signaling server.
 

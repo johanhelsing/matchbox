@@ -37,6 +37,7 @@ mod tests {
         JsonPeerEvent::from_str(&message.to_string()).expect("json peer event")
     }
 
+    // Helper to extract PeerId when expecting an Id assignment
     fn get_peer_id(peer_event: JsonPeerEvent) -> PeerId {
         if let JsonPeerEvent::IdAssigned(id) = peer_event {
             id

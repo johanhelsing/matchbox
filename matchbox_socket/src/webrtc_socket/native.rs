@@ -364,12 +364,12 @@ impl CandidateTrickle {
         // Local candidates can only be sent after the remote description
         if peer_connection.remote_description().await.is_some() {
             // Can send local candidate already
-            debug!("sending IceCandidate signal {}", candidate);
+            debug!("sending IceCandidate signal: {candidate:?}");
             self.signal_peer
                 .send(PeerSignal::IceCandidate(candidate_json));
         } else {
             // Can't send yet, store in pending
-            debug!("storing pending IceCandidate signal {}", candidate_json);
+            debug!("storing pending IceCandidate signal: {candidate_json:?}");
             self.pending.lock().await.push(candidate_json);
         }
     }

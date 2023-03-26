@@ -76,7 +76,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                 }
             };
 
-            match request.clone() {
+            match request {
                 PeerRequest::Signal { receiver, data } => {
                     let event = Message::Text(
                         JsonPeerEvent::Signal {
@@ -94,8 +94,6 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                     // disconnecting idle websocket connections.
                 }
             }
-            // Lifecycle event: On Signal
-            callbacks.on_signal.emit(request);
         }
 
         // Peer disconnected or otherwise ended communication.

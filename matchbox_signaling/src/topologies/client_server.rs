@@ -109,7 +109,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                 }
             };
 
-            match request.clone() {
+            match request {
                 PeerRequest::Signal { receiver, data } => {
                     let event = Message::Text(
                         JsonPeerEvent::Signal {
@@ -133,8 +133,6 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                     // disconnecting idle websocket connections.
                 }
             }
-            // Lifecycle event: On Signal
-            callbacks.on_signal.emit(request);
         }
 
         if is_host {

@@ -17,6 +17,8 @@ use tower_http::{
 };
 use tracing::Level;
 
+use super::callbacks::SharedCallbacks;
+
 /// Builder for [`SignalingServer`]s.
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
@@ -33,7 +35,10 @@ where
     /// The router used by the signaling server
     pub(crate) router: Router,
 
-    /// The callbacks used by the signalling server
+    /// Shared callouts used by all signaling servers
+    pub(crate) base_callbacks: SharedCallbacks,
+
+    /// The callbacks used by the signaling server
     pub(crate) callbacks: Cb,
 
     /// The state machine that runs a websocket to completion, also where topology is implemented
@@ -57,6 +62,7 @@ where
                 .route("/", get(ws_handler::<Cb, S>))
                 .route("/:path", get(ws_handler::<Cb, S>))
                 .with_state(state),
+            base_callbacks: SharedCallbacks::default(),
             callbacks: Cb::default(),
             topology,
             state: PhantomData,
@@ -126,15 +132,6 @@ where
 }
 
 impl SignalingServerBuilder<FullMesh, FullMeshCallbacks, FullMeshState> {
-    /// Set a callback triggered on signals.
-    pub fn on_signal<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(JsonPeerRequest) + 'static,
-    {
-        self.callbacks.on_signal = Callback::from(callback);
-        self
-    }
-
     /// Set a callback triggered on all websocket connections.
     pub fn on_peer_connected<F>(mut self, callback: F) -> Self
     where
@@ -155,15 +152,6 @@ impl SignalingServerBuilder<FullMesh, FullMeshCallbacks, FullMeshState> {
 }
 
 impl SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState> {
-    /// Set a callback triggered on signals.
-    pub fn on_signal<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(JsonPeerRequest) + 'static,
-    {
-        self.callbacks.on_signal = Callback::from(callback);
-        self
-    }
-
     /// Set a callback triggered on all client websocket connections.
     pub fn on_client_connected<F>(mut self, callback: F) -> Self
     where

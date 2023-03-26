@@ -1,5 +1,9 @@
 use std::{fmt, rc::Rc};
 
+use crate::SignalingCallbacks;
+
+use super::handlers::WsUpgradeMeta;
+
 /// Universal callback wrapper.
 ///
 /// An `Rc` wrapper is used to make it cloneable.
@@ -48,3 +52,15 @@ impl<In> Default for Callback<In> {
         Self::noop()
     }
 }
+
+/// Signaling callbacks for all topologies
+#[derive(Default, Debug, Clone)]
+pub struct SharedCallbacks {
+    /// Triggered immediately on connect
+    pub(crate) on_connect: Callback<WsUpgradeMeta>,
+}
+impl SignalingCallbacks for SharedCallbacks {}
+#[allow(unsafe_code)]
+unsafe impl Send for SharedCallbacks {}
+#[allow(unsafe_code)]
+unsafe impl Sync for SharedCallbacks {}

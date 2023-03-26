@@ -9,7 +9,6 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
     let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 3536))
         .on_peer_connected(|id| info!("Joined: {id:?}"))
         .on_peer_disconnected(|id| info!("Left: {id:?}"))
-        .on_signal(|s| info!("Signal: {s:?}"))
         .cors()
         .trace()
         .build();

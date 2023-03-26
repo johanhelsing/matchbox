@@ -11,7 +11,6 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
         .on_host_disconnected(|id| info!("Host left: {id:?}"))
         .on_client_connected(|id| info!("Client joined: {id:?}"))
         .on_client_disconnected(|id| info!("Client left: {id:?}"))
-        .on_signal(|s| info!("Signal: {s:?}"))
         .cors()
         .trace()
         .build();

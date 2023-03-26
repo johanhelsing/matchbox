@@ -165,29 +165,4 @@ mod tests {
 
         wait_for_success(success).await
     }
-
-    #[tokio::test]
-    async fn ws_on_signal_callback() {
-        let success = Arc::new(AtomicBool::new(false));
-
-        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .on_signal({
-                let success = success.clone();
-                move |_| success.store(true, std::sync::atomic::Ordering::Release)
-            })
-            .build();
-        let addr = server.local_addr();
-        tokio::spawn(server.serve());
-
-        // Connect
-        let (mut stream, _) = tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
-            .await
-            .expect("handshake");
-
-        // Send a signal
-        let request = PeerRequest::KeepAlive.to_string();
-        stream.send(Message::Text(request)).await.unwrap();
-
-        wait_for_success(success).await
-    }
 }

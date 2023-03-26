@@ -71,7 +71,7 @@ mod tests {
         let password = "123";
 
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .basic_auth(username, Some(password))
+            .basic_auth(username, password)
             .build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
@@ -107,7 +107,7 @@ mod tests {
         let invalid_password = "321";
 
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .basic_auth(username, Some(password))
+            .basic_auth(username, password)
             .build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());

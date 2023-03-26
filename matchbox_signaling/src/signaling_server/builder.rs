@@ -73,14 +73,11 @@ where
         }
     }
 
-    /// Require peers to provide basic authentication.
-    pub fn basic_auth(
-        mut self,
-        username: impl Into<String>,
-        password: Option<impl Into<String>>,
-    ) -> Self {
+    /// Require all peers to provide basic authentication that matches a given username and
+    /// password.
+    pub fn basic_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         let prev_callback = self.shared_callbacks.on_connection_request.cb.clone();
-        let (username, password) = (username.into(), password.map(|p| p.into()));
+        let (username, password) = (username.into(), password.into());
         self.shared_callbacks.on_connection_request =
             Callback::from(move |extract: WsUpgradeMeta| {
                 let authorization = extract
@@ -119,11 +116,15 @@ where
                         })?;
 
                         // Return depending on if password is present
-                        Ok(if let Some((id, password)) = decoded.split_once(':') {
-                            (id.to_string(), Some(password.to_string()))
+                        if let Some((username, password)) = decoded.split_once(':') {
+                            Ok((username.to_string(), password.to_string()))
                         } else {
-                            (decoded.to_string(), None)
-                        })
+                            Err((
+                                StatusCode::BAD_REQUEST,
+                                "`Authentication` header must be username:password",
+                            )
+                                .into_response())
+                        }
                     }
                     _ => Err((
                         StatusCode::BAD_REQUEST,

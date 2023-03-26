@@ -7,7 +7,7 @@ use self::error::{MessagingError, SignallingError};
 use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
-use futures::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
+use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
@@ -38,10 +38,6 @@ cfg_if! {
         pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
     }
 }
-
-// TODO: Should be a WebRtcConfig field
-/// The duration, in milliseconds, to send "Keep Alive" requests
-const KEEP_ALIVE_INTERVAL: u64 = 10_000;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -131,6 +127,7 @@ async fn message_loop<M: Messenger>(
     ice_server_config: &RtcIceServerConfig,
     channel_configs: &[ChannelConfig],
     channels: MessageLoopChannels,
+    keep_alive_interval: Option<Duration>,
 ) {
     let MessageLoopChannels {
         requests_sender,
@@ -145,7 +142,12 @@ async fn message_loop<M: Messenger>(
     let mut handshake_signals = HashMap::new();
     let mut data_channels = HashMap::new();
 
-    let mut timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL)).fuse();
+    let mut timeout = if let Some(interval) = keep_alive_interval {
+        Either::Left(Delay::new(interval))
+    } else {
+        Either::Right(std::future::pending())
+    }
+    .fuse();
 
     loop {
         let mut next_peer_messages_out = peer_messages_out_rx
@@ -159,7 +161,9 @@ async fn message_loop<M: Messenger>(
         select! {
             _  = &mut timeout => {
                 requests_sender.unbounded_send(PeerRequest::KeepAlive).expect("send failed");
-                timeout = Delay::new(Duration::from_millis(KEEP_ALIVE_INTERVAL)).fuse();
+                // UNWRAP: we will only ever get here if there already was a timeout
+                let interval = keep_alive_interval.unwrap();
+                timeout = Either::Left(Delay::new(interval)).fuse();
             }
 
             message = events_receiver.next().fuse() => {

@@ -4,10 +4,7 @@ use crate::{
         handlers::WsStateMeta,
         SignalingState,
     },
-    topologies::{
-        common_logic::{parse_request, spawn_sender_task},
-        SignalingTopology,
-    },
+    topologies::{common_logic::parse_request, SignalingTopology},
     Callback, SignalingCallbacks, SignalingServerBuilder,
 };
 use async_trait::async_trait;
@@ -64,47 +61,32 @@ impl SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerSta
 impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServer {
     async fn state_machine(upgrade: WsStateMeta<ClientServerCallbacks, ClientServerState>) {
         let WsStateMeta {
-            ws,
+            peer_id,
+            sender,
+            mut receiver,
             mut state,
             callbacks,
         } = upgrade;
 
-        let (ws_sender, mut ws_receiver) = ws.split();
-        let sender = spawn_sender_task(ws_sender);
-
-        // Generate a UUID for the user
-        let peer_uuid = uuid::Uuid::new_v4().into();
-
-        // Send ID to peer
-        let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
-        let event = Message::Text(event_text.clone());
-        if let Err(e) = try_send(&sender, event) {
-            error!("error sending to {peer_uuid:?}: {e:?}");
-            return;
-        } else {
-            info!("{peer_uuid:?} -> {event_text}");
-        };
-
-        // TODO: Make some real way to validate hosts, authentication?
-        // Currently, the first person to connect becomes host.
+        // The first person to connect becomes host.
         if state.get_host().is_none() {
             // Set host
-            state.set_host(peer_uuid, sender.clone());
+            state.set_host(peer_id, sender.clone());
             // Lifecycle event: On Host Connected
-            callbacks.on_host_connected.emit(peer_uuid);
+            callbacks.on_host_connected.emit(peer_id);
         } else {
             // Alert server of new user
-            let event = Message::Text(JsonPeerEvent::NewPeer(peer_uuid).to_string());
+            let event = Message::Text(JsonPeerEvent::NewPeer(peer_id).to_string());
             // Tell host about this new client
             match state.try_send_to_host(event) {
                 Ok(_) => {
                     // Add peer to state
-                    state.add_client(peer_uuid, sender.clone());
+                    state.add_client(peer_id, sender.clone());
                     // Lifecycle event: On Client Connected
-                    callbacks.on_client_connected.emit(peer_uuid);
+                    callbacks.on_client_connected.emit(peer_id);
                 }
                 Err(e) => {
-                    error!("error sending peer {peer_uuid:?} to host: {e:?}");
+                    error!("error sending peer {peer_id:?} to host: {e:?}");
                     return;
                 }
             }
@@ -113,21 +95,21 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
         // Check whether this connection is host
         let is_host = {
             let host = state.get_host();
-            host.is_some() && host.unwrap() == peer_uuid
+            host.is_some() && host.unwrap() == peer_id
         };
 
         // The state machine for the data channel established for this websocket.
-        while let Some(request) = ws_receiver.next().await {
+        while let Some(request) = receiver.next().await {
             let request = match parse_request(request) {
                 Ok(request) => request,
                 Err(e) => {
                     match e {
                         ClientRequestError::Axum(_) => {
                             // Most likely a ConnectionReset or similar.
-                            warn!("Unrecoverable error with {peer_uuid:?}: {e:?}");
+                            warn!("Unrecoverable error with {peer_id:?}: {e:?}");
                         }
                         ClientRequestError::Close => {
-                            info!("Connection closed by {peer_uuid:?}");
+                            info!("Connection closed by {peer_id:?}");
                         }
                         ClientRequestError::Json(_) | ClientRequestError::UnsupportedType(_) => {
                             error!("Error with request: {:?}", e);
@@ -137,11 +119,11 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                     if is_host {
                         state.reset();
                         // Lifecycle event: On Host Disonnected
-                        callbacks.on_host_disconnected.emit(peer_uuid);
+                        callbacks.on_host_disconnected.emit(peer_id);
                     } else {
-                        state.remove_client(&peer_uuid);
+                        state.remove_client(&peer_id);
                         // Lifecycle event: On Client Disonnected
-                        callbacks.on_client_disconnected.emit(peer_uuid);
+                        callbacks.on_client_disconnected.emit(peer_id);
                     }
                     return;
                 }
@@ -151,7 +133,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                 PeerRequest::Signal { receiver, data } => {
                     let event = Message::Text(
                         JsonPeerEvent::Signal {
-                            sender: peer_uuid,
+                            sender: peer_id,
                             data,
                         }
                         .to_string(),
@@ -176,11 +158,11 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
         if is_host {
             state.reset();
             // Lifecycle event: On Host Disonnected
-            callbacks.on_host_disconnected.emit(peer_uuid);
+            callbacks.on_host_disconnected.emit(peer_id);
         } else {
-            state.remove_client(&peer_uuid);
+            state.remove_client(&peer_id);
             // Lifecycle event: On Client Disonnected
-            callbacks.on_client_disconnected.emit(peer_uuid);
+            callbacks.on_client_disconnected.emit(peer_id);
         }
     }
 }

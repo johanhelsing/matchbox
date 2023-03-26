@@ -170,7 +170,7 @@ mod tests {
                 let success = success.clone();
                 move |_| {
                     success.store(true, std::sync::atomic::Ordering::Release);
-                    true
+                    Ok(true)
                 }
             })
             .build();
@@ -193,7 +193,7 @@ mod tests {
                 let upgrade_called = upgrade_called.clone();
                 move |_| {
                     upgrade_called.store(true, std::sync::atomic::Ordering::Release);
-                    false // <-- Deny access!
+                    Ok(false) // <-- Deny access!
                 }
             })
             .on_host_connected({

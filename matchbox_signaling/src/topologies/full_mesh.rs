@@ -47,51 +47,38 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
     /// One of these handlers is spawned for every web socket.
     async fn state_machine(upgrade: WsStateMeta<FullMeshCallbacks, FullMeshState>) {
         let WsStateMeta {
-            ws,
+            peer_id,
+            sender,
+            mut receiver,
             mut state,
             callbacks,
         } = upgrade;
-
-        let (ws_sender, mut ws_receiver) = ws.split();
-        let sender = spawn_sender_task(ws_sender);
-
-        let peer_uuid = uuid::Uuid::new_v4().into();
-
-        // Send ID to peer
-        let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
-        let event = Message::Text(event_text.clone());
-        if let Err(e) = try_send(&sender, event) {
-            error!("error sending to {peer_uuid:?}: {e:?}");
-        } else {
-            info!("{peer_uuid:?} -> {event_text:?}");
-        };
-
         // Add peer to state
-        state.add_peer(peer_uuid, sender.clone());
+        state.add_peer(peer_id, sender.clone());
         // Lifecycle event: On Connected
-        callbacks.on_peer_connected.emit(peer_uuid);
+        callbacks.on_peer_connected.emit(peer_id);
 
         // The state machine for the data channel established for this websocket.
-        while let Some(request) = ws_receiver.next().await {
+        while let Some(request) = receiver.next().await {
             let request = match parse_request(request) {
                 Ok(request) => request,
                 Err(e) => {
                     match e {
                         ClientRequestError::Axum(_) => {
                             // Most likely a ConnectionReset or similar.
-                            warn!("Unrecoverable error with {peer_uuid:?}: {e:?}");
+                            warn!("Unrecoverable error with {peer_id:?}: {e:?}");
                         }
                         ClientRequestError::Close => {
-                            info!("Connection closed by {peer_uuid:?}");
+                            info!("Connection closed by {peer_id:?}");
                         }
                         ClientRequestError::Json(_) | ClientRequestError::UnsupportedType(_) => {
                             error!("Error with request: {e:?}");
                             continue; // Recoverable error
                         }
                     };
-                    state.remove_peer(&peer_uuid);
+                    state.remove_peer(&peer_id);
                     // Lifecycle event: On Disonnected
-                    callbacks.on_peer_disconnected.emit(peer_uuid);
+                    callbacks.on_peer_disconnected.emit(peer_id);
                     return;
                 }
             };
@@ -100,7 +87,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                 PeerRequest::Signal { receiver, data } => {
                     let event = Message::Text(
                         JsonPeerEvent::Signal {
-                            sender: peer_uuid,
+                            sender: peer_id,
                             data,
                         }
                         .to_string(),
@@ -117,9 +104,9 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
         }
 
         // Peer disconnected or otherwise ended communication.
-        state.remove_peer(&peer_uuid);
+        state.remove_peer(&peer_id);
         // Lifecycle event: On Disconnected
-        callbacks.on_peer_disconnected.emit(peer_uuid);
+        callbacks.on_peer_disconnected.emit(peer_id);
     }
 }
 

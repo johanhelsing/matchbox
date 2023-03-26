@@ -33,6 +33,7 @@ clap = { version = "4.0", features = ["derive", "env"] }
 thiserror = "1.0"
 tokio-stream = "0.1"
 async-trait = { version = "0.1" }
+base64 = "0.21"
 
 [dev-dependencies]
 tokio-tungstenite = "0.18.0"

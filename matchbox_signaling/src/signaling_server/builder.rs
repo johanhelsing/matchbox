@@ -1,4 +1,5 @@
 use crate::{
+    authentication::decode,
     signaling_server::{
         callbacks::{Callback, SharedCallbacks},
         handlers::{ws_handler, WsUpgradeMeta},
@@ -7,7 +8,12 @@ use crate::{
     topologies::{SignalingStateMachine, SignalingTopology},
     SignalingCallbacks, SignalingServer, SignalingState,
 };
-use axum::{routing::get, Extension, Router};
+use axum::{
+    response::{IntoResponse, Response},
+    routing::get,
+    Extension, Router,
+};
+use hyper::{header::AUTHORIZATION, StatusCode};
 use std::{marker::PhantomData, net::SocketAddr};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -66,23 +72,53 @@ where
         }
     }
 
-    /// Modify the router with a mutable closure. This is where one may apply middleware or other
-    /// layers to the Router.
-    pub fn middleware(mut self, mut alter: impl FnMut(&mut Router)) -> Self {
-        alter(&mut self.router);
+    pub fn basic_auth(mut self, username: String, password: Option<String>) -> Self {
+        let prev_callback = self.shared_callbacks.on_upgrade.cb.clone();
+        self.shared_callbacks.on_upgrade = Callback::from(move |extract: WsUpgradeMeta| {
+            let authorization = extract
+                .headers
+                .get(AUTHORIZATION)
+                .ok_or(
+                    (StatusCode::BAD_REQUEST, "`Authorization` header is missing").into_response(),
+                )?
+                .to_str()
+                .map_err(|_| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        "`Authorization` header contains invalid characters",
+                    )
+                        .into_response()
+                })?;
+
+            let (decoded_username, decoded_password) = {
+                let split = authorization.split_once(' ');
+                match split {
+                    Some((name, contents)) if name == "Basic" => decode(contents)?,
+                    _ => Err((
+                        StatusCode::BAD_REQUEST,
+                        "`Authorization` header must be for basic authentication",
+                    )
+                        .into_response())?,
+                }
+            };
+
+            let authenticated = (&username, &password) == (&decoded_username, &decoded_password);
+            Ok(authenticated && prev_callback(extract.clone())?)
+        });
         self
     }
 
-    /// Change the topology.
-    pub fn topology(mut self, topology: Topology) -> Self {
-        self.topology = topology;
+    /// Modify the router with a mutable closure. This is where one may apply middleware or other
+    /// layers to the Router.
+    pub fn mutate_router(mut self, mut alter: impl FnMut(&mut Router)) -> Self {
+        alter(&mut self.router);
         self
     }
 
     /// Set a callback triggered before websocket upgrade to determine if the connection is allowed.
     pub fn on_upgrade<F>(mut self, callback: F) -> Self
     where
-        F: Fn(WsUpgradeMeta) -> bool + 'static,
+        F: Fn(WsUpgradeMeta) -> Result<bool, Response> + 'static,
     {
         self.shared_callbacks.on_upgrade = Callback::from(callback);
         self

@@ -213,11 +213,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn on_upgrade_callback() {
+    async fn on_cxn_req_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .on_upgrade({
+            .on_connection_request({
                 let success = success.clone();
                 move |_| {
                     success.store(true, std::sync::atomic::Ordering::Release);
@@ -235,12 +235,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deny_on_upgrade_callback() {
+    async fn deny_on_cxn_req_callback() {
         let upgrade_called = Arc::new(AtomicBool::new(false));
         let peer_connected = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .on_upgrade({
+            .on_connection_request({
                 let upgrade_called = upgrade_called.clone();
                 move |_| {
                     upgrade_called.store(true, std::sync::atomic::Ordering::Release);
@@ -261,6 +261,27 @@ mod tests {
 
         wait_for_success(upgrade_called).await;
         assert!(!peer_connected.load(std::sync::atomic::Ordering::Acquire))
+    }
+
+    #[tokio::test]
+    async fn on_id_assignment_callback() {
+        let success = Arc::new(AtomicBool::new(false));
+
+        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .on_id_assignment({
+                let success = success.clone();
+                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+            })
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        // Connect
+        tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+            .await
+            .expect("handshake");
+
+        wait_for_success(success).await
     }
 
     #[tokio::test]

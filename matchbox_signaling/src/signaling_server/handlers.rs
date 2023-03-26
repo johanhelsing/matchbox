@@ -67,35 +67,40 @@ where
     };
 
     // Lifecycle event: On Upgrade
-    let allow_connection = shared_callbacks.on_upgrade.emit(extract);
+    let allow_connection = shared_callbacks.on_connection_request.emit(extract);
 
     // Finalize the upgrade process by returning upgrade callback to client
     match allow_connection {
-        Ok(true) => ws.on_upgrade(move |ws| {
-            let (ws_sink, receiver) = ws.split();
-            let sender = spawn_sender_task(ws_sink);
-
-            // Generate a UUID for the user
+        Ok(true) => {
+            // Generate an ID for the peer
             let peer_id = uuid::Uuid::new_v4().into();
 
-            // Send ID to peer
-            let event_text = JsonPeerEvent::IdAssigned(peer_id).to_string();
-            let event = Message::Text(event_text.clone());
-            if let Err(e) = try_send(&sender, event) {
-                error!("error sending to {peer_id:?}: {e:?}");
-            } else {
-                info!("{peer_id:?} -> {event_text}");
-            };
+            // Lifecycle event: On ID Assignment
+            shared_callbacks.on_id_assignment.emit(peer_id);
 
-            let meta = WsStateMeta {
-                peer_id,
-                sender,
-                receiver,
-                callbacks,
-                state,
-            };
-            (*state_machine.0)(meta)
-        }),
+            ws.on_upgrade(move |ws| {
+                let (ws_sink, receiver) = ws.split();
+                let sender = spawn_sender_task(ws_sink);
+
+                // Send ID to peer
+                let event_text = JsonPeerEvent::IdAssigned(peer_id).to_string();
+                let event = Message::Text(event_text.clone());
+                if let Err(e) = try_send(&sender, event) {
+                    error!("error sending to {peer_id:?}: {e:?}");
+                } else {
+                    info!("{peer_id:?} -> {event_text}");
+                };
+
+                let meta = WsStateMeta {
+                    peer_id,
+                    sender,
+                    receiver,
+                    callbacks,
+                    state,
+                };
+                (*state_machine.0)(meta)
+            })
+        }
         Ok(false) => (StatusCode::UNAUTHORIZED).into_response(),
         Err(resp) => resp,
     }

@@ -7,7 +7,7 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
     setup_logging();
 
     let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 3536))
-        .on_upgrade(|cxn| {
+        .on_connection_request(|cxn| {
             info!("Connecting: {cxn:?}");
             Ok(true) // Allow all connections
         })

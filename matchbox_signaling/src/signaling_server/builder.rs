@@ -14,6 +14,7 @@ use axum::{
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
 use hyper::StatusCode;
+use matchbox_protocol::PeerId;
 use std::{marker::PhantomData, net::SocketAddr};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -81,42 +82,43 @@ where
         key: Option<impl Into<String>>,
         password: impl Into<String>,
     ) -> Self {
-        let prev_callback = self.shared_callbacks.on_upgrade.cb.clone();
+        let prev_callback = self.shared_callbacks.on_connection_request.cb.clone();
         let (key, password) = (
             key.map(|p| p.into()).unwrap_or("token".to_string()),
             password.into(),
         );
-        self.shared_callbacks.on_upgrade = Callback::from(move |extract: WsUpgradeMeta| {
-            let raw_token = extract
-                .query_params
-                .get(&key)
-                .ok_or(
+        self.shared_callbacks.on_connection_request =
+            Callback::from(move |extract: WsUpgradeMeta| {
+                let raw_token = extract
+                    .query_params
+                    .get(&key)
+                    .ok_or(
+                        (
+                            StatusCode::BAD_REQUEST,
+                            format!("`{key}` query arg is missing"),
+                        )
+                            .into_response(),
+                    )?
+                    .as_str();
+
+                let decoded = STANDARD.decode(raw_token).map_err(|_| {
                     (
                         StatusCode::BAD_REQUEST,
-                        format!("`{key}` query arg is missing"),
+                        format!("`{key}` query value is not valid base64"),
                     )
-                        .into_response(),
-                )?
-                .as_str();
+                        .into_response()
+                })?;
+                let decoded = String::from_utf8(decoded).map_err(|_| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        format!("`{key}` query value contains invalid characters"),
+                    )
+                        .into_response()
+                })?;
 
-            let decoded = STANDARD.decode(raw_token).map_err(|_| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    format!("`{key}` query value is not valid base64"),
-                )
-                    .into_response()
-            })?;
-            let decoded = String::from_utf8(decoded).map_err(|_| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    format!("`{key}` query value contains invalid characters"),
-                )
-                    .into_response()
-            })?;
-
-            let authenticated = password == decoded;
-            Ok(authenticated && prev_callback(extract.clone())?)
-        });
+                let authenticated = password == decoded;
+                Ok(authenticated && prev_callback(extract.clone())?)
+            });
         self
     }
 
@@ -128,11 +130,21 @@ where
     }
 
     /// Set a callback triggered before websocket upgrade to determine if the connection is allowed.
-    pub fn on_upgrade<F>(mut self, callback: F) -> Self
+    pub fn on_connection_request<F>(mut self, callback: F) -> Self
     where
         F: Fn(WsUpgradeMeta) -> Result<bool, Response> + 'static,
     {
-        self.shared_callbacks.on_upgrade = Callback::from(callback);
+        self.shared_callbacks.on_connection_request = Callback::from(callback);
+        self
+    }
+
+    /// Set a callback triggered when a peer has been assigned an ID. This happens after a
+    /// connection is allowed, right before finalizing the websocket upgrade.
+    pub fn on_id_assignment<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(PeerId) + 'static,
+    {
+        self.shared_callbacks.on_id_assignment = Callback::from(callback);
         self
     }
 

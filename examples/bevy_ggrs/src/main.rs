@@ -1,7 +1,7 @@
-use bevy::{log::LogPlugin, prelude::*, tasks::IoTaskPool};
+use bevy::{log::LogPlugin, prelude::*};
 use bevy_ggrs::{GGRSPlugin, Session};
+use bevy_matchbox::prelude::*;
 use ggrs::SessionBuilder;
-use matchbox_socket::{PeerState, SingleChannel, WebRtcSocket};
 
 mod args;
 mod box_game;
@@ -19,9 +19,6 @@ enum AppState {
 }
 
 const SKY_COLOR: Color = Color::rgb(0.69, 0.69, 0.69);
-
-#[derive(Debug, Resource, Deref, DerefMut)]
-struct SocketResource(WebRtcSocket<SingleChannel>);
 
 fn main() {
     // read query string or command line arguments
@@ -91,14 +88,8 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {:?}", room_url);
-    let (socket, message_loop) = WebRtcSocket::new_ggrs(room_url);
 
-    // The message loop needs to be awaited, or nothing will happen.
-    // We do this here using bevy's task system.
-    let task_pool = IoTaskPool::get();
-    task_pool.spawn(message_loop).detach();
-
-    commands.insert_resource(SocketResource(socket));
+    commands.open_socket(WebRtcSocketBuilder::new(room_url).add_channel(ChannelConfig::ggrs()));
 }
 
 // Marker components for UI
@@ -155,7 +146,7 @@ fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
 fn lobby_system(
     mut app_state: ResMut<State<AppState>>,
     args: Res<Args>,
-    mut socket: ResMut<SocketResource>,
+    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {

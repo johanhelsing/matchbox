@@ -50,17 +50,17 @@ pub(crate) async fn ws_handler<Cb, S>(
     Extension(callbacks): Extension<Cb>,
     State(state): State<S>,
     Extension(state_machine): Extension<SignalingStateMachine<Cb, S>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    ConnectInfo(origin): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse
 where
     Cb: SignalingCallbacks,
     S: SignalingState,
 {
-    info!("`{addr}` connected.");
+    info!("`{origin}` connected.");
 
     let path = path.map(|path| path.0);
     let extract = WsUpgradeMeta {
-        origin: addr,
+        origin,
         path,
         query_params,
         headers,

@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use base64::{engine::general_purpose::STANDARD, Engine};
     use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
     use futures_timer::Delay;
     use matchbox_protocol::{JsonPeerEvent, PeerId};
@@ -55,6 +56,46 @@ mod tests {
         tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
             .await
             .expect("handshake");
+    }
+
+    #[tokio::test]
+    async fn ws_connect_auth() {
+        let auth_key = "test";
+        let auth_password = "123";
+        let auth_password_b64 = STANDARD.encode(auth_password);
+
+        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .token_auth(Some(auth_key), auth_password)
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        let resp = tokio_tungstenite::connect_async(format!(
+            "ws://{addr}/room_a?{auth_key}={auth_password_b64}"
+        ))
+        .await;
+
+        assert!(resp.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ws_connect_invalid_auth() {
+        let auth_key = "test";
+        let auth_password = "123";
+        let auth_invalid_password_b64 = STANDARD.encode("321");
+
+        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .token_auth(Some(auth_key), auth_password)
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        let resp = tokio_tungstenite::connect_async(format!(
+            "ws://{addr}/room_a?{auth_key}={auth_invalid_password_b64}"
+        ))
+        .await;
+
+        assert!(resp.is_err());
     }
 
     #[tokio::test]

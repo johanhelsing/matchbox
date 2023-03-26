@@ -1,6 +1,5 @@
-use axum::response::{IntoResponse, Response};
-
 use crate::{signaling_server::handlers::WsUpgradeMeta, SignalingCallbacks};
+use axum::response::Response;
 use std::{fmt, rc::Rc};
 
 /// Universal callback wrapper.

@@ -5,7 +5,7 @@ use crate::{
         SignalingState,
     },
     topologies::{
-        common_logic::{parse_request, spawn_sender_task, StateObj},
+        common_logic::{parse_request, StateObj},
         SignalingTopology,
     },
     Callback, SignalingCallbacks, SignalingServerBuilder,
@@ -127,7 +127,7 @@ unsafe impl Sync for FullMeshCallbacks {}
 /// Signaling server state for full mesh topologies
 #[derive(Default, Debug, Clone)]
 pub struct FullMeshState {
-    pub peers: StateObj<HashMap<PeerId, SignalingChannel>>,
+    pub(crate) peers: StateObj<HashMap<PeerId, SignalingChannel>>,
 }
 impl SignalingState for FullMeshState {}
 

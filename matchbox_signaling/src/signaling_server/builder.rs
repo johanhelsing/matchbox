@@ -1,5 +1,4 @@
 use crate::{
-    authentication::decode,
     signaling_server::{
         callbacks::{Callback, SharedCallbacks},
         handlers::{ws_handler, WsUpgradeMeta},
@@ -13,7 +12,8 @@ use axum::{
     routing::get,
     Extension, Router,
 };
-use hyper::{header::AUTHORIZATION, StatusCode};
+use base64::{engine::general_purpose::STANDARD, Engine};
+use hyper::StatusCode;
 use std::{marker::PhantomData, net::SocketAddr};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -72,37 +72,49 @@ where
         }
     }
 
-    pub fn basic_auth(mut self, username: String, password: Option<String>) -> Self {
+    /// Require peers to provide a `token` query parameter matching the given password in base64 to
+    /// connect. For example, using `.token_auth("123")` would require users to connect to the
+    /// websocket url: `ws://...?token=MTIz`. This is unfortunately a hack, since Tungstenite and
+    /// other websocket client APIs do not allow header-based authentication for websockets yet.
+    pub fn token_auth(
+        mut self,
+        key: Option<impl Into<String>>,
+        password: impl Into<String>,
+    ) -> Self {
         let prev_callback = self.shared_callbacks.on_upgrade.cb.clone();
+        let (key, password) = (
+            key.map(|p| p.into()).unwrap_or("token".to_string()),
+            password.into(),
+        );
         self.shared_callbacks.on_upgrade = Callback::from(move |extract: WsUpgradeMeta| {
-            let authorization = extract
-                .headers
-                .get(AUTHORIZATION)
+            let raw_token = extract
+                .query_params
+                .get(&key)
                 .ok_or(
-                    (StatusCode::BAD_REQUEST, "`Authorization` header is missing").into_response(),
-                )?
-                .to_str()
-                .map_err(|_| {
                     (
                         StatusCode::BAD_REQUEST,
-                        "`Authorization` header contains invalid characters",
+                        format!("`{key}` query arg is missing"),
                     )
-                        .into_response()
-                })?;
+                        .into_response(),
+                )?
+                .as_str();
 
-            let (decoded_username, decoded_password) = {
-                let split = authorization.split_once(' ');
-                match split {
-                    Some((name, contents)) if name == "Basic" => decode(contents)?,
-                    _ => Err((
-                        StatusCode::BAD_REQUEST,
-                        "`Authorization` header must be for basic authentication",
-                    )
-                        .into_response())?,
-                }
-            };
+            let decoded = STANDARD.decode(raw_token).map_err(|_| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("`{key}` query value is not valid base64"),
+                )
+                    .into_response()
+            })?;
+            let decoded = String::from_utf8(decoded).map_err(|_| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("`{key}` query value contains invalid characters"),
+                )
+                    .into_response()
+            })?;
 
-            let authenticated = (&username, &password) == (&decoded_username, &decoded_password);
+            let authenticated = password == decoded;
             Ok(authenticated && prev_callback(extract.clone())?)
         });
         self

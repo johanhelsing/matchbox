@@ -7,6 +7,10 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
     setup_logging();
 
     let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 3536))
+        .on_upgrade(|cxn| {
+            info!("Connecting: {cxn:?}");
+            true // Allow all connections
+        })
         .on_peer_connected(|id| info!("Joined: {id:?}"))
         .on_peer_disconnected(|id| info!("Left: {id:?}"))
         .cors()

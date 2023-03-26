@@ -8,16 +8,19 @@ use axum::{
     response::IntoResponse,
     Extension,
 };
+use hyper::StatusCode;
 use std::{collections::HashMap, net::SocketAddr};
 use tracing::info;
 
+/// Metastate used during by a signaling server's runtime
 pub struct WsStateMeta<Cb, S> {
     pub ws: WebSocket,
     pub callbacks: Cb,
     pub state: S,
 }
 
-/// Metadata generated at the time of websocket upgrade
+/// Metadata captured at the time of websocket upgrade
+#[derive(Debug)]
 pub struct WsUpgradeMeta {
     pub origin: SocketAddr,
     pub path: Option<String>,
@@ -51,16 +54,20 @@ where
         query_params,
     };
 
-    // Lifecycle event: On Connection
-    shared_callbacks.on_connect.emit(extract);
+    // Lifecycle event: On Upgrade
+    let allow_cxn = shared_callbacks.on_upgrade.emit(extract);
 
     // Finalize the upgrade process by returning upgrade callback to client
-    ws.on_upgrade(move |ws| {
-        let meta = WsStateMeta {
-            ws,
-            callbacks,
-            state,
-        };
-        (*state_machine.0)(meta)
-    })
+    if allow_cxn {
+        ws.on_upgrade(move |ws| {
+            let meta = WsStateMeta {
+                ws,
+                callbacks,
+                state,
+            };
+            (*state_machine.0)(meta)
+        })
+    } else {
+        (StatusCode::UNAUTHORIZED).into_response()
+    }
 }

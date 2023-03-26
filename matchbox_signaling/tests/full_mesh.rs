@@ -175,9 +175,12 @@ mod tests {
         let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .on_connection({
+            .on_upgrade({
                 let success = success.clone();
-                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+                move |_| {
+                    success.store(true, std::sync::atomic::Ordering::Release);
+                    true
+                }
             })
             .build();
         let addr = server.local_addr();

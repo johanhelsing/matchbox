@@ -7,6 +7,10 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
     setup_logging();
 
     let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 3536))
+        .on_upgrade(|cxn| {
+            info!("Connecting: {cxn:?}");
+            true // Allow all connections
+        })
         .on_host_connected(|id| info!("Host joined: {id:?}"))
         .on_host_disconnected(|id| info!("Host left: {id:?}"))
         .on_client_connected(|id| info!("Client joined: {id:?}"))

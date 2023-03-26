@@ -79,12 +79,12 @@ where
         self
     }
 
-    /// Set a callback triggered immediately on socket connection
-    pub fn on_connection<F>(mut self, callback: F) -> Self
+    /// Set a callback triggered before websocket upgrade to determine if the connection is allowed.
+    pub fn on_upgrade<F>(mut self, callback: F) -> Self
     where
-        F: Fn(WsUpgradeMeta) + 'static,
+        F: Fn(WsUpgradeMeta) -> bool + 'static,
     {
-        self.shared_callbacks.on_connect = Callback::from(callback);
+        self.shared_callbacks.on_upgrade = Callback::from(callback);
         self
     }
 

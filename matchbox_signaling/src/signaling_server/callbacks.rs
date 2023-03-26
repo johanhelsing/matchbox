@@ -51,11 +51,20 @@ impl<In> Default for Callback<In> {
 }
 
 /// Signaling callbacks for all topologies
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct SharedCallbacks {
-    /// Triggered immediately on connect
-    pub(crate) on_connect: Callback<WsUpgradeMeta>,
+    /// Triggered before websocket upgrade to determine if the connection is allowed.
+    pub(crate) on_upgrade: Callback<WsUpgradeMeta, bool>,
 }
+
+impl Default for SharedCallbacks {
+    fn default() -> Self {
+        Self {
+            on_upgrade: Callback::from(|_| true), // Allow all connections
+        }
+    }
+}
+
 impl SignalingCallbacks for SharedCallbacks {}
 #[allow(unsafe_code)]
 unsafe impl Send for SharedCallbacks {}

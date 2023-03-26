@@ -10,15 +10,21 @@ Painless peer-to-peer WebRTC networking for rust's native and wasm applications.
 The goal of the Matchbox project is to enable udp-like, unordered, unreliable
 p2p connections in web browsers or native to facilitate low-latency multiplayer games.
 
+|            | Ordered | Unordered |
+| ---------- | ------- | --------- |
+| Reliable   | &check; | &check;   |
+| Unreliable | &check; | &check;   |
+
 - [Introductory blog post](https://johanhelsing.studio/posts/introducing-matchbox)
 - [Tutorial for usage with Bevy and GGRS](https://johanhelsing.studio/posts/extreme-bevy)
 
 The Matchbox project contains:
 
-- A socket abstraction, [matchbox_socket](https://github.com/johanhelsing/matchbox/tree/main/matchbox_socket)
-  - With a feature, `ggrs` for providing a [ggrs](https://github.com/gschup/ggrs) compatible socket.
-- A tiny signaling server, [matchbox_server](https://github.com/johanhelsing/matchbox/tree/main/matchbox_server). Written in rust, uses only a couple of megabytes of memory. Also available as a docker image. Compatible with all demos.
-- A signaling server API, [matchbox_signaling](https://github.com/johanhelsing/matchbox/tree/main/matchbox_signaling). For DIY signaling servers and hookable callbacks, this may be useful if you plan a complicated matchmaking procedure.
+- [matchbox_socket](https://github.com/johanhelsing/matchbox/tree/main/matchbox_socket): A socket abstraction for Wasm or Native, with:
+  - `ggrs-socket`: A feature providing a [ggrs](https://github.com/gschup/ggrs) compatible socket.
+- [bevy_matchbox](https://github.com/johanhelsing/matchbox/tree/main/bevy_matchbox): A `matchbox_socket` integration for the [Bevy](https://bevyengine.org/) game engine
+- [matchbox_signaling](https://github.com/johanhelsing/matchbox/tree/main/matchbox_signaling): A signaling server library, with ready to use examples
+- [matchbox_server](https://github.com/johanhelsing/matchbox/tree/main/matchbox_server): A ready to use full-mesh signalling server
 
 ## Examples
 

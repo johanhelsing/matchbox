@@ -171,7 +171,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ws_connect_callback() {
+    async fn on_upgrade_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
@@ -193,7 +193,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ws_on_connect_callback() {
+    async fn deny_on_upgrade_callback() {
+        let upgrade_called = Arc::new(AtomicBool::new(false));
+        let peer_connected = Arc::new(AtomicBool::new(false));
+
+        let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .on_upgrade({
+                let upgrade_called = upgrade_called.clone();
+                move |_| {
+                    upgrade_called.store(true, std::sync::atomic::Ordering::Release);
+                    false // <-- Deny access!
+                }
+            })
+            .on_peer_connected({
+                // This should not get called because we deny all connections on upgrade
+                let peer_connected = peer_connected.clone();
+                move |_| peer_connected.store(true, std::sync::atomic::Ordering::Release)
+            })
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        // Connect
+        _ = tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr)).await;
+
+        wait_for_success(upgrade_called).await;
+        assert!(!peer_connected.load(std::sync::atomic::Ordering::Acquire))
+    }
+
+    #[tokio::test]
+    async fn on_connect_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))
@@ -214,7 +243,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ws_on_disconnect_callback() {
+    async fn on_disconnect_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::full_mesh_builder((Ipv4Addr::UNSPECIFIED, 0))

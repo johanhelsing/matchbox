@@ -76,7 +76,7 @@ where
             let peer_id = uuid::Uuid::new_v4().into();
 
             // Lifecycle event: On ID Assignment
-            shared_callbacks.on_id_assignment.emit(peer_id);
+            shared_callbacks.on_id_assignment.emit((origin, peer_id));
 
             ws.on_upgrade(move |ws| {
                 let (ws_sink, receiver) = ws.split();

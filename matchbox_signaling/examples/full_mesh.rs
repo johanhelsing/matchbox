@@ -11,6 +11,7 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
             info!("Connecting: {cxn:?}");
             Ok(true) // Allow all connections
         })
+        .on_id_assignment(|(socket, id)| info!("{socket} received {id:?}"))
         .on_peer_connected(|id| info!("Joined: {id:?}"))
         .on_peer_disconnected(|id| info!("Left: {id:?}"))
         .cors()

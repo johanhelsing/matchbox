@@ -138,11 +138,11 @@ where
         self
     }
 
-    /// Set a callback triggered when a peer has been assigned an ID. This happens after a
+    /// Set a callback triggered when a socket has been assigned an ID. This happens after a
     /// connection is allowed, right before finalizing the websocket upgrade.
     pub fn on_id_assignment<F>(mut self, callback: F) -> Self
     where
-        F: Fn(PeerId) + 'static,
+        F: Fn((SocketAddr, PeerId)) + 'static,
     {
         self.shared_callbacks.on_id_assignment = Callback::from(callback);
         self

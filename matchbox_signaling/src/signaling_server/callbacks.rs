@@ -1,7 +1,7 @@
 use crate::{signaling_server::handlers::WsUpgradeMeta, SignalingCallbacks};
 use axum::response::Response;
 use matchbox_protocol::PeerId;
-use std::{fmt, rc::Rc};
+use std::{fmt, net::SocketAddr, rc::Rc};
 
 /// Universal callback wrapper.
 ///
@@ -58,8 +58,8 @@ pub struct SharedCallbacks {
     /// Triggered before websocket upgrade to determine if the connection is allowed.
     pub(crate) on_connection_request: Callback<WsUpgradeMeta, Result<bool, Response>>,
 
-    /// Triggered on ID assignment for a peer.
-    pub(crate) on_id_assignment: Callback<PeerId>,
+    /// Triggered on ID assignment for a socket.
+    pub(crate) on_id_assignment: Callback<(SocketAddr, PeerId)>,
 }
 
 impl Default for SharedCallbacks {

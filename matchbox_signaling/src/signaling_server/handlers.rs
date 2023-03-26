@@ -67,10 +67,10 @@ where
     };
 
     // Lifecycle event: On Upgrade
-    let allow_cxn = shared_callbacks.on_upgrade.emit(extract);
+    let allow_connection = shared_callbacks.on_upgrade.emit(extract);
 
     // Finalize the upgrade process by returning upgrade callback to client
-    match allow_cxn {
+    match allow_connection {
         Ok(true) => ws.on_upgrade(move |ws| {
             let (ws_sink, receiver) = ws.split();
             let sender = spawn_sender_task(ws_sink);

@@ -65,13 +65,9 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
     async fn state_machine(upgrade: WsStateMeta<ClientServerCallbacks, ClientServerState>) {
         let WsStateMeta {
             ws,
-            upgrade_meta,
-            shared_callbacks,
             mut state,
             callbacks,
         } = upgrade;
-        // Lifecycle event: On Connection
-        shared_callbacks.on_connect.emit(upgrade_meta);
 
         let (ws_sender, mut ws_receiver) = ws.split();
         let sender = spawn_sender_task(ws_sender);

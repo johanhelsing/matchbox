@@ -13,8 +13,6 @@ use tracing::info;
 
 pub struct WsStateMeta<Cb, S> {
     pub ws: WebSocket,
-    pub upgrade_meta: WsUpgradeMeta,
-    pub shared_callbacks: SharedCallbacks,
     pub callbacks: Cb,
     pub state: S,
 }
@@ -53,15 +51,16 @@ where
         query_params,
     };
 
+    // Lifecycle event: On Connection
+    shared_callbacks.on_connect.emit(extract);
+
     // Finalize the upgrade process by returning upgrade callback to client
     ws.on_upgrade(move |ws| {
-        let upgrade = WsStateMeta {
+        let meta = WsStateMeta {
             ws,
-            upgrade_meta: extract,
-            shared_callbacks,
             callbacks,
             state,
         };
-        (*state_machine.0)(upgrade)
+        (*state_machine.0)(meta)
     })
 }

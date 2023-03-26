@@ -1,12 +1,20 @@
 [package]
 name = "matchbox_protocol"
 version = "0.1.0"
-authors = ["Johan Helsing <johanhelsing@gmail.com>", "Spencer C. Imbleau <spencer@imbleau.com>"]
+authors = [
+  "Johan Helsing <johanhelsing@gmail.com>",
+  "Spencer C. Imbleau <spencer@imbleau.com>",
+]
 description = "Common interfaces between matchbox_socket and matchbox_server"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
-categories = ["network-programming", "game-development", "wasm", "web-programming"]
+categories = [
+  "network-programming",
+  "game-development",
+  "wasm",
+  "web-programming",
+]
 repository = "https://github.com/johanhelsing/matchbox"
 homepage = "https://github.com/johanhelsing/matchbox"
 readme = "../README.md"

@@ -1,0 +1,33 @@
+on:
+  push:
+  pull_request:
+
+name: Lint TOML
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.2.1
+
+      - name: Install Taplo
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: taplo-cli --locked
+
+      - name: Lint
+        run: |
+          taplo check --default-schema-catalogs
+          taplo fmt --check

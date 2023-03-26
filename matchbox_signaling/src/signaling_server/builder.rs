@@ -1,5 +1,9 @@
 use crate::{
-    signaling_server::{callbacks::Callback, handlers::ws_handler, NoOpCallouts, NoState},
+    signaling_server::{
+        callbacks::{Callback, SharedCallbacks},
+        handlers::{ws_handler, WsUpgradeMeta},
+        NoOpCallouts, NoState,
+    },
     topologies::{
         client_server::{ClientServer, ClientServerCallbacks, ClientServerState},
         full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
@@ -8,7 +12,7 @@ use crate::{
     SignalingCallbacks, SignalingServer, SignalingState,
 };
 use axum::{routing::get, Extension, Router};
-use matchbox_protocol::{JsonPeerRequest, PeerId};
+use matchbox_protocol::PeerId;
 use std::{marker::PhantomData, net::SocketAddr};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -16,8 +20,6 @@ use tower_http::{
     LatencyUnit,
 };
 use tracing::Level;
-
-use super::callbacks::SharedCallbacks;
 
 /// Builder for [`SignalingServer`]s.
 ///
@@ -36,7 +38,7 @@ where
     pub(crate) router: Router,
 
     /// Shared callouts used by all signaling servers
-    pub(crate) base_callbacks: SharedCallbacks,
+    pub(crate) shared_callbacks: SharedCallbacks,
 
     /// The callbacks used by the signaling server
     pub(crate) callbacks: Cb,
@@ -62,7 +64,7 @@ where
                 .route("/", get(ws_handler::<Cb, S>))
                 .route("/:path", get(ws_handler::<Cb, S>))
                 .with_state(state),
-            base_callbacks: SharedCallbacks::default(),
+            shared_callbacks: SharedCallbacks::default(),
             callbacks: Cb::default(),
             topology,
             state: PhantomData,
@@ -79,6 +81,15 @@ where
     /// Change the topology.
     pub fn topology(mut self, topology: Topology) -> Self {
         self.topology = topology;
+        self
+    }
+
+    /// Set a callback triggered immediately on socket connection
+    pub fn on_connection<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(WsUpgradeMeta) + 'static,
+    {
+        self.shared_callbacks.on_connect = Callback::from(callback);
         self
     }
 
@@ -117,6 +128,7 @@ where
         self.router = self
             .router
             .layer(Extension(state_machine))
+            .layer(Extension(self.shared_callbacks))
             .layer(Extension(self.callbacks))
             .layer(Extension(self.state));
         let server = axum::Server::bind(&self.socket_addr).serve(

@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
+    use futures::{pin_mut, FutureExt, StreamExt};
     use futures_timer::Delay;
-    use matchbox_protocol::{JsonPeerEvent, PeerRequest};
+    use matchbox_protocol::JsonPeerEvent;
     use matchbox_signaling::SignalingServer;
     use std::{
         net::Ipv4Addr,
@@ -61,6 +61,25 @@ mod tests {
         let id_assigned_event = recv_peer_event(&mut host).await;
 
         assert!(matches!(id_assigned_event, JsonPeerEvent::IdAssigned(..)));
+    }
+
+    #[tokio::test]
+    async fn ws_connect_callback() {
+        let success = Arc::new(AtomicBool::new(false));
+
+        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
+            .on_connection({
+                let success = success.clone();
+                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+            })
+            .build();
+        let addr = server.local_addr();
+        tokio::spawn(server.serve());
+
+        // Connect
+        _ = tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr)).await;
+
+        wait_for_success(success).await
     }
 
     #[tokio::test]

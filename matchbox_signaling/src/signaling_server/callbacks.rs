@@ -1,8 +1,5 @@
+use crate::{signaling_server::handlers::WsUpgradeMeta, SignalingCallbacks};
 use std::{fmt, rc::Rc};
-
-use crate::SignalingCallbacks;
-
-use super::handlers::WsUpgradeMeta;
 
 /// Universal callback wrapper.
 ///

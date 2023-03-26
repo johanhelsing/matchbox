@@ -27,9 +27,12 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
         let WsStateMeta {
             ws,
             upgrade_meta,
+            shared_callbacks,
             mut state,
             callbacks,
         } = upgrade;
+        // Lifecycle event: On Connection
+        shared_callbacks.on_connect.emit(upgrade_meta);
 
         let (ws_sender, mut ws_receiver) = ws.split();
         let sender = spawn_sender_task(ws_sender);
@@ -150,8 +153,6 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
 /// Signaling callbacks for client/server topologies
 #[derive(Default, Debug, Clone)]
 pub struct ClientServerCallbacks {
-    /// Triggered on peer requests to the signalling server
-    pub(crate) on_signal: Callback<JsonPeerRequest>,
     /// Triggered on a new client connection to the signalling server
     pub(crate) on_client_connected: Callback<PeerId>,
     /// Triggered on a client disconnection to the signalling server

@@ -28,9 +28,12 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
         let WsStateMeta {
             ws,
             upgrade_meta,
+            shared_callbacks,
             mut state,
             callbacks,
         } = upgrade;
+        // Lifecycle event: On Connection
+        shared_callbacks.on_connect.emit(upgrade_meta);
 
         let (ws_sender, mut ws_receiver) = ws.split();
         let sender = spawn_sender_task(ws_sender);
@@ -106,8 +109,6 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
 /// Signaling callbacks for full mesh topologies
 #[derive(Default, Debug, Clone)]
 pub struct FullMeshCallbacks {
-    /// Triggered on peer requests to the signalling server
-    pub(crate) on_signal: Callback<JsonPeerRequest>,
     /// Triggered on a new connection to the signalling server
     pub(crate) on_peer_connected: Callback<PeerId>,
     /// Triggered on a disconnection to the signalling server

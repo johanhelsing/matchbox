@@ -3,6 +3,7 @@ mod tests {
     use base64::{engine::general_purpose::STANDARD, Engine};
     use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
     use futures_timer::Delay;
+    use hyper::Uri;
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signaling::SignalingServer;
     use std::{
@@ -11,7 +12,13 @@ mod tests {
         sync::{atomic::AtomicBool, Arc},
     };
     use tokio::{net::TcpStream, select, time::Duration};
-    use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
+    use tokio_tungstenite::{
+        tungstenite::{
+            handshake::client::{generate_key, Request},
+            Message,
+        },
+        MaybeTlsStream, WebSocketStream,
+    };
 
     async fn wait_for_success(success: Arc<AtomicBool>) {
         // Give adaquete time for the callback to trigger
@@ -60,40 +67,70 @@ mod tests {
 
     #[tokio::test]
     async fn ws_connect_auth() {
-        let auth_key = "test";
-        let auth_password = "123";
-        let auth_password_b64 = STANDARD.encode(auth_password);
+        let username = "test";
+        let password = "123";
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .token_auth(Some(auth_key), auth_password)
+            .basic_auth(username, Some(password))
             .build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
 
-        let resp = tokio_tungstenite::connect_async(format!(
-            "ws://{addr}/room_a?{auth_key}={auth_password_b64}"
-        ))
-        .await;
+        let auth = STANDARD.encode(format!("{username}:{password}"));
+        let uri = format!("ws://{addr}/room_a").parse::<Uri>().unwrap();
+        let authority = uri.authority().unwrap().as_str();
+        let host = authority
+            .find('@')
+            .map(|idx| authority.split_at(idx + 1).1)
+            .unwrap_or_else(|| authority);
+        let request = Request::builder()
+            .uri(format!("ws://{addr}/room_a"))
+            .method("GET")
+            .header("Host", host)
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", generate_key())
+            .header("Authorization", format!("Basic {auth}"))
+            .body(())
+            .unwrap();
 
-        assert!(resp.is_ok());
+        tokio_tungstenite::connect_async(request)
+            .await
+            .expect("handshake");
     }
 
     #[tokio::test]
     async fn ws_connect_invalid_auth() {
-        let auth_key = "test";
-        let auth_password = "123";
-        let auth_invalid_password_b64 = STANDARD.encode("321");
+        let username = "test";
+        let password = "123";
+        let invalid_password = "321";
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
-            .token_auth(Some(auth_key), auth_password)
+            .basic_auth(username, Some(password))
             .build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
 
-        let resp = tokio_tungstenite::connect_async(format!(
-            "ws://{addr}/room_a?{auth_key}={auth_invalid_password_b64}"
-        ))
-        .await;
+        let auth = STANDARD.encode(format!("{username}:{invalid_password}"));
+        let uri = format!("ws://{addr}/room_a").parse::<Uri>().unwrap();
+        let authority = uri.authority().unwrap().as_str();
+        let host = authority
+            .find('@')
+            .map(|idx| authority.split_at(idx + 1).1)
+            .unwrap_or_else(|| authority);
+        let request = Request::builder()
+            .uri(format!("ws://{addr}/room_a"))
+            .method("GET")
+            .header("Host", host)
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", generate_key())
+            .header("Authorization", format!("Basic {auth}"))
+            .body(())
+            .unwrap();
+        let resp = tokio_tungstenite::connect_async(request).await;
 
         assert!(resp.is_err());
     }

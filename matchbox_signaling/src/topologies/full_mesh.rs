@@ -4,22 +4,43 @@ use crate::{
         handlers::WsStateMeta,
         SignalingState,
     },
-    topologies::{parse_request, spawn_sender_task, SignalingTopology},
-    Callback, SignalingCallbacks,
+    topologies::{
+        common_logic::{parse_request, spawn_sender_task, StateObj},
+        SignalingTopology,
+    },
+    Callback, SignalingCallbacks, SignalingServerBuilder,
 };
 use async_trait::async_trait;
 use axum::extract::ws::Message;
 use futures::StreamExt;
-use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
-use tokio::sync::mpsc::UnboundedSender;
+use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
+use std::collections::HashMap;
 use tracing::{error, info, warn};
+
+use super::common_logic::{try_send, SignalingChannel};
 
 #[derive(Debug, Default)]
 pub struct FullMesh;
+
+impl SignalingServerBuilder<FullMesh, FullMeshCallbacks, FullMeshState> {
+    /// Set a callback triggered on all websocket connections.
+    pub fn on_peer_connected<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(PeerId) + 'static,
+    {
+        self.callbacks.on_peer_connected = Callback::from(callback);
+        self
+    }
+
+    /// Set a callback triggered on all websocket disconnections.
+    pub fn on_peer_disconnected<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(PeerId) + 'static,
+    {
+        self.callbacks.on_peer_disconnected = Callback::from(callback);
+        self
+    }
+}
 
 #[async_trait]
 impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
@@ -43,7 +64,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
         // Send ID to peer
         let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
         let event = Message::Text(event_text.clone());
-        if let Err(e) = state.try_send(&sender, event) {
+        if let Err(e) = try_send(&sender, event) {
             error!("error sending to {peer_uuid:?}: {e:?}");
         } else {
             info!("{peer_uuid:?} -> {event_text:?}");
@@ -123,17 +144,13 @@ unsafe impl Sync for FullMeshCallbacks {}
 /// Signaling server state for full mesh topologies
 #[derive(Default, Debug, Clone)]
 pub struct FullMeshState {
-    pub peers: Arc<Mutex<HashMap<PeerId, UnboundedSender<Result<Message, axum::Error>>>>>,
+    pub peers: StateObj<HashMap<PeerId, SignalingChannel>>,
 }
 impl SignalingState for FullMeshState {}
 
 impl FullMeshState {
     /// Add a peer, returning peers that already existed
-    pub fn add_peer(
-        &mut self,
-        peer: PeerId,
-        sender: UnboundedSender<Result<Message, axum::Error>>,
-    ) {
+    pub fn add_peer(&mut self, peer: PeerId, sender: SignalingChannel) {
         // Alert all peers of new user
         let event = Message::Text(JsonPeerEvent::NewPeer(peer).to_string());
         let peers = { self.peers.try_lock().unwrap().clone() };
@@ -167,15 +184,6 @@ impl FullMeshState {
         }
     }
 
-    /// Send a message to a channel without blocking.
-    pub fn try_send(
-        &self,
-        sender: &UnboundedSender<Result<Message, axum::Error>>,
-        message: Message,
-    ) -> Result<(), SignalingError> {
-        sender.send(Ok(message)).map_err(SignalingError::from)
-    }
-
     /// Send a message to a peer without blocking.
     pub fn try_send_to_peer(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
         self.peers
@@ -183,6 +191,6 @@ impl FullMeshState {
             .unwrap()
             .get(&id)
             .ok_or_else(|| SignalingError::UnknownPeer)
-            .and_then(|sender| self.try_send(sender, message))
+            .and_then(|sender| try_send(sender, message))
     }
 }

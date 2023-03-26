@@ -4,15 +4,10 @@ use crate::{
         handlers::{ws_handler, WsUpgradeMeta},
         NoOpCallouts, NoState,
     },
-    topologies::{
-        client_server::{ClientServer, ClientServerCallbacks, ClientServerState},
-        full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
-        SignalingStateMachine, SignalingTopology,
-    },
+    topologies::{SignalingStateMachine, SignalingTopology},
     SignalingCallbacks, SignalingServer, SignalingState,
 };
 use axum::{routing::get, Extension, Router};
-use matchbox_protocol::PeerId;
 use std::{marker::PhantomData, net::SocketAddr};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -140,63 +135,5 @@ where
             server,
             socket_addr,
         }
-    }
-}
-
-impl SignalingServerBuilder<FullMesh, FullMeshCallbacks, FullMeshState> {
-    /// Set a callback triggered on all websocket connections.
-    pub fn on_peer_connected<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(PeerId) + 'static,
-    {
-        self.callbacks.on_peer_connected = Callback::from(callback);
-        self
-    }
-
-    /// Set a callback triggered on all websocket disconnections.
-    pub fn on_peer_disconnected<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(PeerId) + 'static,
-    {
-        self.callbacks.on_peer_disconnected = Callback::from(callback);
-        self
-    }
-}
-
-impl SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState> {
-    /// Set a callback triggered on all client websocket connections.
-    pub fn on_client_connected<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(PeerId) + 'static,
-    {
-        self.callbacks.on_client_connected = Callback::from(callback);
-        self
-    }
-
-    /// Set a callback triggered on all client websocket disconnections.
-    pub fn on_client_disconnected<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(PeerId) + 'static,
-    {
-        self.callbacks.on_client_disconnected = Callback::from(callback);
-        self
-    }
-
-    /// Set a callback triggered on host websocket connection.
-    pub fn on_host_connected<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(PeerId) + 'static,
-    {
-        self.callbacks.on_host_connected = Callback::from(callback);
-        self
-    }
-
-    /// Set a callback triggered on host websocket disconnection.
-    pub fn on_host_disconnected<F>(mut self, callback: F) -> Self
-    where
-        F: Fn(PeerId) + 'static,
-    {
-        self.callbacks.on_host_disconnected = Callback::from(callback);
-        self
     }
 }

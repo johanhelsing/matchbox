@@ -10,7 +10,7 @@ use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
-use std::{collections::HashMap, marker::PhantomData, pin::Pin};
+use std::{collections::HashMap, marker::PhantomData, pin::Pin, time::Duration};
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
@@ -75,7 +75,7 @@ impl Default for RtcIceServerConfig {
 
 /// Tags types which are used to indicate the number of [`WebRtcChannel`]s or
 /// [`ChannelConfig`]s in a [`WebRtcSocket`] or [`WebRtcSocketBuilder`] respectively.
-pub trait ChannelPlurality {}
+pub trait ChannelPlurality: Send + Sync {}
 
 /// Tags types which are used to indicate a quantity of [`ChannelConfig`]s which can be
 /// used to build a [`WebRtcSocket`].
@@ -118,6 +118,8 @@ pub(crate) struct SocketConfig {
     pub(crate) channels: Vec<ChannelConfig>,
     /// The amount of attempts to initiate connection
     pub(crate) attempts: Option<u16>,
+    /// Interval at which to send empty requests to the signaling server
+    pub(crate) keep_alive_interval: Option<Duration>,
 }
 
 /// Builder for [`WebRtcSocket`]s.
@@ -144,6 +146,7 @@ impl WebRtcSocketBuilder {
                 ice_server: RtcIceServerConfig::default(),
                 channels: Vec::default(),
                 attempts: Some(3),
+                keep_alive_interval: Some(Duration::from_secs(10)),
             },
             channel_plurality: PhantomData::default(),
         }
@@ -157,8 +160,23 @@ impl WebRtcSocketBuilder {
 
     /// Sets the number of attempts to make at reconnecting to the signaling server,
     /// if `None` the socket will attempt to connect indefinitely.
+    ///
+    /// The default is 2 reconnection attempts.
     pub fn reconnect_attempts(mut self, attempts: Option<u16>) -> Self {
         self.config.attempts = attempts;
+        self
+    }
+
+    /// Sets the interval at which to send empty requests to the signaling server.
+    ///
+    /// Some web services (like e.g. nginx as a reverse proxy) will close idle
+    /// web sockets. Setting this interval will periodically send empty requests
+    /// to let the signaling server know the client is still connected and
+    /// prevent disconnections.
+    ///
+    /// The defaults is 10 seconds.
+    pub fn signaling_keep_alive_interval(mut self, interval: Option<Duration>) -> Self {
+        self.config.keep_alive_interval = interval;
         self
     }
 }
@@ -531,8 +549,13 @@ async fn run_socket(
         peer_state_tx,
         messages_from_peers_tx,
     };
-    let message_loop_fut =
-        message_loop::<UseMessenger>(id_tx, &config.ice_server, &config.channels, channels);
+    let message_loop_fut = message_loop::<UseMessenger>(
+        id_tx,
+        &config.ice_server,
+        &config.channels,
+        channels,
+        config.keep_alive_interval,
+    );
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());
     let mut signaling_loop_done = Box::pin(signaling_loop_fut.fuse());

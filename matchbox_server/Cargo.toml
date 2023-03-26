@@ -6,7 +6,12 @@ edition = "2021"
 description = "A signaling server for WebRTC peer-to-peer full-mesh networking"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
-categories = ["network-programming", "game-development", "wasm", "web-programming"]
+categories = [
+  "network-programming",
+  "game-development",
+  "wasm",
+  "web-programming",
+]
 repository = "https://github.com/johanhelsing/matchbox"
 homepage = "https://github.com/johanhelsing/matchbox"
 readme = "../README.md"

@@ -220,8 +220,8 @@ async fn handle_ws(
                 }
             }
             PeerRequest::KeepAlive => {
-                // Do nothing. KeepAlive packets are used to protect against users' browsers
-                // disconnecting idle websocket connections.
+                // Do nothing. KeepAlive packets are used to protect against idle websocket
+                // connections getting automatically disconnected, common for reverse proxies.
             }
         }
     }

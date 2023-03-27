@@ -2,7 +2,7 @@ use crate::{
     signaling_server::{
         error::{ClientRequestError, SignalingError},
         handlers::WsStateMeta,
-        Authentication, SignalingState,
+        SignalingState,
     },
     topologies::{
         common_logic::{parse_request, try_send, SignalingChannel, StateObj},
@@ -20,10 +20,7 @@ use tracing::{error, info, warn};
 #[derive(Debug, Default)]
 pub struct ClientServer;
 
-impl<A> SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState, A>
-where
-    A: Authentication,
-{
+impl SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState> {
     /// Set a callback triggered on all client websocket connections.
     pub fn on_client_connected<F>(mut self, callback: F) -> Self
     where

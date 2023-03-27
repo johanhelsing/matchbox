@@ -1,5 +1,5 @@
 use crate::{
-    signaling_server::{auth::AuthKey, callbacks::SharedCallbacks, Authentication, SignalingState},
+    signaling_server::{callbacks::SharedCallbacks, SignalingState},
     topologies::{
         common_logic::{spawn_sender_task, try_send, SignalingChannel},
         SignalingStateMachine,
@@ -41,14 +41,13 @@ pub struct WsUpgradeMeta {
 /// The handler for the HTTP request to upgrade to WebSockets.
 /// This is the last point where we can extract metadata such as IP address of the client.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn ws_handler<Cb, S, A>(
+pub(crate) async fn ws_handler<Cb, S>(
     ws: WebSocketUpgrade,
     path: Option<Path<String>>,
     headers: HeaderMap,
     Query(query_params): Query<HashMap<String, String>>,
     Extension(shared_callbacks): Extension<SharedCallbacks>,
     Extension(callbacks): Extension<Cb>,
-    Extension(auth_key): Extension<AuthKey>,
     Extension(state): Extension<S>,
     Extension(state_machine): Extension<SignalingStateMachine<Cb, S>>,
     ConnectInfo(origin): ConnectInfo<SocketAddr>,
@@ -56,7 +55,6 @@ pub(crate) async fn ws_handler<Cb, S, A>(
 where
     Cb: SignalingCallbacks,
     S: SignalingState,
-    A: Authentication,
 {
     info!("`{origin}` connected.");
 
@@ -69,14 +67,7 @@ where
     };
 
     // Lifecycle event: On Connection Request
-    match shared_callbacks.on_connection_request.emit(meta.clone()) {
-        Ok(true) => {}
-        Ok(false) => return (StatusCode::UNAUTHORIZED).into_response(),
-        Err(e) => return e,
-    };
-
-    // Check authentication
-    match A::verify(meta, auth_key) {
+    match shared_callbacks.on_connection_request.emit(meta) {
         Ok(true) => {}
         Ok(false) => return (StatusCode::UNAUTHORIZED).into_response(),
         Err(e) => return e,

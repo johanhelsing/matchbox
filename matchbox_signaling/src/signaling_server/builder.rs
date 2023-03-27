@@ -1,17 +1,15 @@
 use crate::{
     signaling_server::{
-        auth::{AuthKey, BasicAuthentication, NoAuthentication},
         callbacks::{Callback, SharedCallbacks},
         handlers::{ws_handler, WsUpgradeMeta},
-        Authentication, NoOpCallouts, NoState,
+        NoOpCallouts, NoState,
     },
     topologies::{SignalingStateMachine, SignalingTopology},
     SignalingCallbacks, SignalingServer, SignalingState,
 };
 use axum::{response::Response, routing::get, Extension, Router};
-use base64::{engine::general_purpose::STANDARD, Engine};
 use matchbox_protocol::PeerId;
-use std::{marker::PhantomData, net::SocketAddr};
+use std::net::SocketAddr;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
@@ -23,12 +21,11 @@ use tracing::Level;
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
 /// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
-pub struct SignalingServerBuilder<Topology, Cb = NoOpCallouts, S = NoState, A = NoAuthentication>
+pub struct SignalingServerBuilder<Topology, Cb = NoOpCallouts, S = NoState>
 where
     Topology: SignalingTopology<Cb, S>,
     Cb: SignalingCallbacks,
     S: SignalingState,
-    A: Authentication,
 {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
@@ -47,20 +44,13 @@ where
 
     /// Arbitrary state accompanying a server
     pub(crate) state: S,
-
-    /// Authentication method used by the server
-    pub(crate) auth: PhantomData<A>,
-
-    /// The expected auth key used by the server
-    pub(crate) auth_key: AuthKey,
 }
 
-impl<Topology, Cb, S, A> SignalingServerBuilder<Topology, Cb, S, A>
+impl<Topology, Cb, S> SignalingServerBuilder<Topology, Cb, S>
 where
     Topology: SignalingTopology<Cb, S>,
     Cb: SignalingCallbacks,
     S: SignalingState,
-    A: Authentication,
 {
     /// Creates a new builder for a [`SignalingServer`].
     pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology, state: S) -> Self {
@@ -71,29 +61,6 @@ where
             callbacks: Cb::default(),
             topology,
             state,
-            auth: PhantomData,
-            auth_key: AuthKey::default(),
-        }
-    }
-
-    /// Require all peers to present basic authentication matching a provided username and password
-    /// to connect.
-    pub fn basic_auth(
-        mut self,
-        username: impl Into<String>,
-        password: impl Into<String>,
-    ) -> SignalingServerBuilder<Topology, Cb, S, BasicAuthentication> {
-        let (username, password) = (username.into(), password.into());
-        self.auth_key = AuthKey(STANDARD.encode(format!("{username}:{password}")));
-        SignalingServerBuilder {
-            socket_addr: self.socket_addr,
-            router: self.router,
-            shared_callbacks: self.shared_callbacks,
-            callbacks: self.callbacks,
-            topology: self.topology,
-            state: self.state,
-            auth: PhantomData,
-            auth_key: self.auth_key,
         }
     }
 
@@ -157,13 +124,12 @@ where
             SignalingStateMachine::from_topology(self.topology);
         self.router = self
             .router
-            .route("/", get(ws_handler::<Cb, S, A>))
-            .route("/:path", get(ws_handler::<Cb, S, A>))
+            .route("/", get(ws_handler::<Cb, S>))
+            .route("/:path", get(ws_handler::<Cb, S>))
             .layer(Extension(state_machine))
             .layer(Extension(self.shared_callbacks))
             .layer(Extension(self.callbacks))
-            .layer(Extension(self.state))
-            .layer(Extension(self.auth_key));
+            .layer(Extension(self.state));
         let server = axum::Server::bind(&self.socket_addr).serve(
             self.router
                 .into_make_service_with_connect_info::<SocketAddr>(),

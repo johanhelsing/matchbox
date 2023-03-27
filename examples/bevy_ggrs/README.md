@@ -1,6 +1,6 @@
 # Bevy + GGRS
 
-Shows how to use `matchbox_socket` with `bevy` and `ggrs`, to create a simple working browser "game" (if moving cubes around on a plane can be called a game).
+Shows how to use `matchbox_socket` with `bevy` and `ggrs` using `bevy_matchbox` and `bevy_ggrs`, to create a simple working browser "game" (if moving cubes around on a plane can be called a game).
 
 ## Live Demo
 

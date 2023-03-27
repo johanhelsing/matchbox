@@ -1,4 +1,4 @@
-# Signalling server as a docker image
+# Signaling server as a docker image
 #
 # to build, run `docker build -f matchbox_server/Dockerfile` from root of the
 # repository

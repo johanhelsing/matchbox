@@ -30,11 +30,6 @@ pub(crate) struct RequestedRoom {
     next: Option<usize>,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-pub(crate) struct QueryParam {
-    next: Option<usize>,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct Peer {
     pub uuid: PeerId,
@@ -225,8 +220,8 @@ async fn handle_ws(
                 }
             }
             PeerRequest::KeepAlive => {
-                // Do nothing. KeepAlive packets are used to protect against users' browsers
-                // disconnecting idle websocket connections.
+                // Do nothing. KeepAlive packets are used to protect against idle websocket
+                // connections getting automatically disconnected, common for reverse proxies.
             }
         }
     }

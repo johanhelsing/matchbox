@@ -54,6 +54,7 @@ jobs:
             --all-targets
             --target wasm32-unknown-unknown
             -p matchbox_socket
+            -p bevy_matchbox
             -p bevy_ggrs_example
             -p simple_example
 

@@ -250,7 +250,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn on_cxn_req_callback() {
+    async fn on_connection_req_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
@@ -272,7 +272,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deny_on_cxn_req_callback() {
+    async fn deny_on_connection_req_callback() {
         let upgrade_called = Arc::new(AtomicBool::new(false));
         let peer_connected = Arc::new(AtomicBool::new(false));
 

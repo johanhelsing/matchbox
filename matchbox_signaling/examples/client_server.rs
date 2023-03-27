@@ -7,8 +7,8 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
     setup_logging();
 
     let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 3536))
-        .on_connection_request(|cxn| {
-            info!("Connecting: {cxn:?}");
+        .on_connection_request(|connection| {
+            info!("Connecting: {connection:?}");
             Ok(true) // Allow all connections
         })
         .on_id_assignment(|(socket, id)| info!("{socket} received {id:?}"))

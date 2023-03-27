@@ -1,5 +1,5 @@
 use crate::signaling_server::{handlers::WsUpgradeMeta, Authentication};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use hyper::{header::AUTHORIZATION, StatusCode};
 
 #[derive(Default, Debug, Clone)]
@@ -8,7 +8,7 @@ pub struct AuthKey(pub String);
 /// No authentication is used, all connections are granted.
 pub struct NoAuthentication;
 impl Authentication for NoAuthentication {
-    fn verify(_meta: WsUpgradeMeta, _auth_key: AuthKey) -> Result<bool, axum::response::Response> {
+    fn verify(_meta: WsUpgradeMeta, _auth_key: AuthKey) -> Result<bool, Response> {
         Ok(true)
     }
 }
@@ -17,7 +17,7 @@ impl Authentication for NoAuthentication {
 /// header on connect.
 pub struct BasicAuthentication;
 impl Authentication for BasicAuthentication {
-    fn verify(meta: WsUpgradeMeta, auth_key: AuthKey) -> Result<bool, axum::response::Response> {
+    fn verify(meta: WsUpgradeMeta, auth_key: AuthKey) -> Result<bool, Response> {
         let authorization = meta
             .headers
             .get(AUTHORIZATION)

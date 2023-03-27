@@ -26,6 +26,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
+          args: --all-targets
 
   check-wasm:
     name: Check wasm
@@ -49,7 +50,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --target wasm32-unknown-unknown -p matchbox_socket -p bevy_ggrs_example -p simple_example
+          args: >
+            --all-targets
+            --target wasm32-unknown-unknown
+            -p matchbox_socket
+            -p bevy_ggrs_example
+            -p simple_example
 
   test:
     name: Test Suite

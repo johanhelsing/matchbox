@@ -3,7 +3,7 @@ mod messages;
 mod signal_peer;
 mod socket;
 
-use self::error::{MessagingError, SignallingError};
+use self::error::{MessagingError, SignalingError};
 use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
@@ -25,14 +25,14 @@ cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm;
         type UseMessenger = wasm::WasmMessenger;
-        type UseSignaller = wasm::WasmSignaller;
+        type UseSignaler = wasm::WasmSignaler;
         /// A future which runs the message loop for the socket and completes
         /// when the socket closes or disconnects
         pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
     } else {
         mod native;
         type UseMessenger = native::NativeMessenger;
-        type UseSignaller = native::NativeSignaller;
+        type UseSignaler = native::NativeSignaler;
         /// A future which runs the message loop for the socket and completes
         /// when the socket closes or disconnects
         pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
@@ -41,44 +41,44 @@ cfg_if! {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-trait Signaller: Sized {
+trait Signaler: Sized {
     async fn new(
         mut attempts: Option<u16>,
         room_url: &str,
         authentication: Option<&String>,
-    ) -> Result<Self, SignallingError>;
+    ) -> Result<Self, SignalingError>;
 
-    async fn send(&mut self, request: String) -> Result<(), SignallingError>;
+    async fn send(&mut self, request: String) -> Result<(), SignalingError>;
 
-    async fn next_message(&mut self) -> Result<String, SignallingError>;
+    async fn next_message(&mut self) -> Result<String, SignalingError>;
 }
 
-async fn signalling_loop<S: Signaller>(
+async fn signaling_loop<S: Signaler>(
     attempts: Option<u16>,
     room_url: String,
     authentication: Option<String>,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
-) -> Result<(), SignallingError> {
-    let mut signaller = S::new(attempts, &room_url, authentication.as_ref()).await?;
+) -> Result<(), SignalingError> {
+    let mut signaler = S::new(attempts, &room_url, authentication.as_ref()).await?;
 
     loop {
         select! {
             request = requests_receiver.next().fuse() => {
                 let request = serde_json::to_string(&request).expect("serializing request");
                 debug!("-> {request}");
-                signaller.send(request).await.map_err(SignallingError::from)?;
+                signaler.send(request).await.map_err(SignalingError::from)?;
             }
 
-            message = signaller.next_message().fuse() => {
+            message = signaler.next_message().fuse() => {
                 match message {
                     Ok(message) => {
                         debug!("Received {message}");
                         let event: PeerEvent = serde_json::from_str(&message)
                             .unwrap_or_else(|err| panic!("couldn't parse peer event: {err}.\nEvent: {message}"));
-                        events_sender.unbounded_send(event).map_err(SignallingError::from)?;
+                        events_sender.unbounded_send(event).map_err(SignalingError::from)?;
                     }
-                    Err(SignallingError::UnknownFormat) => warn!("ignoring unexpected non-text message from signalling server"),
+                    Err(SignalingError::UnknownFormat) => warn!("ignoring unexpected non-text message from signaling server"),
                     Err(err) => break Err(err)
                 }
 

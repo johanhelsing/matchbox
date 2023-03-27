@@ -5,9 +5,9 @@ use super::{
     HandshakeResult, PeerDataSender,
 };
 use crate::webrtc_socket::{
-    error::SignallingError, messages::PeerSignal, signal_peer::SignalPeer,
+    error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
     socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, RtcIceServerConfig,
-    Signaller,
+    Signaler,
 };
 use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
@@ -26,12 +26,12 @@ use web_sys::{
 };
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 
-pub(crate) struct WasmSignaller {
+pub(crate) struct WasmSignaler {
     websocket_stream: futures::stream::Fuse<WsStream>,
 }
 
 #[async_trait(?Send)]
-impl Signaller for WasmSignaller {
+impl Signaler for WasmSignaler {
     async fn new(
         mut attempts: Option<u16>,
         room_url: &str,
@@ -46,19 +46,19 @@ impl Signaller for WasmSignaller {
             // Connect
             match WsMeta::connect(room_url, None)
                 .await
-                .map_err(SignallingError::from)
+                .map_err(SignalingError::from)
             {
                 Ok((_, wss)) => break wss.fuse(),
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {
                         if *attempts <= 1 {
-                            return Err(SignallingError::ConnectionFailed(Box::new(e)));
+                            return Err(SignalingError::ConnectionFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
-                            warn!("connection to signalling server failed, {attempts} attempt(s) remain");
+                            warn!("connection to signaling server failed, {attempts} attempt(s) remain");
                         }
                     } else {
-                        continue 'signalling;
+                        continue 'signaling;
                     }
                 }
             };
@@ -66,18 +66,18 @@ impl Signaller for WasmSignaller {
         Ok(Self { websocket_stream })
     }
 
-    async fn send(&mut self, request: String) -> Result<(), SignallingError> {
+    async fn send(&mut self, request: String) -> Result<(), SignalingError> {
         self.websocket_stream
             .send(WsMessage::Text(request))
             .await
-            .map_err(SignallingError::from)
+            .map_err(SignalingError::from)
     }
 
-    async fn next_message(&mut self) -> Result<String, SignallingError> {
+    async fn next_message(&mut self) -> Result<String, SignalingError> {
         match self.websocket_stream.next().await {
             Some(WsMessage::Text(message)) => Ok(message),
-            Some(_) => Err(SignallingError::UnknownFormat),
-            None => Err(SignallingError::StreamExhausted),
+            Some(_) => Err(SignalingError::UnknownFormat),
+            None => Err(SignalingError::StreamExhausted),
         }
     }
 }

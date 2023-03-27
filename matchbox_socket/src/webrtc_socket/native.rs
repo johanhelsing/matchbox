@@ -1,11 +1,11 @@
 use super::{error::MessagingError, HandshakeResult, PeerDataSender};
 use crate::{
     webrtc_socket::{
-        error::SignallingError,
+        error::SignalingError,
         messages::PeerSignal,
         signal_peer::SignalPeer,
         socket::{create_data_channels_ready_fut, new_senders_and_receivers},
-        ChannelConfig, Messenger, Packet, Signaller,
+        ChannelConfig, Messenger, Packet, Signaler,
     },
     RtcIceServerConfig,
 };
@@ -44,18 +44,18 @@ use webrtc::{
     },
 };
 
-pub(crate) struct NativeSignaller {
+pub(crate) struct NativeSignaler {
     websocket_stream: WebSocketStream<ConnectStream>,
 }
 
 #[async_trait]
-impl Signaller for NativeSignaller {
+impl Signaler for NativeSignaler {
     async fn new(
         mut attempts: Option<u16>,
         room_url: &str,
         authentication: Option<&String>,
-    ) -> Result<Self, SignallingError> {
-        let websocket_stream = 'signalling: loop {
+    ) -> Result<Self, SignalingError> {
+        let websocket_stream = 'signaling: loop {
             // Setup connection request
             let uri = room_url.parse::<Uri>().expect("invalid room url");
             let authority = uri.authority().expect("no authority in url").as_str();
@@ -77,18 +77,18 @@ impl Signaller for NativeSignaller {
             let request = request.body(()).expect("invalid configuration");
 
             // Connect
-            match connect_async(request).await.map_err(SignallingError::from) {
+            match connect_async(request).await.map_err(SignalingError::from) {
                 Ok((wss, _)) => break wss,
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {
                         if *attempts <= 1 {
-                            return Err(SignallingError::ConnectionFailed(Box::new(e)));
+                            return Err(SignalingError::ConnectionFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
-                            warn!("connection to signalling server failed, {attempts} attempt(s) remain");
+                            warn!("connection to signaling server failed, {attempts} attempt(s) remain");
                         }
                     } else {
-                        continue 'signalling;
+                        continue 'signaling;
                     }
                 }
             };
@@ -96,19 +96,19 @@ impl Signaller for NativeSignaller {
         Ok(Self { websocket_stream })
     }
 
-    async fn send(&mut self, request: String) -> Result<(), SignallingError> {
+    async fn send(&mut self, request: String) -> Result<(), SignalingError> {
         self.websocket_stream
             .send(Message::Text(request))
             .await
-            .map_err(SignallingError::from)
+            .map_err(SignalingError::from)
     }
 
-    async fn next_message(&mut self) -> Result<String, SignallingError> {
+    async fn next_message(&mut self) -> Result<String, SignalingError> {
         match self.websocket_stream.next().await {
             Some(Ok(Message::Text(message))) => Ok(message),
-            Some(Ok(_)) => Err(SignallingError::UnknownFormat),
-            Some(Err(err)) => Err(SignallingError::from(err)),
-            None => Err(SignallingError::StreamExhausted),
+            Some(Ok(_)) => Err(SignalingError::UnknownFormat),
+            Some(Err(err)) => Err(SignalingError::from(err)),
+            None => Err(SignalingError::StreamExhausted),
         }
     }
 }
@@ -322,7 +322,7 @@ impl Messenger for NativeMessenger {
                     _ = peer_disconnected.next() => break,
 
                     _ = message_loop_futs.next() => break,
-                    // TODO: this means that the signalling is down, should return an
+                    // TODO: this means that the signaling is down, should return an
                     // error
                     _ = trickle_fut => continue,
                 }
@@ -352,7 +352,7 @@ async fn complete_handshake(
             _ = wait_for_channels => {
                 break;
             },
-            // TODO: this means that the signalling is down, should return an
+            // TODO: this means that the signaling is down, should return an
             // error
             _ = trickle_fut => continue,
         };

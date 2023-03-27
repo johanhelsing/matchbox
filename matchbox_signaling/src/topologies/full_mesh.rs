@@ -5,7 +5,7 @@ use crate::{
         SignalingState,
     },
     topologies::{
-        common_logic::{parse_request, StateObj},
+        common_logic::{parse_request, try_send, SignalingChannel, StateObj},
         SignalingTopology,
     },
     Callback, SignalingCallbacks, SignalingServerBuilder,
@@ -16,8 +16,6 @@ use futures::StreamExt;
 use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
-
-use super::common_logic::{try_send, SignalingChannel};
 
 #[derive(Debug, Default)]
 pub struct FullMesh;

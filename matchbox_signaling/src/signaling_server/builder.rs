@@ -1,19 +1,15 @@
 use crate::{
     signaling_server::{
+        auth::{AuthKey, BasicAuthentication, NoAuthentication},
         callbacks::{Callback, SharedCallbacks},
         handlers::{ws_handler, WsUpgradeMeta},
-        NoOpCallouts, NoState,
+        Authentication, NoOpCallouts, NoState,
     },
     topologies::{SignalingStateMachine, SignalingTopology},
     SignalingCallbacks, SignalingServer, SignalingState,
 };
-use axum::{
-    response::{IntoResponse, Response},
-    routing::get,
-    Extension, Router,
-};
+use axum::{response::Response, routing::get, Extension, Router};
 use base64::{engine::general_purpose::STANDARD, Engine};
-use hyper::{header::AUTHORIZATION, StatusCode};
 use matchbox_protocol::PeerId;
 use std::{marker::PhantomData, net::SocketAddr};
 use tower_http::{
@@ -27,11 +23,12 @@ use tracing::Level;
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
 /// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
-pub struct SignalingServerBuilder<Topology, Cb = NoOpCallouts, S = NoState>
+pub struct SignalingServerBuilder<Topology, Cb = NoOpCallouts, S = NoState, A = NoAuthentication>
 where
     Topology: SignalingTopology<Cb, S>,
     Cb: SignalingCallbacks,
     S: SignalingState,
+    A: Authentication,
 {
     /// The socket address to broadcast on
     pub(crate) socket_addr: SocketAddr,
@@ -49,97 +46,55 @@ where
     pub(crate) topology: Topology,
 
     /// Arbitrary state accompanying a server
-    pub(crate) state: PhantomData<S>,
+    pub(crate) state: S,
+
+    /// Authentication method used by the server
+    pub(crate) auth: PhantomData<A>,
+
+    /// The expected auth key used by the server
+    pub(crate) auth_key: AuthKey,
 }
 
-impl<Topology, Cb, S> SignalingServerBuilder<Topology, Cb, S>
+impl<Topology, Cb, S, A> SignalingServerBuilder<Topology, Cb, S, A>
 where
     Topology: SignalingTopology<Cb, S>,
     Cb: SignalingCallbacks,
     S: SignalingState,
+    A: Authentication,
 {
     /// Creates a new builder for a [`SignalingServer`].
     pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology, state: S) -> Self {
         Self {
             socket_addr: socket_addr.into(),
-            router: Router::new()
-                .route("/", get(ws_handler::<Cb, S>))
-                .route("/:path", get(ws_handler::<Cb, S>))
-                .with_state(state),
+            router: Router::new(),
             shared_callbacks: SharedCallbacks::default(),
             callbacks: Cb::default(),
             topology,
-            state: PhantomData,
+            state,
+            auth: PhantomData,
+            auth_key: AuthKey::default(),
         }
     }
 
-    /// Require all peers to provide basic authentication that matches a given username and
-    /// password. This must come AFTER any calls to
-    /// [`SignalingServerBuilder::on_connection_request`] for the time being!
-    pub fn basic_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
-        // TODO: Make authentication a generic on the builder, or make the callback separated from
-        // on_connection_request, since this has the potential for ordering problems
-        let prev_callback = self.shared_callbacks.on_connection_request.cb.clone();
+    /// Require all peers to present basic authentication matching a provided username and password
+    /// to connect.
+    pub fn basic_auth(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> SignalingServerBuilder<Topology, Cb, S, BasicAuthentication> {
         let (username, password) = (username.into(), password.into());
-        self.shared_callbacks.on_connection_request =
-            Callback::from(move |extract: WsUpgradeMeta| {
-                let authorization = extract
-                    .headers
-                    .get(AUTHORIZATION)
-                    .ok_or(
-                        (StatusCode::BAD_REQUEST, "`Authorization` header is missing")
-                            .into_response(),
-                    )?
-                    .to_str()
-                    .map_err(|_| {
-                        (
-                            StatusCode::BAD_REQUEST,
-                            "`Authorization` header contains invalid characters",
-                        )
-                            .into_response()
-                    })?;
-
-                // Check that its well-formed basic auth then decode
-                let split = authorization.split_once(' ');
-                let (rx_username, rx_password) = match split {
-                    Some((name, contents)) if name == "Basic" => {
-                        let decoded = STANDARD.decode(contents).map_err(|_| {
-                            (
-                                StatusCode::BAD_REQUEST,
-                                "`Authorization` header could not be decoded",
-                            )
-                                .into_response()
-                        })?;
-                        let decoded = String::from_utf8(decoded).map_err(|_| {
-                            (
-                                StatusCode::BAD_REQUEST,
-                                "`Authentication` contains invalid characters",
-                            )
-                                .into_response()
-                        })?;
-
-                        // Return depending on if password is present
-                        if let Some((username, password)) = decoded.split_once(':') {
-                            Ok((username.to_string(), password.to_string()))
-                        } else {
-                            Err((
-                                StatusCode::BAD_REQUEST,
-                                "`Authentication` header must be username:password",
-                            )
-                                .into_response())
-                        }
-                    }
-                    _ => Err((
-                        StatusCode::BAD_REQUEST,
-                        "`Authorization` header must be for basic authentication",
-                    )
-                        .into_response())?,
-                }?;
-
-                let authenticated = (&username, &password) == (&rx_username, &rx_password);
-                Ok(authenticated && prev_callback(extract.clone())?)
-            });
-        self
+        self.auth_key = AuthKey(STANDARD.encode(format!("{username}:{password}")));
+        SignalingServerBuilder {
+            socket_addr: self.socket_addr,
+            router: self.router,
+            shared_callbacks: self.shared_callbacks,
+            callbacks: self.callbacks,
+            topology: self.topology,
+            state: self.state,
+            auth: PhantomData,
+            auth_key: self.auth_key,
+        }
     }
 
     /// Modify the router with a mutable closure. This is where one may apply middleware or other
@@ -202,10 +157,13 @@ where
             SignalingStateMachine::from_topology(self.topology);
         self.router = self
             .router
+            .route("/", get(ws_handler::<Cb, S, A>))
+            .route("/:path", get(ws_handler::<Cb, S, A>))
             .layer(Extension(state_machine))
             .layer(Extension(self.shared_callbacks))
             .layer(Extension(self.callbacks))
-            .layer(Extension(self.state));
+            .layer(Extension(self.state))
+            .layer(Extension(self.auth_key));
         let server = axum::Server::bind(&self.socket_addr).serve(
             self.router
                 .into_make_service_with_connect_info::<SocketAddr>(),

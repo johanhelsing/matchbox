@@ -2,7 +2,7 @@ use super::error::GetChannelError;
 use crate::{
     webrtc_socket::{
         message_loop, signaling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
-        UseMessenger, UseSignaller,
+        UseMessenger, UseSignaler,
     },
     Error,
 };
@@ -552,7 +552,7 @@ async fn run_socket(
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
-    let signaling_loop_fut = signaling_loop::<UseSignaller>(
+    let signaling_loop_fut = signaling_loop::<UseSignaler>(
         config.attempts,
         config.room_url,
         config.authentication,

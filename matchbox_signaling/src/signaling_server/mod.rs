@@ -22,19 +22,11 @@ pub trait Authentication: 'static {
 }
 
 /// No-Op signaling callbacks
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct NoOpCallouts {}
 impl SignalingCallbacks for NoOpCallouts {}
-#[allow(unsafe_code)]
-unsafe impl Send for NoOpCallouts {}
-#[allow(unsafe_code)]
-unsafe impl Sync for NoOpCallouts {}
 
 /// Store no state
 #[derive(Clone)]
 pub struct NoState {}
 impl SignalingState for NoState {}
-#[allow(unsafe_code)]
-unsafe impl Send for NoState {}
-#[allow(unsafe_code)]
-unsafe impl Sync for NoState {}

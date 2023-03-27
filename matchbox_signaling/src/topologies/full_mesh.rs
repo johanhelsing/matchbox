@@ -27,7 +27,7 @@ where
     /// Set a callback triggered on all websocket connections.
     pub fn on_peer_connected<F>(mut self, callback: F) -> Self
     where
-        F: Fn(PeerId) + 'static,
+        F: Fn(PeerId) + Send + Sync + 'static,
     {
         self.callbacks.on_peer_connected = Callback::from(callback);
         self
@@ -36,7 +36,7 @@ where
     /// Set a callback triggered on all websocket disconnections.
     pub fn on_peer_disconnected<F>(mut self, callback: F) -> Self
     where
-        F: Fn(PeerId) + 'static,
+        F: Fn(PeerId) + Send + Sync + 'static,
     {
         self.callbacks.on_peer_disconnected = Callback::from(callback);
         self
@@ -120,10 +120,6 @@ pub struct FullMeshCallbacks {
     pub(crate) on_peer_disconnected: Callback<PeerId>,
 }
 impl SignalingCallbacks for FullMeshCallbacks {}
-#[allow(unsafe_code)]
-unsafe impl Send for FullMeshCallbacks {}
-#[allow(unsafe_code)]
-unsafe impl Sync for FullMeshCallbacks {}
 
 /// Signaling server state for full mesh topologies
 #[derive(Default, Debug, Clone)]

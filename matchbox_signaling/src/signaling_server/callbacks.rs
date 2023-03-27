@@ -1,19 +1,25 @@
-use crate::{signaling_server::handlers::WsUpgradeMeta, SignalingCallbacks};
+use crate::signaling_server::handlers::WsUpgradeMeta;
 use axum::response::Response;
 use matchbox_protocol::PeerId;
-use std::{fmt, net::SocketAddr, rc::Rc};
+use std::{
+    fmt,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 /// Universal callback wrapper.
 ///
-/// An `Rc` wrapper is used to make it cloneable.
+/// An `Arc` wrapper is used to make it cloneable and thread safe.
 pub struct Callback<In, Out = ()> {
     /// A callback which can be called multiple times
-    pub(crate) cb: Rc<dyn Fn(In) -> Out>,
+    pub(crate) cb: Arc<Mutex<dyn Fn(In) -> Out + Send + Sync>>,
 }
 
-impl<In, Out, F: Fn(In) -> Out + 'static> From<F> for Callback<In, Out> {
+impl<In, Out, F: Fn(In) -> Out + Send + Sync + 'static> From<F> for Callback<In, Out> {
     fn from(func: F) -> Self {
-        Callback { cb: Rc::new(func) }
+        Callback {
+            cb: Arc::new(Mutex::new(func)),
+        }
     }
 }
 
@@ -34,7 +40,8 @@ impl<In, Out> fmt::Debug for Callback<In, Out> {
 impl<In, Out> Callback<In, Out> {
     /// This method calls the callback's function.
     pub fn emit(&self, value: In) -> Out {
-        (*self.cb)(value)
+        let lock = self.cb.lock().expect("lock");
+        (*lock)(value)
     }
 }
 
@@ -70,9 +77,3 @@ impl Default for SharedCallbacks {
         }
     }
 }
-
-impl SignalingCallbacks for SharedCallbacks {}
-#[allow(unsafe_code)]
-unsafe impl Send for SharedCallbacks {}
-#[allow(unsafe_code)]
-unsafe impl Sync for SharedCallbacks {}

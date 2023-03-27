@@ -107,7 +107,7 @@ where
     /// Set a callback triggered before websocket upgrade to determine if the connection is allowed.
     pub fn on_connection_request<F>(mut self, callback: F) -> Self
     where
-        F: Fn(WsUpgradeMeta) -> Result<bool, Response> + 'static,
+        F: Fn(WsUpgradeMeta) -> Result<bool, Response> + Send + Sync + 'static,
     {
         self.shared_callbacks.on_connection_request = Callback::from(callback);
         self
@@ -117,7 +117,7 @@ where
     /// connection is allowed, right before finalizing the websocket upgrade.
     pub fn on_id_assignment<F>(mut self, callback: F) -> Self
     where
-        F: Fn((SocketAddr, PeerId)) + 'static,
+        F: Fn((SocketAddr, PeerId)) + Send + Sync + 'static,
     {
         self.shared_callbacks.on_id_assignment = Callback::from(callback);
         self

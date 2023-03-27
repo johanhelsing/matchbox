@@ -27,7 +27,7 @@ where
     /// Set a callback triggered on all client websocket connections.
     pub fn on_client_connected<F>(mut self, callback: F) -> Self
     where
-        F: Fn(PeerId) + 'static,
+        F: Fn(PeerId) + Send + Sync + 'static,
     {
         self.callbacks.on_client_connected = Callback::from(callback);
         self
@@ -36,7 +36,7 @@ where
     /// Set a callback triggered on all client websocket disconnections.
     pub fn on_client_disconnected<F>(mut self, callback: F) -> Self
     where
-        F: Fn(PeerId) + 'static,
+        F: Fn(PeerId) + Send + Sync + 'static,
     {
         self.callbacks.on_client_disconnected = Callback::from(callback);
         self
@@ -45,7 +45,7 @@ where
     /// Set a callback triggered on host websocket connection.
     pub fn on_host_connected<F>(mut self, callback: F) -> Self
     where
-        F: Fn(PeerId) + 'static,
+        F: Fn(PeerId) + Send + Sync + 'static,
     {
         self.callbacks.on_host_connected = Callback::from(callback);
         self
@@ -54,7 +54,7 @@ where
     /// Set a callback triggered on host websocket disconnection.
     pub fn on_host_disconnected<F>(mut self, callback: F) -> Self
     where
-        F: Fn(PeerId) + 'static,
+        F: Fn(PeerId) + Send + Sync + 'static,
     {
         self.callbacks.on_host_disconnected = Callback::from(callback);
         self
@@ -184,10 +184,6 @@ pub struct ClientServerCallbacks {
     pub(crate) on_host_disconnected: Callback<PeerId>,
 }
 impl SignalingCallbacks for ClientServerCallbacks {}
-#[allow(unsafe_code)]
-unsafe impl Send for ClientServerCallbacks {}
-#[allow(unsafe_code)]
-unsafe impl Sync for ClientServerCallbacks {}
 
 /// Signaling server state for client/server topologies
 #[derive(Default, Debug, Clone)]

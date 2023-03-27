@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 mod error;
 mod signaling_server;
 mod topologies;

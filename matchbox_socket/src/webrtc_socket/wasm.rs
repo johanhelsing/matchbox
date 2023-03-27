@@ -37,7 +37,7 @@ impl Signaler for WasmSignaler {
         room_url: &str,
         authentication: Option<&String>,
     ) -> Result<Self, SignalingError> {
-        let websocket_stream = 'Signaling: loop {
+        let websocket_stream = 'signaling: loop {
             // Setup connection request
             if authentication.is_some() {
                 todo!("authentication is not yet implemented on wasm");

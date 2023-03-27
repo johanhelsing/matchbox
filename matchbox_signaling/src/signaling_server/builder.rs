@@ -74,8 +74,11 @@ where
     }
 
     /// Require all peers to provide basic authentication that matches a given username and
-    /// password.
+    /// password. This must come AFTER any calls to
+    /// [`SignalingServerBuilder::on_connection_request`] for the time being!
     pub fn basic_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        // TODO: Make authentication a generic on the builder, or make the callback separated from
+        // on_connection_request, since this has the potential for ordering problems
         let prev_callback = self.shared_callbacks.on_connection_request.cb.clone();
         let (username, password) = (username.into(), password.into());
         self.shared_callbacks.on_connection_request =

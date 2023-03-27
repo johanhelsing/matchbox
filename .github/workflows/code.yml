@@ -132,7 +132,14 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --target wasm32-unknown-unknown -p matchbox_socket -p bevy_ggrs_example -p simple_example -- -D warnings
+          args: >
+            --target wasm32-unknown-unknown
+            -p matchbox_socket
+            -p bevy_matchbox
+            -p bevy_ggrs_example
+            -p simple_example
+            --
+            -D warnings
 
   server-container:
     name: Build & Push Server Container

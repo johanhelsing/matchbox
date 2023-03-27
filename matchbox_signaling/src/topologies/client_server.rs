@@ -149,7 +149,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                             state.try_send_to_host(event)
                         }
                     } {
-                        error!("error sending: {:?}", e);
+                        error!("error sending signal event: {e:?}");
                     }
                 }
                 PeerRequest::KeepAlive => {

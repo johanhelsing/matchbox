@@ -15,7 +15,7 @@ categories = [
 repository = "https://github.com/johanhelsing/matchbox"
 
 [features]
-ggrs-socket = ["dep:bincode", "dep:ggrs"]
+ggrs = ["dep:bincode", "dep:ggrs"]
 
 [dependencies]
 matchbox_protocol = { path = "../matchbox_protocol", default-features = false }

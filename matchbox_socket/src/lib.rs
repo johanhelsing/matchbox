@@ -3,7 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod error;
-#[cfg(feature = "ggrs-socket")]
+#[cfg(feature = "ggrs")]
 mod ggrs_socket;
 mod webrtc_socket;
 

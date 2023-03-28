@@ -19,7 +19,7 @@ ggrs = { version = "0.9", features = ["wasm-bindgen"] }
 
 [dependencies]
 bevy_matchbox = { path = "../../bevy_matchbox" }
-matchbox_socket = { path = "../../matchbox_socket", features = ["ggrs-socket"] }
+matchbox_socket = { path = "../../matchbox_socket", features = ["ggrs"] }
 bevy = { version = "0.9", default-features = false, features = [
   "bevy_gltf",
   "bevy_winit",

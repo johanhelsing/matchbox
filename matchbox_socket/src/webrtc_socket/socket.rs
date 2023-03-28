@@ -426,11 +426,34 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     ///     .add_channel(ChannelConfig::reliable())
     ///     .add_channel(ChannelConfig::unreliable())
     ///     .build();
+    /// let reliable_channel_messages = socket.channel(0).receive();
+    /// ```
+    ///
+    /// See also: [`WebRtcSocket::get_channel`], [`WebRtcSocket::take_channel`]
+    ///
+    /// # Panics
+    ///
+    /// will panic if the channel cannot be found.
+    pub fn channel(&mut self, channel: usize) -> &mut WebRtcChannel {
+        self.get_channel(channel).unwrap()
+    }
+
+    /// Gets a mutable reference to the [`WebRtcChannel`] of a given id.
+    ///
+    /// Returns an error if the channel was not found.
+    ///
+    /// ```
+    /// use matchbox_socket::*;
+    ///
+    /// let (mut socket, message_loop) = WebRtcSocketBuilder::new("wss://example.invalid/")
+    ///     .add_channel(ChannelConfig::reliable())
+    ///     .add_channel(ChannelConfig::unreliable())
+    ///     .build();
     /// let reliable_channel_messages = socket.channel(0).unwrap().receive();
     /// ```
     ///
-    /// See also: [`WebRtcSocket::take_channel`]
-    pub fn channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, GetChannelError> {
+    /// See also: [`WebRtcSocket::channel`], [`WebRtcSocket::take_channel`]
+    pub fn get_channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, GetChannelError> {
         self.channels
             .get_mut(channel)
             .ok_or(GetChannelError::NotFound)?

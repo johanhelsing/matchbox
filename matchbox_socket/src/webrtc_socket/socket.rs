@@ -29,7 +29,7 @@ pub struct RtcIceServerConfig {
 }
 
 /// Configuration options for a data channel
-/// See also: https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel
+/// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel>
 #[derive(Debug, Clone)]
 pub struct ChannelConfig {
     /// Whether messages sent on the channel are guaranteed to arrive in order

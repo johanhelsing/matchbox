@@ -5,64 +5,8 @@ on:
 name: Code
 
 jobs:
-  check-native:
-    name: Check native
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.2.1
-
-      - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-targets
-
-  check-wasm:
-    name: Check wasm
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.2.1
-
-      - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: >
-            --all-targets
-            --target wasm32-unknown-unknown
-            -p matchbox_socket
-            -p bevy_matchbox
-            -p bevy_ggrs_example
-            -p simple_example
-
-  test:
-    name: Test Suite
+  test-native:
+    name: Test Native
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -85,8 +29,65 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --all-targets
 
-  lints-native:
+  # Should be upgraded to test when possible
+  check-wasm:
+    name: Check Wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+      
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.2.1
+  
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: >
+            --all-targets
+            --target wasm32-unknown-unknown
+            -p matchbox_socket
+            -p bevy_matchbox
+            -p bevy_ggrs_example
+            -p simple_example
+     
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.2.1
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all --check
+
+
+  lint-native:
     name: Lints native
     strategy:
       matrix:
@@ -102,24 +103,18 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-          components: rustfmt, clippy
+          components: clippy
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.2.1
-
-      - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -D warnings
+          args: --all-targets -- -D warnings
 
-  clippy-wasm:
+  lint-wasm:
     name: Clippy wasm
     runs-on: ubuntu-latest
     steps:
@@ -143,6 +138,7 @@ jobs:
         with:
           command: clippy
           args: >
+            --all-targets
             --target wasm32-unknown-unknown
             -p matchbox_socket
             -p bevy_matchbox
@@ -153,7 +149,7 @@ jobs:
 
   server-container:
     name: Build & Push Server Container
-    needs: ["check-native", "check-wasm", "test", "lints-native", "clippy-wasm"]
+    needs: [test-native, check-wasm, lint-native, lint-wasm]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository

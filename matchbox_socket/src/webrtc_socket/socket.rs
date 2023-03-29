@@ -130,7 +130,7 @@ pub(crate) struct SocketConfig {
 #[derive(Debug, Clone)]
 pub struct WebRtcSocketBuilder<C: ChannelPlurality = NoChannels> {
     pub(crate) config: SocketConfig,
-    channel_plurality: PhantomData<C>,
+    pub(crate) channel_plurality: PhantomData<C>,
 }
 
 impl WebRtcSocketBuilder {
@@ -190,6 +190,24 @@ impl WebRtcSocketBuilder<NoChannels> {
             channel_plurality: PhantomData::default(),
         }
     }
+
+    /// Adds a new unreliable channel to the [`WebRtcSocket`] configuration.
+    pub fn add_unreliable_channel(mut self) -> WebRtcSocketBuilder<SingleChannel> {
+        self.config.channels.push(ChannelConfig::unreliable());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
+
+    /// Adds a new reliable channel to the [`WebRtcSocket`] configuration.
+    pub fn add_reliable_channel(mut self) -> WebRtcSocketBuilder<SingleChannel> {
+        self.config.channels.push(ChannelConfig::reliable());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
 }
 
 impl WebRtcSocketBuilder<SingleChannel> {
@@ -201,12 +219,48 @@ impl WebRtcSocketBuilder<SingleChannel> {
             channel_plurality: PhantomData::default(),
         }
     }
+
+    /// Adds a new unreliable channel to the [`WebRtcSocket`] configuration.
+    pub fn add_unreliable_channel(mut self) -> WebRtcSocketBuilder<MultipleChannels> {
+        self.config.channels.push(ChannelConfig::unreliable());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
+
+    /// Adds a new reliable channel to the [`WebRtcSocket`] configuration.
+    pub fn add_reliable_channel(mut self) -> WebRtcSocketBuilder<MultipleChannels> {
+        self.config.channels.push(ChannelConfig::reliable());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
 }
 impl WebRtcSocketBuilder<MultipleChannels> {
     /// Adds a new channel to the [`WebRtcSocket`] configuration according to a [`ChannelConfig`].
     pub fn add_channel(mut self, config: ChannelConfig) -> WebRtcSocketBuilder<MultipleChannels> {
         self.config.channels.push(config);
         self
+    }
+
+    /// Adds a new unreliable channel to the [`WebRtcSocket`] configuration.
+    pub fn add_unreliable_channel(mut self) -> WebRtcSocketBuilder<MultipleChannels> {
+        self.config.channels.push(ChannelConfig::unreliable());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
+
+    /// Adds a new reliable channel to the [`WebRtcSocket`] configuration.
+    pub fn add_reliable_channel(mut self) -> WebRtcSocketBuilder<MultipleChannels> {
+        self.config.channels.push(ChannelConfig::reliable());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
     }
 }
 

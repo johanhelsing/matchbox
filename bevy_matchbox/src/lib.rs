@@ -13,6 +13,16 @@ use std::marker::PhantomData;
 
 /// A [`Resource`] wrapping [`WebRtcSocket`].
 ///
+/// ```
+/// # use bevy_matchbox::prelude::*;
+/// # use bevy::prelude::*;
+/// # fn system(mut commands: Commands) {
+/// let room_url = "ws://matchbox.example.com";
+/// commands.open_socket(WebRtcSocketBuilder::new(room_url).add_channel(ChannelConfig::reliable()));
+/// commands.close_socket::<SingleChannel>();
+/// # }
+/// ```
+///
 /// To create and destroy this resource use the [`OpenSocket`] and [`CloseSocket`] [`Command`]s respectively.
 #[derive(Resource, Debug, Deref, DerefMut)]
 pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>);
@@ -53,13 +63,13 @@ impl<C: BuildablePlurality + 'static> Command for CloseSocket<C> {
 }
 
 /// A [`Commands`] extension used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`] resource.
-pub trait CloseSocketExt<C> {
+pub trait CloseSocketExt {
     /// Delete the [`MatchboxSocket`] resource.
-    fn close_socket(&mut self);
+    fn close_socket<C: BuildablePlurality + 'static>(&mut self);
 }
 
-impl<'w, 's, C: BuildablePlurality + 'static> CloseSocketExt<C> for Commands<'w, 's> {
-    fn close_socket(&mut self) {
+impl<'w, 's> CloseSocketExt for Commands<'w, 's> {
+    fn close_socket<C: BuildablePlurality + 'static>(&mut self) {
         self.add(CloseSocket::<C>(PhantomData::default()))
     }
 }

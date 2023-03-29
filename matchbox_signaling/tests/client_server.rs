@@ -48,7 +48,7 @@ mod tests {
 
     #[tokio::test]
     async fn ws_connect() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0)).build();
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
 
@@ -59,7 +59,7 @@ mod tests {
 
     #[tokio::test]
     async fn uuid_assigned() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0)).build();
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
 
@@ -74,7 +74,7 @@ mod tests {
 
     #[tokio::test]
     async fn new_client() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0)).build();
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
 
@@ -96,7 +96,7 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_client() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0)).build();
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
 
@@ -124,7 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn signal() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0)).build();
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
         let addr = server.local_addr();
         tokio::spawn(server.serve());
 
@@ -165,7 +165,7 @@ mod tests {
     async fn on_connection_req_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_connection_request({
                 let success = success.clone();
                 move |_| {
@@ -188,7 +188,7 @@ mod tests {
         let upgrade_called = Arc::new(AtomicBool::new(false));
         let peer_connected = Arc::new(AtomicBool::new(false));
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_connection_request({
                 let upgrade_called = upgrade_called.clone();
                 move |_| {
@@ -216,7 +216,7 @@ mod tests {
     async fn on_id_assignment_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_id_assignment({
                 let success = success.clone();
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
@@ -237,7 +237,7 @@ mod tests {
     async fn on_host_connect_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_host_connected({
                 let success = success.clone();
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
@@ -258,7 +258,7 @@ mod tests {
     async fn on_host_disconnect_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_host_disconnected({
                 let success = success.clone();
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
@@ -282,7 +282,7 @@ mod tests {
     async fn on_client_connect_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_client_connected({
                 let success = success.clone();
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
@@ -310,7 +310,7 @@ mod tests {
     async fn on_client_disconnect_callback() {
         let success = Arc::new(AtomicBool::new(false));
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::UNSPECIFIED, 0))
+        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_client_disconnected({
                 let success = success.clone();
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)

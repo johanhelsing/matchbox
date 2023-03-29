@@ -296,7 +296,7 @@ mod tests {
 
     #[tokio::test]
     async fn ws_connect() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
@@ -308,7 +308,7 @@ mod tests {
 
     #[tokio::test]
     async fn uuid_assigned() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
@@ -325,7 +325,7 @@ mod tests {
 
     #[tokio::test]
     async fn new_peer() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
@@ -351,7 +351,7 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_peer() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
@@ -383,7 +383,7 @@ mod tests {
 
     #[tokio::test]
     async fn signal() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
@@ -426,7 +426,7 @@ mod tests {
 
     #[tokio::test]
     async fn match_pairs() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
@@ -478,7 +478,7 @@ mod tests {
     }
     #[tokio::test]
     async fn match_pair_and_other_alone_room_without_next() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
@@ -521,7 +521,7 @@ mod tests {
 
     #[tokio::test]
     async fn match_different_id_same_next() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);
@@ -573,7 +573,7 @@ mod tests {
     }
     #[tokio::test]
     async fn match_same_id_different_next() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .serve(app().into_make_service_with_connect_info::<SocketAddr>());
         let addr = server.local_addr();
         tokio::spawn(server);

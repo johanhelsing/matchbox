@@ -8,21 +8,19 @@ use bevy::{
     tasks::IoTaskPool,
 };
 pub use matchbox_socket;
-use matchbox_socket::{BuildablePlurality, WebRtcSocket, WebRtcSocketBuilder};
+use matchbox_socket::{BuildablePlurality, MultipleChannels, WebRtcSocket, WebRtcSocketBuilder};
 use std::marker::PhantomData;
-
-pub mod multi_channel_socket;
 
 /// A [`Resource`] wrapping [`WebRtcSocket`].
 ///
 /// To create and destroy this resource use the [`OpenSocket`] and [`CloseSocket`] [`Command`]s respectively.
 #[derive(Resource, Debug, Deref, DerefMut)]
-pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>);
+pub struct MatchboxSocket(WebRtcSocket<MultipleChannels>);
 
 /// A [`Command`] used to open a [`MatchboxSocket`] and allocate it as a resource.
 struct OpenSocket<C: BuildablePlurality>(WebRtcSocketBuilder<C>);
 
-impl<C: BuildablePlurality + 'static> Command for OpenSocket<C> {
+impl Command for OpenSocket<MultipleChannels> {
     fn write(self, world: &mut World) {
         let (socket, message_loop) = self.0.build();
 
@@ -34,13 +32,13 @@ impl<C: BuildablePlurality + 'static> Command for OpenSocket<C> {
 }
 
 /// A [`Commands`] extension used to open a [`MatchboxSocket`] and allocate it as a resource.
-pub trait OpenSocketExt<C: BuildablePlurality> {
+pub trait OpenSocketExt {
     /// Opens a [`MatchboxSocket`] and allocates it as a resource.
-    fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder<C>);
+    fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder<MultipleChannels>);
 }
 
-impl<'w, 's, C: BuildablePlurality + 'static> OpenSocketExt<C> for Commands<'w, 's> {
-    fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder<C>) {
+impl<'w, 's> OpenSocketExt for Commands<'w, 's> {
+    fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder<MultipleChannels>) {
         self.add(OpenSocket(socket_builder))
     }
 }
@@ -50,7 +48,7 @@ struct CloseSocket<C: BuildablePlurality>(PhantomData<C>);
 
 impl<C: BuildablePlurality + 'static> Command for CloseSocket<C> {
     fn write(self, world: &mut World) {
-        world.remove_resource::<MatchboxSocket<C>>();
+        world.remove_resource::<MatchboxSocket>();
     }
 }
 

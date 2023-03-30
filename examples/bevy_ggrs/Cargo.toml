@@ -28,6 +28,8 @@ bevy = { version = "0.10", default-features = false, features = [
   "bevy_core_pipeline",
   "bevy_ui",
   "bevy_text",
+  "bevy_asset",
+  "bevy_sprite",
   "png",
   # gh actions runners don't like wayland
   "x11",

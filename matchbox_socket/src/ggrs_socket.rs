@@ -1,15 +1,49 @@
+use std::marker::PhantomData;
+
 use ggrs::{Message, PlayerType};
 use matchbox_protocol::PeerId;
 
 use crate::{
-    ChannelConfig, MessageLoopFuture, Packet, SingleChannel, WebRtcChannel, WebRtcSocket,
-    WebRtcSocketBuilder,
+    ChannelConfig, MessageLoopFuture, MultipleChannels, NoChannels, Packet, SingleChannel,
+    WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
 
 impl ChannelConfig {
     /// Creates a [`ChannelConfig`] suitable for use with GGRS.
     pub fn ggrs() -> Self {
         Self::unreliable()
+    }
+}
+
+impl WebRtcSocketBuilder<NoChannels> {
+    /// Adds a new channel suitable for use with GGRS to the [`WebRtcSocket`] configuration.
+    pub fn add_ggrs_channel(mut self) -> WebRtcSocketBuilder<SingleChannel> {
+        self.config.channels.push(ChannelConfig::ggrs());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
+}
+
+impl WebRtcSocketBuilder<SingleChannel> {
+    /// Adds a new channel suitable for use with GGRS to the [`WebRtcSocket`] configuration.
+    pub fn add_ggrs_channel(mut self) -> WebRtcSocketBuilder<MultipleChannels> {
+        self.config.channels.push(ChannelConfig::ggrs());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
+    }
+}
+impl WebRtcSocketBuilder<MultipleChannels> {
+    /// Adds a new channel suitable for use with GGRS to the [`WebRtcSocket`] configuration.
+    pub fn add_ggrs_channel(mut self) -> WebRtcSocketBuilder<MultipleChannels> {
+        self.config.channels.push(ChannelConfig::ggrs());
+        WebRtcSocketBuilder {
+            config: self.config,
+            channel_plurality: PhantomData::default(),
+        }
     }
 }
 

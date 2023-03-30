@@ -23,5 +23,5 @@ readme = "../README.md"
 ggrs = ["matchbox_socket/ggrs"]
 
 [dependencies]
-bevy = { version = ">=0.9, <0.11", default-features = false }
+bevy = { version = "0.10", default-features = false }
 matchbox_socket = { path = "../matchbox_socket" }

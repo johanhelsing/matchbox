@@ -1,5 +1,5 @@
 use bevy::{log::LogPlugin, prelude::*};
-use bevy_ggrs::{GGRSPlugin, Session};
+use bevy_ggrs::{GGRSPlugin, GGRSSchedule, Session};
 use bevy_matchbox::prelude::*;
 use ggrs::SessionBuilder;
 
@@ -10,10 +10,10 @@ use args::*;
 use box_game::*;
 
 const FPS: usize = 60;
-const ROLLBACK_DEFAULT: &str = "rollback_default";
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Hash, States)]
 enum AppState {
+    #[default]
     Lobby,
     InGame,
 }
@@ -37,15 +37,6 @@ fn main() {
         .register_rollback_component::<Transform>()
         .register_rollback_component::<Velocity>()
         .register_rollback_resource::<FrameCount>()
-        // these systems will be executed as part of the advance frame update
-        .with_rollback_schedule(
-            Schedule::default().with_stage(
-                ROLLBACK_DEFAULT,
-                SystemStage::parallel()
-                    .with_system(move_cube_system)
-                    .with_system(increase_frame_system),
-            ),
-        )
         // make it happen in the bevy app
         .build(&mut app);
 
@@ -57,26 +48,24 @@ fn main() {
                     level: bevy::log::Level::DEBUG,
                 })
                 .set(WindowPlugin {
-                    window: WindowDescriptor {
+                    primary_window: Some(Window {
                         fit_canvas_to_parent: true, // behave on wasm
                         ..default()
-                    },
+                    }),
                     ..default()
                 }),
         )
         // Some of our systems need the query parameters
         .insert_resource(args)
         .init_resource::<FrameCount>()
-        .add_state(AppState::Lobby)
-        .add_system_set(
-            SystemSet::on_enter(AppState::Lobby)
-                .with_system(lobby_startup)
-                .with_system(start_matchbox_socket),
-        )
-        .add_system_set(SystemSet::on_update(AppState::Lobby).with_system(lobby_system))
-        .add_system_set(SystemSet::on_exit(AppState::Lobby).with_system(lobby_cleanup))
-        .add_system_set(SystemSet::on_enter(AppState::InGame).with_system(setup_scene_system))
-        .add_system_set(SystemSet::on_update(AppState::InGame).with_system(log_ggrs_events))
+        .add_state::<AppState>()
+        .add_systems((lobby_startup, start_matchbox_socket).in_schedule(OnEnter(AppState::Lobby)))
+        .add_system(lobby_system.in_set(OnUpdate(AppState::Lobby)))
+        .add_system(lobby_cleanup.in_schedule(OnExit(AppState::Lobby)))
+        .add_system(setup_scene_system.in_schedule(OnEnter(AppState::InGame)))
+        .add_system(log_ggrs_events.in_set(OnUpdate(AppState::InGame)))
+        // these systems will be executed as part of the advance frame update
+        .add_systems((move_cube_system, increase_frame_system).in_schedule(GGRSSchedule))
         .run();
 }
 
@@ -144,7 +133,7 @@ fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
 }
 
 fn lobby_system(
-    mut app_state: ResMut<State<AppState>>,
+    mut app_state: ResMut<NextState<AppState>>,
     args: Res<Args>,
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
     mut commands: Commands,
@@ -197,9 +186,7 @@ fn lobby_system(
     commands.insert_resource(Session::P2PSession(sess));
 
     // transition to in-game state
-    app_state
-        .set(AppState::InGame)
-        .expect("Tried to go in-game while already in-game");
+    app_state.set(AppState::InGame);
 }
 
 fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {

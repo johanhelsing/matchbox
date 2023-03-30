@@ -12,8 +12,9 @@ use box_game::*;
 const FPS: usize = 60;
 const ROLLBACK_DEFAULT: &str = "rollback_default";
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, States)]
 enum AppState {
+    #[default]
     Lobby,
     InGame,
 }
@@ -57,17 +58,17 @@ fn main() {
                     level: bevy::log::Level::DEBUG,
                 })
                 .set(WindowPlugin {
-                    window: WindowDescriptor {
+                    primary_window: Some(Window {
                         fit_canvas_to_parent: true, // behave on wasm
                         ..default()
-                    },
+                    }),
                     ..default()
                 }),
         )
         // Some of our systems need the query parameters
         .insert_resource(args)
         .init_resource::<FrameCount>()
-        .add_state(AppState::Lobby)
+        .add_state::<AppState>()
         .add_system_set(
             SystemSet::on_enter(AppState::Lobby)
                 .with_system(lobby_startup)
@@ -144,7 +145,7 @@ fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
 }
 
 fn lobby_system(
-    mut app_state: ResMut<State<AppState>>,
+    mut app_state: ResMut<NextState<AppState>>,
     args: Res<Args>,
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
     mut commands: Commands,
@@ -197,9 +198,7 @@ fn lobby_system(
     commands.insert_resource(Session::P2PSession(sess));
 
     // transition to in-game state
-    app_state
-        .set(AppState::InGame)
-        .expect("Tried to go in-game while already in-game");
+    app_state.set(AppState::InGame);
 }
 
 fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {

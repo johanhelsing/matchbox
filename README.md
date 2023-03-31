@@ -48,8 +48,8 @@ All of this, however, is hidden from rust application code. All you will need to
 
 - Create a new socket, and give it a signaling server url
 - `.await` the message loop future that processes new messages.
-  - If you are using Bevy, it can be spawned as a Bevy io task (see the [`bevy_ggrs`](examples/bevy_ggrs/) example).
-  - If you are using WASM, `wasm-bindgen-futures` can help (see the [`simple`](examples/simple/)).
+  - If you are using [Bevy](https://bevyengine.org), this is done automatically by `bevy_matchbox` (see the [`bevy_ggrs`](examples/bevy_ggrs/) example).
+  - Otherwise, if you are using WASM, `wasm-bindgen-futures` can help (see the [`simple`](examples/simple/)).
   - Alternatively, the future can be polled manually, i.e. once per frame.
 
 You can hook into the lifecycle of your socket through the socket's API, such as connection state changes. Similarly, you can send packets to peers using the socket through a simple, non-blocking method.

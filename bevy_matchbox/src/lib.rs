@@ -67,8 +67,6 @@ use std::marker::PhantomData;
 ///     commands.remove_resource::<MatchboxSocket<SingleChannel>>();
 /// }
 /// ```
-///
-/// To create and destroy this resource use the [`OpenSocket`] and [`CloseSocket`] [`Command`]s respectively.
 #[derive(Resource, Component, Debug, Deref, DerefMut)]
 pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>);
 

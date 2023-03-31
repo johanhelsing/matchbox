@@ -24,4 +24,4 @@ ggrs = ["matchbox_socket/ggrs"]
 
 [dependencies]
 bevy = { version = "0.10", default-features = false }
-matchbox_socket = { path = "../matchbox_socket" }
+matchbox_socket = { path = "../matchbox_socket", version = "0.6" }

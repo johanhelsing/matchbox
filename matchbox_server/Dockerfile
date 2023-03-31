@@ -11,10 +11,6 @@ WORKDIR /usr/src/matchbox_server/
 # save disk space on builders
 COPY matchbox_server/Cargo.toml /usr/src/matchbox_server/Cargo.toml
 COPY matchbox_protocol /usr/src/matchbox_protocol
-RUN mkdir src \
-    && echo "fn main() {}" > src/main.rs \
-    && cargo build --release
-
 COPY matchbox_server /usr/src/matchbox_server
 
 RUN cargo build --release

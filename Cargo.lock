@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_ggrs_example"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "bevy",
  "bevy_ggrs",
@@ -2946,7 +2946,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_signaling"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "axum",

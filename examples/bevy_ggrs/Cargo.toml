@@ -1,6 +1,6 @@
 [package]
 name = "bevy_ggrs_example"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "A demo game where two web browser can connect and move boxes around"
 edition = "2021"

@@ -42,7 +42,7 @@ The signaling service needs to run somewhere all clients can reach it over http 
 
 When a client wants to join a p2p (mesh) network, it connects to the signaling service. The signaling server then notifies the peers that have already connected about the new peer (sends a `NewPeer` event).
 
-Peers then negotiate a connection through the signaling server. The initiator sends an "offer" and the recipient responds with an "answer." Once peers have enough information relayed, a WebRTCPeerConnection is established for each peer, which comes with a data channel.
+Peers then negotiate a connection through the signaling server. The initiator sends an "offer" and the recipient responds with an "answer." Once peers have enough information relayed, a [RTCPeerConnection](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection) is established for each peer, which comes with one or more data channels.
 
 All of this, however, is hidden from rust application code. All you will need to do on the client side, is:
 

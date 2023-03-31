@@ -8,7 +8,7 @@ authors = [
 edition = "2021"
 description = "A Bevy extension for Matchbox WebRtc networking"
 license = "MIT OR Apache-2.0"
-keywords = ["bevy", "gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
+keywords = ["bevy", "webrtc", "peer-to-peer", "networking", "wasm"]
 categories = [
   "network-programming",
   "game-development",

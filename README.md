@@ -15,7 +15,6 @@ p2p connections in web browsers or native to facilitate low-latency multiplayer 
 | Reliable   | &check; | &check;   |
 | Unreliable | &check; | &check;   |
 
-- [Introductory blog post](https://johanhelsing.studio/posts/introducing-matchbox)
 - [Tutorial for usage with Bevy and GGRS](https://johanhelsing.studio/posts/extreme-bevy)
 
 The Matchbox project contains:

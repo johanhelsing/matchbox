@@ -78,7 +78,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {:?}", room_url);
 
-    commands.open_socket(WebRtcSocketBuilder::new(room_url).add_channel(ChannelConfig::ggrs()));
+    commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
 }
 
 // Marker components for UI

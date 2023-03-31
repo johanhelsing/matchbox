@@ -8,7 +8,9 @@ use bevy::{
     tasks::IoTaskPool,
 };
 pub use matchbox_socket;
-use matchbox_socket::{BuildablePlurality, WebRtcSocket, WebRtcSocketBuilder};
+use matchbox_socket::{
+    BuildablePlurality, MessageLoopFuture, SingleChannel, WebRtcSocket, WebRtcSocketBuilder,
+};
 use std::marker::PhantomData;
 
 /// A [`WebRtcSocket`] as a [`Component`] or [`Resource`].
@@ -72,11 +74,14 @@ pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>);
 
 impl<C: BuildablePlurality> From<WebRtcSocketBuilder<C>> for MatchboxSocket<C> {
     fn from(builder: WebRtcSocketBuilder<C>) -> Self {
-        let (socket, message_loop) = builder.build();
+        Self::from(builder.build())
+    }
+}
 
+impl<C: BuildablePlurality> From<(WebRtcSocket<C>, MessageLoopFuture)> for MatchboxSocket<C> {
+    fn from((socket, message_loop_fut): (WebRtcSocket<C>, MessageLoopFuture)) -> Self {
         let task_pool = IoTaskPool::get();
-        task_pool.spawn(message_loop).detach();
-
+        task_pool.spawn(message_loop_fut).detach();
         MatchboxSocket(socket)
     }
 }
@@ -130,4 +135,52 @@ pub mod prelude {
         BuildablePlurality, ChannelConfig, MultipleChannels, PeerId, PeerState, SingleChannel,
         WebRtcSocketBuilder,
     };
+}
+
+impl MatchboxSocket<SingleChannel> {
+    /// Create a new socket with a single unreliable channel
+    ///
+    /// ```rust
+    /// # use bevy_matchbox::prelude::*;
+    /// # use bevy::prelude::*;
+    /// # fn open_channel_system(mut commands: Commands) {
+    /// let room_url = "ws://matchbox.example.com";
+    /// let socket = MatchboxSocket::new_unreliable(room_url);
+    /// commands.spawn(socket);
+    /// # }
+    /// ```
+    pub fn new_unreliable(room_url: impl Into<String>) -> MatchboxSocket<SingleChannel> {
+        Self::from(WebRtcSocket::new_unreliable(room_url))
+    }
+
+    /// Create a new socket with a single reliable channel
+    ///
+    /// ```rust
+    /// # use bevy_matchbox::prelude::*;
+    /// # use bevy::prelude::*;
+    /// # fn open_channel_system(mut commands: Commands) {
+    /// let room_url = "ws://matchbox.example.com";
+    /// let socket = MatchboxSocket::new_reliable(room_url);
+    /// commands.spawn(socket);
+    /// # }
+    /// ```
+    pub fn new_reliable(room_url: impl Into<String>) -> MatchboxSocket<SingleChannel> {
+        Self::from(WebRtcSocket::new_reliable(room_url))
+    }
+
+    /// Create a new socket with a single ggrs-compatible channel
+    ///
+    /// ```rust
+    /// # use bevy_matchbox::prelude::*;
+    /// # use bevy::prelude::*;
+    /// # fn open_channel_system(mut commands: Commands) {
+    /// let room_url = "ws://matchbox.example.com";
+    /// let socket = MatchboxSocket::new_ggrs(room_url);
+    /// commands.spawn(socket);
+    /// # }
+    /// ```
+    #[cfg(feature = "ggrs")]
+    pub fn new_ggrs(room_url: impl Into<String>) -> MatchboxSocket<SingleChannel> {
+        Self::from(WebRtcSocket::new_ggrs(room_url))
+    }
 }

@@ -20,33 +20,32 @@ use std::marker::PhantomData;
 /// use bevy_matchbox::prelude::*;
 /// use bevy::prelude::*;
 ///
-/// fn open(mut commands: Commands) {
-///     let room_url = "ws://matchbox.example.com";
+/// fn open_socket_system(mut commands: Commands) {
+///     let room_url = "wss://matchbox.example.com";
 ///     let builder = WebRtcSocketBuilder::new(room_url).add_channel(ChannelConfig::reliable());
 ///     commands.spawn(MatchboxSocket::from(builder));
 /// }
 ///
-/// fn close<C: BuildablePlurality + 'static>(
+/// fn close_socket_system(
 ///     mut commands: Commands,
-///     socket: Query<Entity, With<MatchboxSocket<C>>>
+///     socket: Query<Entity, With<MatchboxSocket<SingleChannel>>>
 /// ) {
 ///     let socket = socket.single();
-///     commands.entity(socket).despawn()
+///     commands.entity(socket).despawn();
 /// }
 ///
 /// ```
 ///
 /// As a [`Resource`], with [`Commands`]
 /// ```
-/// use bevy_matchbox::prelude::*;
-/// use bevy::prelude::*;
-///
-/// fn open(mut commands: Commands) {
-///     let room_url = "ws://matchbox.example.com";
+/// # use bevy_matchbox::prelude::*;
+/// # use bevy::prelude::*;
+/// fn open_socket_system(mut commands: Commands) {
+///     let room_url = "wss://matchbox.example.com";
 ///     commands.open_socket(WebRtcSocketBuilder::new(room_url).add_channel(ChannelConfig::reliable()));
 /// }
 ///
-/// fn close(mut commands: Commands) {
+/// fn close_socket_system(mut commands: Commands) {
 ///     commands.close_socket::<SingleChannel>();
 /// }
 /// ```
@@ -54,16 +53,19 @@ use std::marker::PhantomData;
 /// As a [`Resource`], directly
 ///
 /// ```
-/// use bevy_matchbox::prelude::*;
-/// use bevy::prelude::*;
+/// # use bevy_matchbox::prelude::*;
+/// # use bevy::prelude::*;
+/// fn open_socket_system(mut commands: Commands) {
+///     let room_url = "wss://matchbox.example.com";
 ///
-/// fn open(mut commands: Commands) {
-///     let room_url = "ws://matchbox.example.com";
-///     let builder = WebRtcSocketBuilder::new(room_url).add_channel(ChannelConfig::reliable());
-///     commands.insert_resource(MatchboxSocket::from(builder));
+///     let socket: MatchboxSocket<SingleChannel> = WebRtcSocket::builder(room_url)
+///         .add_channel(ChannelConfig::reliable())
+///         .into();
+///
+///     commands.insert_resource(socket);
 /// }
 ///
-/// fn close(mut commands: Commands) {
+/// fn close_socket_system(mut commands: Commands) {
 ///     commands.remove_resource::<MatchboxSocket<SingleChannel>>();
 /// }
 /// ```
@@ -142,7 +144,7 @@ impl MatchboxSocket<SingleChannel> {
     /// # use bevy_matchbox::prelude::*;
     /// # use bevy::prelude::*;
     /// # fn open_channel_system(mut commands: Commands) {
-    /// let room_url = "ws://matchbox.example.com";
+    /// let room_url = "wss://matchbox.example.com";
     /// let socket = MatchboxSocket::new_unreliable(room_url);
     /// commands.spawn(socket);
     /// # }
@@ -157,7 +159,7 @@ impl MatchboxSocket<SingleChannel> {
     /// # use bevy_matchbox::prelude::*;
     /// # use bevy::prelude::*;
     /// # fn open_channel_system(mut commands: Commands) {
-    /// let room_url = "ws://matchbox.example.com";
+    /// let room_url = "wss://matchbox.example.com";
     /// let socket = MatchboxSocket::new_reliable(room_url);
     /// commands.spawn(socket);
     /// # }
@@ -172,7 +174,7 @@ impl MatchboxSocket<SingleChannel> {
     /// # use bevy_matchbox::prelude::*;
     /// # use bevy::prelude::*;
     /// # fn open_channel_system(mut commands: Commands) {
-    /// let room_url = "ws://matchbox.example.com";
+    /// let room_url = "wss://matchbox.example.com";
     /// let socket = MatchboxSocket::new_ggrs(room_url);
     /// commands.spawn(socket);
     /// # }

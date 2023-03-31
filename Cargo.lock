@@ -817,7 +817,6 @@ dependencies = [
  "bytemuck",
  "clap",
  "ggrs",
- "matchbox_socket",
  "serde",
  "serde_qs",
  "wasm-bindgen",

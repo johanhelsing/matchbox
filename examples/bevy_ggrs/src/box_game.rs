@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_ggrs::{PlayerInputs, Rollback, RollbackIdProvider, Session};
+use bevy_matchbox::prelude::*;
 use bytemuck::{Pod, Zeroable};
 use ggrs::{Config, PlayerHandle};
-use matchbox_socket::PeerId;
 use std::hash::Hash;
 
 const BLUE: Color = Color::rgb(0.8, 0.6, 0.2);

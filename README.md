@@ -35,8 +35,7 @@ The Matchbox project contains:
 
 ## How it works
 
-![Connection](https://raw.githubusercontent.com/johanhelsing/matchbox/main/images/connection.light.excalidraw.svg#gh-light-mode-only)
-![Connection](https://raw.githubusercontent.com/johanhelsing/matchbox/main/images/connection.dark.excalidraw.svg#gh-dark-mode-only)
+![Connection](https://raw.githubusercontent.com/johanhelsing/matchbox/main/images/connection.excalidraw.svg)
 
 WebRTC allows direct connections between peers, but in order to establish those connections, some kind of signaling service is needed. `matchbox_server` is such a service. Once the connections are established, however, data will flow directly between peers, and no traffic will go through the signaling server.
 

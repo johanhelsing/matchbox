@@ -2,10 +2,14 @@ use crate::webrtc_socket::messages::PeerEvent;
 use cfg_if::cfg_if;
 use futures_channel::mpsc::TrySendError;
 
+/// An error that can occur when getting a socket's channel through
+/// `get_channel` or `take_channel`.
 #[derive(Debug, thiserror::Error)]
 pub enum GetChannelError {
+    /// Can occur if trying to get a channel with an Id that was not added while building the socket
     #[error("This channel was never created")]
     NotFound,
+    /// The channel has already been taken and is no longer on the socket
     #[error("This channel has already been taken and is no longer on the socket")]
     Taken,
 }

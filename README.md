@@ -7,13 +7,9 @@
 
 Painless peer-to-peer WebRTC networking for rust's native and wasm applications.
 
-The goal of the Matchbox project is to enable udp-like, unordered, unreliable
-p2p connections in web browsers or native to facilitate low-latency multiplayer games.
+The goal of the Matchbox project is to enable udp-like, unordered, unreliable p2p connections in web browsers or native to facilitate low-latency multiplayer games.
 
-|  Channel   | Ordered | Retransmits |
-| ---------- | ------- | ----------- |
-| Reliable   | &check; | &check;     |
-| Unreliable |         |             |
+Matchbox supports unreliable and reliable data channels, with configurable number of package retransmits and ordering guarantees.
 
 - [Tutorial for usage with Bevy and GGRS](https://johanhelsing.studio/posts/extreme-bevy)
 

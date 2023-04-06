@@ -181,12 +181,19 @@ async fn message_loop<M: Messenger>(
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to report peer as disconnected");},
                         PeerEvent::Signal { sender, data } => {
-                            handshake_signals.entry(sender).or_insert_with(|| {
+                            let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
                                 let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender, requests_sender.clone());
                                 handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs));
                                 from_peer_tx
-                            }).unbounded_send(data).expect("failed to forward signal to handshaker");
+                            });
+
+                            if signal_tx.is_closed() {
+                                warn!("ignoring signal from peer {:?} because the handshake is already finished", sender);
+                                continue;
+                            }
+
+                            signal_tx.unbounded_send(data).expect("failed to forward signal to handshaker");
                         },
                     }
                 }

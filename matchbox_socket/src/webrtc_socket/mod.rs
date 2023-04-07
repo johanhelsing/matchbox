@@ -188,12 +188,9 @@ async fn message_loop<M: Messenger>(
                                 from_peer_tx
                             });
 
-                            if signal_tx.is_closed() {
-                                warn!("ignoring signal from peer {:?} because the handshake is already finished", sender);
-                                continue;
+                            if signal_tx.unbounded_send(data).is_err() {
+                                warn!("ignoring signal from peer {sender:?} because the handshake has already finished");
                             }
-
-                            signal_tx.unbounded_send(data).expect("failed to forward signal to handshaker");
                         },
                     }
                 }

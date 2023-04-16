@@ -5,11 +5,13 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, Future};
 use std::sync::Arc;
 
+/// An implementation of a client server topolgy
 pub mod client_server;
+/// An implementation of a full mesh topology
 pub mod full_mesh;
 
 #[derive(Clone)]
-pub struct SignalingStateMachine<Cb, S>(
+pub(crate) struct SignalingStateMachine<Cb, S>(
     #[allow(clippy::type_complexity)]
     pub  Arc<Box<dyn Fn(WsStateMeta<Cb, S>) -> BoxFuture<'static, ()> + Send + Sync>>,
 );
@@ -19,14 +21,14 @@ where
     Cb: SignalingCallbacks,
     S: SignalingState,
 {
-    pub fn from_topology<Topology>(_: Topology) -> Self
+    pub(crate) fn from_topology<Topology>(_: Topology) -> Self
     where
         Topology: SignalingTopology<Cb, S>,
     {
         Self::new(|ws| <Topology as SignalingTopology<Cb, S>>::state_machine(ws))
     }
 
-    pub fn new<F, Fut>(callback: F) -> Self
+    pub(crate) fn new<F, Fut>(callback: F) -> Self
     where
         F: Fn(WsStateMeta<Cb, S>) -> Fut + 'static + Send + Sync,
         Fut: Future<Output = ()> + 'static + Send,
@@ -35,6 +37,7 @@ where
     }
 }
 
+/// Topology produced by the signaling server
 #[async_trait]
 pub trait SignalingTopology<Cb = NoOpCallouts, S = NoState>
 where

@@ -947,6 +947,8 @@ name = "bevy_matchbox"
 version = "0.6.0"
 dependencies = [
  "bevy",
+ "cfg-if",
+ "matchbox_signaling",
  "matchbox_socket",
 ]
 

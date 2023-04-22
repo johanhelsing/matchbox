@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use bevy::{
     ecs::system::Command,
     prelude::{Commands, Resource},
-    tasks::IoTaskPool,
+    tasks::{IoTaskPool, Task},
 };
 pub use matchbox_signaling;
 use matchbox_signaling::{
@@ -12,7 +12,7 @@ use matchbox_signaling::{
         full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
         SignalingTopology,
     },
-    SignalingCallbacks, SignalingServer, SignalingServerBuilder, SignalingState,
+    Error, SignalingCallbacks, SignalingServer, SignalingServerBuilder, SignalingState,
 };
 
 /// A [`SignalingServer`] as a [`Resource`].
@@ -64,7 +64,7 @@ use matchbox_signaling::{
 /// }
 /// ```
 #[derive(Debug, Resource)]
-pub struct MatchboxServer;
+pub struct MatchboxServer(Task<Result<(), Error>>);
 
 impl<Topology, Cb, S> From<SignalingServerBuilder<Topology, Cb, S>> for MatchboxServer
 where
@@ -80,8 +80,8 @@ where
 impl From<SignalingServer> for MatchboxServer {
     fn from(server: SignalingServer) -> Self {
         let task_pool = IoTaskPool::get();
-        task_pool.spawn(server.serve()).detach();
-        MatchboxServer
+        let task = task_pool.spawn(server.serve());
+        MatchboxServer(task)
     }
 }
 

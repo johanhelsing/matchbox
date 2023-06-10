@@ -427,6 +427,23 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
         changes
     }
 
+    pub fn try_update_peers(&mut self) -> Result<Vec<(PeerId, PeerState)>, &'static str> {
+        let mut changes = Vec::new();
+        while let Ok(res) = self.peer_state_rx.try_next() {
+            match res {
+                Some((id, state)) => {
+                    let old = self.peers.insert(id, state);
+                    if old != Some(state) {
+                        changes.push((id, state));
+                    }
+                }
+                None => return Err("Channel closed"),
+            }
+        }
+
+        Ok(changes)
+    }
+
     /// Returns an iterator of the ids of the connected peers.
     ///
     /// Note: You have to call [`WebRtcSocket::update_peers`] for this list to be accurate.

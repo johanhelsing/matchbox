@@ -52,7 +52,7 @@ mod tests {
         let addr = server.local_addr();
         tokio::spawn(server.serve());
 
-        tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+        tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
             .expect("handshake");
     }
@@ -188,7 +188,7 @@ mod tests {
         tokio::spawn(server.serve());
 
         // Connect
-        _ = tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr)).await;
+        _ = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a")).await;
 
         wait_for_success(success).await
     }
@@ -216,7 +216,7 @@ mod tests {
         tokio::spawn(server.serve());
 
         // Connect
-        _ = tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr)).await;
+        _ = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a")).await;
 
         wait_for_success(upgrade_called).await;
         assert!(!peer_connected.load(std::sync::atomic::Ordering::Acquire))
@@ -236,7 +236,7 @@ mod tests {
         tokio::spawn(server.serve());
 
         // Connect
-        tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+        tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
             .expect("handshake");
 
@@ -257,7 +257,7 @@ mod tests {
         tokio::spawn(server.serve());
 
         // Connect
-        tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+        tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
             .expect("handshake");
 
@@ -279,7 +279,7 @@ mod tests {
 
         // Connect
         {
-            tokio_tungstenite::connect_async(format!("ws://{}/room_a", addr))
+            tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
                 .await
                 .expect("handshake");
         }

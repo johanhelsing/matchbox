@@ -23,10 +23,11 @@ use futures::{
     Future, FutureExt, SinkExt, StreamExt,
 };
 use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
+use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
-use log::{debug, error, trace, warn};
+use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
-use std::{pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc, time::Duration};
 use webrtc::{
     api::APIBuilder,
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
@@ -57,6 +58,10 @@ impl Signaller for NativeSignaller {
                         } else {
                             *attempts -= 1;
                             warn!("connection to signaling server failed, {attempts} attempt(s) remain");
+                            warn!("waiting 3 seconds to re-try connection...");
+                            Delay::new(Duration::from_secs(3)).await;
+                            info!("retrying connection...");
+                            continue 'signaling;
                         }
                     } else {
                         continue 'signaling;

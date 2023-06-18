@@ -12,11 +12,13 @@ use crate::webrtc_socket::{
 use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
 use futures_channel::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
+use futures_timer::Delay;
 use futures_util::select;
 use js_sys::{Function, Reflect};
-use log::{debug, error, trace, warn};
+use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
+use std::time::Duration;
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -46,6 +48,10 @@ impl Signaller for WasmSignaller {
                         } else {
                             *attempts -= 1;
                             warn!("connection to signaling server failed, {attempts} attempt(s) remain");
+                            warn!("waiting 3 seconds to re-try connection...");
+                            Delay::new(Duration::from_secs(3)).await;
+                            info!("retrying connection...");
+                            continue 'signaling;
                         }
                     } else {
                         continue 'signaling;

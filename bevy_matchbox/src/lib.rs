@@ -33,7 +33,6 @@ use std::marker::PhantomData;
 ///     let socket = socket.single();
 ///     commands.entity(socket).despawn();
 /// }
-///
 /// ```
 ///
 /// As a [`Resource`], with [`Commands`]
@@ -58,9 +57,7 @@ use std::marker::PhantomData;
 /// fn open_socket_system(mut commands: Commands) {
 ///     let room_url = "wss://matchbox.example.com";
 ///
-///     let socket: MatchboxSocket<SingleChannel> = WebRtcSocket::builder(room_url)
-///         .add_channel(ChannelConfig::reliable())
-///         .into();
+///     let socket: MatchboxSocket<SingleChannel> = MatchboxSocket::new_reliable(room_url);
 ///
 ///     commands.insert_resource(socket);
 /// }
@@ -116,7 +113,8 @@ impl<C: BuildablePlurality + 'static> Command for CloseSocket<C> {
     }
 }
 
-/// A [`Commands`] extension used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`] resource.
+/// A [`Commands`] extension used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`]
+/// resource.
 pub trait CloseSocketExt {
     /// Delete the [`MatchboxSocket`] resource.
     fn close_socket<C: BuildablePlurality + 'static>(&mut self);

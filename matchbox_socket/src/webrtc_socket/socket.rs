@@ -416,12 +416,24 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// this method was called.
     ///
     /// See also: [`PeerState`]
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the connection has been closed or is broken.
+    ///
+    /// [`WebRtcSocket::try_update_peers`] is the equivalent method that will instead return a
+    /// `Result`.
     pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
         let mut changes = Vec::new();
-        while let Ok(Some((id, state))) = self.peer_state_rx.try_next() {
-            let old = self.peers.insert(id, state);
-            if old != Some(state) {
-                changes.push((id, state));
+        while let Ok(res) = self.peer_state_rx.try_next() {
+            match res {
+                Some((id, state)) => {
+                    let old = self.peers.insert(id, state);
+                    if old != Some(state) {
+                        changes.push((id, state));
+                    }
+                }
+                None => panic!("Channel closed."),
             }
         }
         changes

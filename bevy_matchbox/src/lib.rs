@@ -33,7 +33,6 @@ use std::marker::PhantomData;
 ///     let socket = socket.single();
 ///     commands.entity(socket).despawn();
 /// }
-///
 /// ```
 ///
 /// As a [`Resource`], with [`Commands`]
@@ -114,7 +113,8 @@ impl<C: BuildablePlurality + 'static> Command for CloseSocket<C> {
     }
 }
 
-/// A [`Commands`] extension used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`] resource.
+/// A [`Commands`] extension used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`]
+/// resource.
 pub trait CloseSocketExt {
     /// Delete the [`MatchboxSocket`] resource.
     fn close_socket<C: BuildablePlurality + 'static>(&mut self);

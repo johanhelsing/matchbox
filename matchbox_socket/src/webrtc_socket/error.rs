@@ -6,7 +6,8 @@ use futures_channel::mpsc::TrySendError;
 /// `get_channel` or `take_channel`.
 #[derive(Debug, thiserror::Error)]
 pub enum GetChannelError {
-    /// Can occur if trying to get a channel with an Id that was not added while building the socket
+    /// Can occur if trying to get a channel with an Id that was not added while building the
+    /// socket
     #[error("This channel was never created")]
     NotFound,
     /// The channel has already been taken and is no longer on the socket

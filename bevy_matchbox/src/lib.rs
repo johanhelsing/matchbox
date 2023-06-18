@@ -58,9 +58,7 @@ use std::marker::PhantomData;
 /// fn open_socket_system(mut commands: Commands) {
 ///     let room_url = "wss://matchbox.example.com";
 ///
-///     let socket: MatchboxSocket<SingleChannel> = WebRtcSocket::builder(room_url)
-///         .add_channel(ChannelConfig::reliable())
-///         .into();
+///     let socket: MatchboxSocket<SingleChannel> = MatchboxSocket::new_reliable(room_url);
 ///
 ///     commands.insert_resource(socket);
 /// }

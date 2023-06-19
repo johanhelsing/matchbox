@@ -35,7 +35,7 @@ where
     }
 }
 
-/// A custom topology used to run a WebRTC connection to completion
+/// A topology used to map connections between peers.
 #[async_trait]
 pub trait SignalingTopology<Cb = NoCallbacks, S = NoState>
 where

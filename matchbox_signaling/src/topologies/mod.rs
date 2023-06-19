@@ -62,7 +62,7 @@ pub mod common_logic {
     /// Alias for Arc<Mutex<T>>
     pub type StateObj<T> = Arc<Mutex<T>>;
 
-    /// Sugar for UnboundedSender<Result<Message, axum::Error>>
+    /// Alias for UnboundedSender<Result<Message, axum::Error>>
     pub type SignalingChannel = UnboundedSender<Result<Message, axum::Error>>;
 
     /// Send a message to a channel without blocking.

@@ -64,7 +64,7 @@ async fn main() {
         .trace()
         .mutate_router(|router| {
             // Apply router transformations
-            router.route("/health", get(health_handler))
+            router.route("/health", get(|| async { StatusCode::OK }))
         })
         .build();
     server

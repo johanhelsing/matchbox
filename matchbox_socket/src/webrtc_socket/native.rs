@@ -531,9 +531,10 @@ async fn create_data_channel(
     channel.on_message(Box::new(move |message| {
         let packet = (*message.data).into();
         trace!("data channel message received: {packet:?}");
-        from_peer_message_tx
-            .unbounded_send((peer_id, packet))
-            .unwrap();
+        if let Err(e) = from_peer_message_tx.unbounded_send((peer_id, packet)) {
+            // should only happen if the socket is dropped, or we are out of memory
+            warn!("failed to notify about data channel message: {e:?}");
+        }
         Box::pin(async move {})
     }));
 

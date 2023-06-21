@@ -21,6 +21,7 @@ readme = "../README.md"
 
 [features]
 ggrs = ["matchbox_socket/ggrs"]
+signaling = ["matchbox_signaling"]
 
 [dependencies]
 bevy = { version = "0.10", default-features = false }
@@ -28,4 +29,4 @@ matchbox_socket = { path = "../matchbox_socket", version = "0.6" }
 cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-matchbox_signaling = { path = "../matchbox_signaling", version = "0.6" }
+matchbox_signaling = { path = "../matchbox_signaling", version = "0.6", optional = true }

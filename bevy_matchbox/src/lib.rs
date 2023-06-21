@@ -8,7 +8,7 @@ mod socket;
 pub use socket::*;
 
 cfg_if! {
-    if #[cfg(not(target_arch = "wasm32"))] {
+    if #[cfg(all(not(target_arch = "wasm32"), feature = "signaling"))] {
         mod signaling;
         pub use signaling::*;
     }
@@ -24,7 +24,7 @@ pub mod prelude {
     };
 
     cfg_if! {
-        if #[cfg(not(target_arch = "wasm32"))] {
+        if #[cfg(all(not(target_arch = "wasm32"), feature = "signaling"))] {
             pub use crate::signaling::{MatchboxServer, StartServerExt, StopServerExt};
             pub use matchbox_signaling::SignalingServerBuilder;
         }

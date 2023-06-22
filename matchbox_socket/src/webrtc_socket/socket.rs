@@ -419,7 +419,7 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     ///
     /// # Panics
     ///
-    /// Will panic if the channel has been closed or is broken.
+    /// Will panic if the socket has been closed or is broken.
     ///
     /// [`WebRtcSocket::try_update_peers`] is the equivalent method that will instead return a
     /// `Result`.
@@ -428,7 +428,7 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     }
 
     /// Similar to [`WebRtcSocket::update_peers`]. Will instead return a Result::Err if the
-    /// channel is closed or broken.
+    /// socket is closed or broken.
     pub fn try_update_peers(&mut self) -> Result<Vec<(PeerId, PeerState)>, &'static str> {
         let mut changes = Vec::new();
         while let Ok(res) = self.peer_state_rx.try_next() {

@@ -1,7 +1,7 @@
 use axum::{extract::ws::Message, Error};
 use matchbox_protocol::PeerId;
 use matchbox_signaling::{
-    common_logic::{self, StateObj},
+    common_logic::{self},
     SignalingError, SignalingState,
 };
 use serde::Deserialize;
@@ -28,50 +28,42 @@ pub(crate) struct Peer {
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct ServerState {
-    clients_waiting: StateObj<HashMap<SocketAddr, RequestedRoom>>,
-    clients_in_queue: StateObj<HashMap<PeerId, RequestedRoom>>,
-    clients: StateObj<HashMap<PeerId, Peer>>,
-    rooms: StateObj<HashMap<RequestedRoom, HashSet<PeerId>>>,
+    clients_waiting: HashMap<SocketAddr, RequestedRoom>,
+    clients_in_queue: HashMap<PeerId, RequestedRoom>,
+    clients: HashMap<PeerId, Peer>,
+    rooms: HashMap<RequestedRoom, HashSet<PeerId>>,
 }
 impl SignalingState for ServerState {}
 
 impl ServerState {
     /// Add a waiting client to matchmaking
     pub fn add_waiting_client(&mut self, origin: SocketAddr, room: RequestedRoom) {
-        self.clients_waiting.lock().unwrap().insert(origin, room);
+        self.clients_waiting.insert(origin, room);
     }
 
     /// Assign a peer id to a waiting client
     pub fn assign_id_to_waiting_client(&mut self, origin: SocketAddr, peer_id: PeerId) {
-        let room = {
-            let mut lock = self.clients_waiting.lock().unwrap();
-            lock.remove(&origin).expect("waiting client")
-        };
-        {
-            let mut lock = self.clients_in_queue.lock().unwrap();
-            lock.insert(peer_id, room);
-        }
+        let room = self
+            .clients_waiting
+            .remove(&origin)
+            .expect("waiting client");
+        self.clients_in_queue.insert(peer_id, room);
     }
 
     /// Remove the waiting peer, returning the peer's requested room
     pub fn remove_waiting_peer(&mut self, peer_id: PeerId) -> RequestedRoom {
-        let room = {
-            let mut lock = self.clients_in_queue.lock().unwrap();
-            lock.remove(&peer_id).expect("waiting peer")
-        };
-        room
+        self.clients_in_queue
+            .remove(&peer_id)
+            .expect("waiting peer")
     }
 
     /// Add a peer, returning the peers already in room
     pub fn add_peer(&mut self, peer: Peer) -> Vec<PeerId> {
         let peer_id = peer.uuid;
         let room = peer.room.clone();
-        {
-            let mut clients = self.clients.lock().unwrap();
-            clients.insert(peer.uuid, peer);
-        };
-        let mut rooms = self.rooms.lock().unwrap();
-        let peers = rooms.entry(room.clone()).or_default();
+        self.clients.insert(peer.uuid, peer);
+
+        let peers = self.rooms.entry(room.clone()).or_default();
         let prev_peers = peers.iter().cloned().collect();
 
         match room.next {
@@ -92,15 +84,12 @@ impl ServerState {
 
     /// Get a peer
     pub fn get_peer(&self, peer_id: &PeerId) -> Option<Peer> {
-        let clients = self.clients.lock().unwrap();
-        clients.get(peer_id).cloned()
+        self.clients.get(peer_id).cloned()
     }
 
     /// Get the peers in a room currently
     pub fn get_room_peers(&self, room: &RequestedRoom) -> Vec<PeerId> {
         self.rooms
-            .lock()
-            .unwrap()
             .get(room)
             .map(|room_peers| room_peers.iter().copied().collect::<Vec<PeerId>>())
             .unwrap_or_default()
@@ -109,14 +98,11 @@ impl ServerState {
     /// Remove a peer from the state if it existed, returning the peer removed.
     #[must_use]
     pub fn remove_peer(&mut self, peer_id: &PeerId) -> Option<Peer> {
-        let peer = { self.clients.lock().unwrap().remove(peer_id) };
-
+        let peer = self.clients.remove(peer_id);
         if let Some(ref peer) = peer {
             // Best effort to remove peer from their room
             _ = self
                 .rooms
-                .lock()
-                .unwrap()
                 .get_mut(&peer.room)
                 .map(|room| room.remove(peer_id));
         }
@@ -125,8 +111,7 @@ impl ServerState {
 
     /// Send a message to a peer without blocking.
     pub fn try_send(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
-        let clients = self.clients.lock().unwrap();
-        match clients.get(&id) {
+        match self.clients.get(&id) {
             Some(peer) => Ok(common_logic::try_send(&peer.sender, message)?),
             None => Err(SignalingError::UnknownPeer),
         }

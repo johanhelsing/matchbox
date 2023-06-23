@@ -17,6 +17,7 @@ use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 
+/// A full mesh network topolgoy
 #[derive(Debug, Default)]
 pub struct FullMesh;
 

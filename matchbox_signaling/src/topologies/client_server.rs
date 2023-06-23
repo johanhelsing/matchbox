@@ -17,6 +17,7 @@ use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 
+/// A client server network topology
 #[derive(Debug, Default)]
 pub struct ClientServer;
 
@@ -243,6 +244,7 @@ impl ClientServerState {
             .and_then(|(_id, sender)| try_send(sender, message))
     }
 
+    /// Inform all clients that the host has disconnected.
     pub fn reset(&mut self) {
         // Safety: Lock must be scoped/dropped to ensure no deadlock with next section
         let host_id = {

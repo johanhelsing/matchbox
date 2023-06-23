@@ -3,7 +3,8 @@
 #![forbid(unsafe_code)]
 mod error;
 mod signaling_server;
-mod topologies;
+/// Network topologies to be created by the [`SignalingServer`]
+pub mod topologies;
 
 pub use error::Error;
 pub use signaling_server::{

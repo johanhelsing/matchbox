@@ -30,10 +30,7 @@ fn setup_logging() {
 
 #[tokio::main]
 async fn main() {
-    // Initialize logger
     setup_logging();
-
-    // Parse clap arguments
     let args = Args::parse();
 
     // Setup router

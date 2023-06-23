@@ -11,9 +11,9 @@ use axum::{http::StatusCode, response::IntoResponse, routing::get};
 use clap::Parser;
 use matchbox_signaling::SignalingServerBuilder;
 use tracing::info;
+use tracing_subscriber::prelude::*;
 
 fn setup_logging() {
-    use tracing_subscriber::prelude::*;
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()

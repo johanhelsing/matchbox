@@ -14,8 +14,10 @@ pub enum ChannelError {
     #[error("This channel has already been taken and is no longer on the socket")]
     Taken,
     /// Channel might have been opened but later closed, or never opened in the first place.
-    #[error("This channel is broken.")]
-    Broken,
+    /// The latter can for example occur when an one calls `try_update_peers` on a socket that was
+    /// given an invalid room URL.
+    #[error("This channel is closed.")]
+    Closed,
 }
 
 /// An error that can occur with WebRTC signaling.

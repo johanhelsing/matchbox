@@ -23,8 +23,11 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.5.0
 
-      - name: Run cargo test
-        run: cargo test --all-targets
+      - name: Run Cargo Test
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: test
+          args: --all-targets
 
   # Should be upgraded to test when possible
   check-wasm:
@@ -39,19 +42,22 @@ jobs:
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
-      
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.5.0
-  
-      - name: Run cargo check
-        run: cargo check >
-          --all-targets
-          --target wasm32-unknown-unknown
-          -p matchbox_socket
-          -p bevy_matchbox
-          -p bevy_ggrs_example
-          -p simple_example
-     
+
+      - name: Run Cargo Check
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: check
+          args: >
+            --all-targets
+            --target wasm32-unknown-unknown
+            -p matchbox_socket
+            -p bevy_matchbox
+            -p bevy_ggrs_example
+            -p simple_example
+
   format:
     name: Format
     runs-on: ubuntu-latest
@@ -68,9 +74,13 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.5.0
 
-      - name: Run cargo clippy
-        run: cargo fmt --all --check
-
+      - name: Run Cargo Clippy
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: fmt
+          args: >
+            --all
+            --check
 
   lint-native:
     name: Lints native
@@ -92,7 +102,13 @@ jobs:
         uses: Swatinem/rust-cache@v2.5.0
 
       - name: Run cargo clippy
-        run: cargo clippy --all-targets -- -D warnings
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: clippy
+          args: >
+            --all-targets
+            --
+            -D warnings
 
   lint-wasm:
     name: Clippy wasm
@@ -112,7 +128,10 @@ jobs:
         uses: Swatinem/rust-cache@v2.5.0
 
       - name: Run cargo clippy
-        run: cargo clippy >
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: clippy
+          args: >
             --all-targets
             --target wasm32-unknown-unknown
             -p matchbox_socket

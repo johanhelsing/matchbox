@@ -6,3 +6,5 @@ crates/*/target
 /.vscode
 /benches/target
 *.code-workspace
+
+/website/dist

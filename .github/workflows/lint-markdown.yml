@@ -2,7 +2,7 @@ on:
   push:
   pull_request:
 
-name: Markdown Lint
+name: Lint Markdown
 
 jobs:
   markdownlint:

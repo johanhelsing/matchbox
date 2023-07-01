@@ -8,6 +8,14 @@ repository = "https://github.com/johanhelsing/matchbox"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
 license = "MIT OR Apache-2.0"
 
+[lib]
+name = "bevy_ggrs_example_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bevy_ggrs_example"
+path = "src/main.rs"
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = [
   "Document",

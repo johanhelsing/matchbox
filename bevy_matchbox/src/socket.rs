@@ -1,13 +1,14 @@
 use bevy::{
     ecs::system::Command,
     prelude::{Commands, Component, Resource, World},
-    tasks::{IoTaskPool, Task},
+    tasks::IoTaskPool,
 };
 pub use matchbox_socket;
 use matchbox_socket::{
     BuildablePlurality, MessageLoopFuture, SingleChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
 use std::{
+    fmt::Debug,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -69,10 +70,7 @@ use std::{
 /// }
 /// ```
 #[derive(Resource, Component, Debug)]
-pub struct MatchboxSocket<C: BuildablePlurality>(
-    WebRtcSocket<C>,
-    Task<Result<(), matchbox_socket::Error>>,
-);
+pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>, Box<dyn Debug + Send + Sync>);
 
 impl<C: BuildablePlurality> Deref for MatchboxSocket<C> {
     type Target = WebRtcSocket<C>;
@@ -98,7 +96,7 @@ impl<C: BuildablePlurality> From<(WebRtcSocket<C>, MessageLoopFuture)> for Match
     fn from((socket, message_loop_fut): (WebRtcSocket<C>, MessageLoopFuture)) -> Self {
         let task_pool = IoTaskPool::get();
         let task = task_pool.spawn(message_loop_fut);
-        MatchboxSocket(socket, task)
+        MatchboxSocket(socket, Box::new(task))
     }
 }
 

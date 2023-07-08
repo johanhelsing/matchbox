@@ -168,7 +168,7 @@ async fn message_loop<M: Messenger>(
 
             message = events_receiver.next().fuse() => {
                 if let Some(event) = message {
-                    debug!("{:?}", event);
+                    debug!("{event:?}");
                     match event {
                         PeerEvent::IdAssigned(peer_uuid) => {
                             id_tx.try_send(peer_uuid.to_owned()).unwrap();

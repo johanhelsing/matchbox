@@ -114,7 +114,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                             info!("Connection closed by {peer_id}");
                         }
                         ClientRequestError::Json(_) | ClientRequestError::UnsupportedType(_) => {
-                            error!("Error with request: {:?}", e);
+                            error!("Error with request: {e:?}");
                             continue; // Recoverable error
                         }
                     };

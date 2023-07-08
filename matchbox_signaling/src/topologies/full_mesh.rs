@@ -92,7 +92,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                         .to_string(),
                     );
                     if let Err(e) = state.try_send_to_peer(receiver, event) {
-                        error!("error sending: {:?}", e);
+                        error!("error sending: {e:?}");
                     }
                 }
                 PeerRequest::KeepAlive => {

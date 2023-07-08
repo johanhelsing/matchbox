@@ -185,7 +185,7 @@ async fn handle_ws(
             Ok(request) => request,
             Err(ClientRequestError::Axum(e)) => {
                 // Most likely a ConnectionReset or similar.
-                error!("Axum error while receiving request: {:?}", e);
+                error!("Axum error while receiving request: {e:?}");
                 warn!("Severing connection with {peer_uuid}");
                 break; // give up on this peer.
             }
@@ -194,7 +194,7 @@ async fn handle_ws(
                 break;
             }
             Err(e) => {
-                error!("Error untangling request: {:?}", e);
+                error!("Error untangling request: {e:?}");
                 continue;
             }
         };
@@ -213,7 +213,7 @@ async fn handle_ws(
                 let state = state.lock().await;
                 if let Some(peer) = state.clients.get(&receiver) {
                     if let Err(e) = peer.sender.send(Ok(event)) {
-                        error!("error sending: {:?}", e);
+                        error!("error sending: {e:?}");
                     }
                 } else {
                     warn!("peer not found ({receiver}), ignoring signal");

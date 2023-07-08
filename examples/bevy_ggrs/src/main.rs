@@ -23,7 +23,7 @@ const SKY_COLOR: Color = Color::rgb(0.69, 0.69, 0.69);
 fn main() {
     // read query string or command line arguments
     let args = Args::get();
-    info!("{:?}", args);
+    info!("{args:?}");
 
     let mut app = App::new();
 
@@ -76,7 +76,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     };
 
     let room_url = format!("{}/{}", &args.matchbox, room_id);
-    info!("connecting to matchbox server: {:?}", room_url);
+    info!("connecting to matchbox server: {room_url:?}");
 
     commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
 }
@@ -193,7 +193,7 @@ fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {
     match session.as_mut() {
         Session::P2PSession(s) => {
             for event in s.events() {
-                info!("GGRS Event: {:?}", event);
+                info!("GGRS Event: {event:?}");
             }
         }
         _ => panic!("This example focuses on p2p."),

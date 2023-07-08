@@ -189,7 +189,7 @@ async fn message_loop<M: Messenger>(
                             });
 
                             if signal_tx.unbounded_send(data).is_err() {
-                                warn!("ignoring signal from peer {sender:?} because the handshake has already finished");
+                                warn!("ignoring signal from peer {sender} because the handshake has already finished");
                             }
                         },
                     }
@@ -203,7 +203,7 @@ async fn message_loop<M: Messenger>(
             }
 
             peer_uuid = peer_loops.select_next_some() => {
-                debug!("peer {peer_uuid:?} finished");
+                debug!("peer {peer_uuid} finished");
                 peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("failed to report peer as disconnected");
             }
 

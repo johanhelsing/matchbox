@@ -143,8 +143,8 @@ fn lobby_system(
     for (peer, new_state) in socket.update_peers() {
         // you can also handle the specific dis(connections) as they occur:
         match new_state {
-            PeerState::Connected => info!("peer {peer:?} connected"),
-            PeerState::Disconnected => info!("peer {peer:?} disconnected"),
+            PeerState::Connected => info!("peer {peer} connected"),
+            PeerState::Disconnected => info!("peer {peer} disconnected"),
         }
     }
 

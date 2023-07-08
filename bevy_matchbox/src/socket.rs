@@ -1,13 +1,17 @@
 use bevy::{
     ecs::system::Command,
-    prelude::{Commands, Component, Deref, DerefMut, Resource, World},
+    prelude::{Commands, Component, Resource, World},
     tasks::IoTaskPool,
 };
 pub use matchbox_socket;
 use matchbox_socket::{
     BuildablePlurality, MessageLoopFuture, SingleChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
-use std::marker::PhantomData;
+use std::{
+    fmt::Debug,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// A [`WebRtcSocket`] as a [`Component`] or [`Resource`].
 ///
@@ -65,8 +69,22 @@ use std::marker::PhantomData;
 ///     commands.remove_resource::<MatchboxSocket<SingleChannel>>();
 /// }
 /// ```
-#[derive(Resource, Component, Debug, Deref, DerefMut)]
-pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>);
+#[derive(Resource, Component, Debug)]
+pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>, Box<dyn Debug + Send + Sync>);
+
+impl<C: BuildablePlurality> Deref for MatchboxSocket<C> {
+    type Target = WebRtcSocket<C>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<C: BuildablePlurality> DerefMut for MatchboxSocket<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 impl<C: BuildablePlurality> From<WebRtcSocketBuilder<C>> for MatchboxSocket<C> {
     fn from(builder: WebRtcSocketBuilder<C>) -> Self {
@@ -77,8 +95,8 @@ impl<C: BuildablePlurality> From<WebRtcSocketBuilder<C>> for MatchboxSocket<C> {
 impl<C: BuildablePlurality> From<(WebRtcSocket<C>, MessageLoopFuture)> for MatchboxSocket<C> {
     fn from((socket, message_loop_fut): (WebRtcSocket<C>, MessageLoopFuture)) -> Self {
         let task_pool = IoTaskPool::get();
-        task_pool.spawn(message_loop_fut).detach();
-        MatchboxSocket(socket)
+        let task = task_pool.spawn(message_loop_fut);
+        MatchboxSocket(socket, Box::new(task))
     }
 }
 

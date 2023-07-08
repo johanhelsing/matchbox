@@ -3018,6 +3018,7 @@ dependencies = [
  "bytes",
  "cfg-if 1.0.0",
  "crossbeam-channel",
+ "derive_more",
  "futures",
  "futures-channel",
  "futures-test",

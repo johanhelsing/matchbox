@@ -53,6 +53,7 @@ pub(crate) struct MessagingError(#[from] JsError);
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         use wasm_bindgen::{JsValue};
+        use derive_more::Display;
 
         // The below is just to wrap Result<JsValue, JsValue> into something sensible-ish
 
@@ -66,15 +67,10 @@ cfg_if! {
             }
         }
 
-        #[derive(Debug)]
+        #[derive(Debug, Display)]
+        #[display(fmt = "{_0:?}")]
         pub struct JsError(JsValue);
 
         impl std::error::Error for JsError {}
-
-        impl std::fmt::Display for JsError {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{:?}", self.0)
-            }
-        }
     }
 }

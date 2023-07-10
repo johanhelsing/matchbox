@@ -419,7 +419,7 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     ///
     /// # Panics
     ///
-    /// Will panic if the socket is closed.
+    /// Will panic if the socket future has been dropped.
     ///
     /// [`WebRtcSocket::try_update_peers`] is the equivalent method that will instead return a
     /// `Result`.

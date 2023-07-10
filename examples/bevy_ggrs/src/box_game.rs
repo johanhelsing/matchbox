@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_ggrs::{PlayerInputs, Rollback, RollbackIdProvider, Session};
+use bevy_ggrs::{AddRollbackCommandExtension, PlayerInputs, Rollback, Session};
 use bevy_matchbox::prelude::*;
 use bytemuck::{Pod, Zeroable};
 use ggrs::{Config, PlayerHandle};
@@ -80,16 +80,15 @@ pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> 
 
 pub fn setup_scene_system(
     mut commands: Commands,
-    mut rip: ResMut<RollbackIdProvider>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     session: Res<Session<GGRSConfig>>,
     mut camera_query: Query<&mut Transform, With<Camera>>,
 ) {
     let num_players = match &*session {
-        Session::SyncTestSession(s) => s.num_players(),
-        Session::P2PSession(s) => s.num_players(),
-        Session::SpectatorSession(s) => s.num_players(),
+        Session::SyncTest(s) => s.num_players(),
+        Session::P2P(s) => s.num_players(),
+        Session::Spectator(s) => s.num_players(),
     };
 
     // plane
@@ -129,10 +128,7 @@ pub fn setup_scene_system(
             },
             Player { handle },
             Velocity::default(),
-            // this component indicates bevy_GGRS that parts of this entity should be saved and
-            // loaded
-            Rollback::new(rip.next_id()),
-        ));
+        )).add_rollback();
     }
 
     // light

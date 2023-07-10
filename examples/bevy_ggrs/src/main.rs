@@ -1,5 +1,5 @@
 use bevy::{log::LogPlugin, prelude::*};
-use bevy_ggrs::{GGRSPlugin, GGRSSchedule, Session};
+use bevy_ggrs::{GgrsPlugin, GgrsSchedule, Session};
 use bevy_matchbox::prelude::*;
 use ggrs::SessionBuilder;
 
@@ -27,7 +27,7 @@ fn main() {
 
     let mut app = App::new();
 
-    GGRSPlugin::<GGRSConfig>::new()
+    GgrsPlugin::<GGRSConfig>::new()
         // define frequency of rollback game logic update
         .with_update_frequency(FPS)
         // define system that returns inputs given a player handle, so GGRS can send the inputs
@@ -59,13 +59,13 @@ fn main() {
         .insert_resource(args)
         .init_resource::<FrameCount>()
         .add_state::<AppState>()
-        .add_systems((lobby_startup, start_matchbox_socket).in_schedule(OnEnter(AppState::Lobby)))
-        .add_system(lobby_system.in_set(OnUpdate(AppState::Lobby)))
-        .add_system(lobby_cleanup.in_schedule(OnExit(AppState::Lobby)))
-        .add_system(setup_scene_system.in_schedule(OnEnter(AppState::InGame)))
-        .add_system(log_ggrs_events.in_set(OnUpdate(AppState::InGame)))
+        .add_systems(OnEnter(AppState::Lobby), (lobby_startup, start_matchbox_socket))
+        .add_systems(Update, lobby_system.run_if(in_state(AppState::Lobby)))
+        .add_systems(OnExit(AppState::Lobby), lobby_cleanup)
+        .add_systems(OnEnter(AppState::InGame), setup_scene_system)
+        .add_systems(Update, log_ggrs_events.run_if(in_state(AppState::InGame)))
         // these systems will be executed as part of the advance frame update
-        .add_systems((move_cube_system, increase_frame_system).in_schedule(GGRSSchedule))
+        .add_systems(GgrsSchedule, (move_cube_system, increase_frame_system))
         .run();
 }
 
@@ -94,7 +94,8 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn(NodeBundle {
             style: Style {
-                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
                 position_type: PositionType::Absolute,
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::FlexEnd,
@@ -183,7 +184,7 @@ fn lobby_system(
         .start_p2p_session(channel)
         .expect("failed to start session");
 
-    commands.insert_resource(Session::P2PSession(sess));
+    commands.insert_resource(Session::P2P(sess));
 
     // transition to in-game state
     app_state.set(AppState::InGame);
@@ -191,7 +192,7 @@ fn lobby_system(
 
 fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {
     match session.as_mut() {
-        Session::P2PSession(s) => {
+        Session::P2P(s) => {
             for event in s.events() {
                 info!("GGRS Event: {event:?}");
             }

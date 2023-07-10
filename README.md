@@ -65,7 +65,7 @@ Projects using Matchbox:
 
 PRs welcome!
 
-If you have questions or suggestions, feel free to make an [issue](https://github.com/johanhelsing/matchbox/issues). There's also a [Discord channel](https://discord.gg/Rzw8f9cY) if you want to get in touch.
+If you have questions or suggestions, feel free to make an [issue](https://github.com/johanhelsing/matchbox/issues). There's also a [Discord channel](https://discord.gg/ye9UDNvqQD) if you want to get in touch.
 
 ## Thanks
 

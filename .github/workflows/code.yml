@@ -42,7 +42,7 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.5.1
- 
+
       - name: Run cargo check
         run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo check >
           --all-targets
@@ -112,7 +112,7 @@ jobs:
         uses: Swatinem/rust-cache@v2.5.1
 
       - name: Run cargo clippy
-        run: cargo clippy >
+        run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo clippy >
             --all-targets
             --target wasm32-unknown-unknown
             -p matchbox_socket

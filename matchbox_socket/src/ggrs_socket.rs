@@ -21,7 +21,7 @@ impl WebRtcSocketBuilder<NoChannels> {
         self.config.channels.push(ChannelConfig::ggrs());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }
@@ -32,7 +32,7 @@ impl WebRtcSocketBuilder<SingleChannel> {
         self.config.channels.push(ChannelConfig::ggrs());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }
@@ -42,7 +42,7 @@ impl WebRtcSocketBuilder<MultipleChannels> {
         self.config.channels.push(ChannelConfig::ggrs());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }

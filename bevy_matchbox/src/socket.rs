@@ -104,7 +104,7 @@ impl<C: BuildablePlurality> From<(WebRtcSocket<C>, MessageLoopFuture)> for Match
 struct OpenSocket<C: BuildablePlurality>(WebRtcSocketBuilder<C>);
 
 impl<C: BuildablePlurality + 'static> Command for OpenSocket<C> {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         world.insert_resource(MatchboxSocket::from(self.0));
     }
 }
@@ -125,12 +125,13 @@ impl<'w, 's, C: BuildablePlurality + 'static> OpenSocketExt<C> for Commands<'w, 
 struct CloseSocket<C: BuildablePlurality>(PhantomData<C>);
 
 impl<C: BuildablePlurality + 'static> Command for CloseSocket<C> {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         world.remove_resource::<MatchboxSocket<C>>();
     }
 }
 
-/// A [`Commands`] extension used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`] resource.
+/// A [`Commands`] extension used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`]
+/// resource.
 pub trait CloseSocketExt {
     /// Delete the [`MatchboxSocket`] resource.
     fn close_socket<C: BuildablePlurality + 'static>(&mut self);
@@ -138,7 +139,7 @@ pub trait CloseSocketExt {
 
 impl<'w, 's> CloseSocketExt for Commands<'w, 's> {
     fn close_socket<C: BuildablePlurality + 'static>(&mut self) {
-        self.add(CloseSocket::<C>(PhantomData::default()))
+        self.add(CloseSocket::<C>(PhantomData))
     }
 }
 

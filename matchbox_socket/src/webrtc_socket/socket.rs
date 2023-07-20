@@ -148,7 +148,7 @@ impl WebRtcSocketBuilder {
                 attempts: Some(3),
                 keep_alive_interval: Some(Duration::from_secs(10)),
             },
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -187,7 +187,7 @@ impl WebRtcSocketBuilder<NoChannels> {
         self.config.channels.push(config);
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -196,7 +196,7 @@ impl WebRtcSocketBuilder<NoChannels> {
         self.config.channels.push(ChannelConfig::unreliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -205,7 +205,7 @@ impl WebRtcSocketBuilder<NoChannels> {
         self.config.channels.push(ChannelConfig::reliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }
@@ -216,7 +216,7 @@ impl WebRtcSocketBuilder<SingleChannel> {
         self.config.channels.push(config);
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -225,7 +225,7 @@ impl WebRtcSocketBuilder<SingleChannel> {
         self.config.channels.push(ChannelConfig::unreliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -234,7 +234,7 @@ impl WebRtcSocketBuilder<SingleChannel> {
         self.config.channels.push(ChannelConfig::reliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }
@@ -250,7 +250,7 @@ impl WebRtcSocketBuilder<MultipleChannels> {
         self.config.channels.push(ChannelConfig::unreliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -259,7 +259,7 @@ impl WebRtcSocketBuilder<MultipleChannels> {
         self.config.channels.push(ChannelConfig::reliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }
@@ -296,7 +296,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 peer_state_rx,
                 peers: Default::default(),
                 channels,
-                channel_plurality: PhantomData::default(),
+                channel_plurality: PhantomData,
             },
             Box::pin(run_socket(
                 id_tx,

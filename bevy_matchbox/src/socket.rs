@@ -139,7 +139,7 @@ pub trait CloseSocketExt {
 
 impl<'w, 's> CloseSocketExt for Commands<'w, 's> {
     fn close_socket<C: BuildablePlurality + 'static>(&mut self) {
-        self.add(CloseSocket::<C>(PhantomData::default()))
+        self.add(CloseSocket::<C>(PhantomData))
     }
 }
 

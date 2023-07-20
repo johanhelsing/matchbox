@@ -59,7 +59,10 @@ fn main() {
         .insert_resource(args)
         .init_resource::<FrameCount>()
         .add_state::<AppState>()
-        .add_systems(OnEnter(AppState::Lobby), (lobby_startup, start_matchbox_socket))
+        .add_systems(
+            OnEnter(AppState::Lobby),
+            (lobby_startup, start_matchbox_socket),
+        )
         .add_systems(Update, lobby_system.run_if(in_state(AppState::Lobby)))
         .add_systems(OnExit(AppState::Lobby), lobby_cleanup)
         .add_systems(OnEnter(AppState::InGame), setup_scene_system)

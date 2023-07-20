@@ -34,7 +34,7 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 log = { version = "0.4", default-features = false }
 thiserror = "1.0"
 cfg-if = "1.0"
-async-trait = { version = "0.1.71" }
+async-trait = { version = "0.1" }
 once_cell = { version = "1.17", default-features = false, features = [
   "race",
   "alloc",
@@ -83,7 +83,7 @@ async-tungstenite = { version = "0.22", default-features = false, features = [
 ] }
 webrtc = { version = "0.8", default-features = false }
 bytes = { version = "1.1", default-features = false }
-async-compat = { version = "0.2.1", default-features = false }
+async-compat = { version = "0.2", default-features = false }
 
 [dev-dependencies]
 futures-test = { version = "0.3" }

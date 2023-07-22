@@ -21,7 +21,7 @@ jobs:
           toolchain: stable
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.5.0
+        uses: Swatinem/rust-cache@v2.5.1
 
       - name: Run cargo test
         run: cargo test --all-targets
@@ -39,19 +39,19 @@ jobs:
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
-      
+
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.5.0
-  
+        uses: Swatinem/rust-cache@v2.5.1
+
       - name: Run cargo check
-        run: cargo check >
+        run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo check >
           --all-targets
           --target wasm32-unknown-unknown
           -p matchbox_socket
           -p bevy_matchbox
           -p bevy_ggrs_example
           -p simple_example
-     
+
   format:
     name: Format
     runs-on: ubuntu-latest
@@ -66,7 +66,7 @@ jobs:
           components: rustfmt
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.5.0
+        uses: Swatinem/rust-cache@v2.5.1
 
       - name: Run cargo clippy
         run: cargo fmt --all --check
@@ -89,7 +89,7 @@ jobs:
           components: clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.5.0
+        uses: Swatinem/rust-cache@v2.5.1
 
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings
@@ -109,10 +109,10 @@ jobs:
           components: clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.5.0
+        uses: Swatinem/rust-cache@v2.5.1
 
       - name: Run cargo clippy
-        run: cargo clippy >
+        run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo clippy >
             --all-targets
             --target wasm32-unknown-unknown
             -p matchbox_socket

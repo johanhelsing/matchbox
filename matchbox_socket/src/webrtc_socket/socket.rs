@@ -1,4 +1,4 @@
-use super::error::GetChannelError;
+use super::error::ChannelError;
 use crate::{
     webrtc_socket::{
         message_loop, signaling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
@@ -148,7 +148,7 @@ impl WebRtcSocketBuilder {
                 attempts: Some(3),
                 keep_alive_interval: Some(Duration::from_secs(10)),
             },
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -187,7 +187,7 @@ impl WebRtcSocketBuilder<NoChannels> {
         self.config.channels.push(config);
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -196,7 +196,7 @@ impl WebRtcSocketBuilder<NoChannels> {
         self.config.channels.push(ChannelConfig::unreliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -205,7 +205,7 @@ impl WebRtcSocketBuilder<NoChannels> {
         self.config.channels.push(ChannelConfig::reliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }
@@ -216,7 +216,7 @@ impl WebRtcSocketBuilder<SingleChannel> {
         self.config.channels.push(config);
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -225,7 +225,7 @@ impl WebRtcSocketBuilder<SingleChannel> {
         self.config.channels.push(ChannelConfig::unreliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -234,7 +234,7 @@ impl WebRtcSocketBuilder<SingleChannel> {
         self.config.channels.push(ChannelConfig::reliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }
@@ -250,7 +250,7 @@ impl WebRtcSocketBuilder<MultipleChannels> {
         self.config.channels.push(ChannelConfig::unreliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 
@@ -259,7 +259,7 @@ impl WebRtcSocketBuilder<MultipleChannels> {
         self.config.channels.push(ChannelConfig::reliable());
         WebRtcSocketBuilder {
             config: self.config,
-            channel_plurality: PhantomData::default(),
+            channel_plurality: PhantomData,
         }
     }
 }
@@ -296,7 +296,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 peer_state_rx,
                 peers: Default::default(),
                 channels,
-                channel_plurality: PhantomData::default(),
+                channel_plurality: PhantomData,
             },
             Box::pin(run_socket(
                 id_tx,
@@ -416,15 +416,34 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// this method was called.
     ///
     /// See also: [`PeerState`]
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the socket future has been dropped.
+    ///
+    /// [`WebRtcSocket::try_update_peers`] is the equivalent method that will instead return a
+    /// `Result`.
     pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
+        self.try_update_peers().unwrap()
+    }
+
+    /// Similar to [`WebRtcSocket::update_peers`]. Will instead return a Result::Err if the
+    /// socket is closed.
+    pub fn try_update_peers(&mut self) -> Result<Vec<(PeerId, PeerState)>, ChannelError> {
         let mut changes = Vec::new();
-        while let Ok(Some((id, state))) = self.peer_state_rx.try_next() {
-            let old = self.peers.insert(id, state);
-            if old != Some(state) {
-                changes.push((id, state));
+        while let Ok(res) = self.peer_state_rx.try_next() {
+            match res {
+                Some((id, state)) => {
+                    let old = self.peers.insert(id, state);
+                    if old != Some(state) {
+                        changes.push((id, state));
+                    }
+                }
+                None => return Err(ChannelError::Closed),
             }
         }
-        changes
+
+        Ok(changes)
     }
 
     /// Returns an iterator of the ids of the connected peers.
@@ -507,12 +526,12 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// ```
     ///
     /// See also: [`WebRtcSocket::channel`], [`WebRtcSocket::take_channel`]
-    pub fn get_channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, GetChannelError> {
+    pub fn get_channel(&mut self, channel: usize) -> Result<&mut WebRtcChannel, ChannelError> {
         self.channels
             .get_mut(channel)
-            .ok_or(GetChannelError::NotFound)?
+            .ok_or(ChannelError::NotFound)?
             .as_mut()
-            .ok_or(GetChannelError::Taken)
+            .ok_or(ChannelError::Taken)
     }
 
     /// Takes the [`WebRtcChannel`] of a given id.
@@ -529,12 +548,12 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// ```
     ///
     /// See also: [`WebRtcSocket::channel`]
-    pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, GetChannelError> {
+    pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, ChannelError> {
         self.channels
             .get_mut(channel)
-            .ok_or(GetChannelError::NotFound)?
+            .ok_or(ChannelError::NotFound)?
             .take()
-            .ok_or(GetChannelError::Taken)
+            .ok_or(ChannelError::Taken)
     }
 }
 

@@ -93,9 +93,9 @@ where
         let event_text = JsonPeerEvent::IdAssigned(peer_id).to_string();
         let event = Message::Text(event_text.clone());
         if let Err(e) = try_send(&sender, event) {
-            error!("error sending to {peer_id:?}: {e:?}");
+            error!("error sending to {peer_id}: {e:?}");
         } else {
-            info!("{peer_id:?} -> {event_text}");
+            info!("{peer_id} -> {event_text}");
         };
 
         let meta = WsStateMeta {

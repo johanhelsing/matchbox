@@ -37,7 +37,7 @@ impl SignalingTopology<NoCallbacks, ServerState> for MatchmakingDemoTopology {
             if let Err(e) = state.try_send(peer_id, event.clone()) {
                 error!("error sending to {peer_id:?}: {e:?}");
             } else {
-                info!("{:?} -> {:?}", peer_id, event_text);
+                info!("{peer_id} -> {event_text:?}");
             }
         }
 

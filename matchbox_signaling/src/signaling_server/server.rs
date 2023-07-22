@@ -5,7 +5,7 @@ use crate::{
         full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
     },
 };
-use axum_server::{accept::DefaultAcceptor, Handle};
+use axum_server::Handle;
 use futures::Future;
 use std::{io, net::SocketAddr, pin::Pin};
 
@@ -24,22 +24,14 @@ impl SignalingServer {
     pub fn full_mesh_builder(
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<FullMesh, FullMeshCallbacks, FullMeshState> {
-        SignalingServerBuilder::<_, _, _, DefaultAcceptor>::new(
-            socket_addr,
-            FullMesh,
-            FullMeshState::default(),
-        )
+        SignalingServerBuilder::new(socket_addr, FullMesh, FullMeshState::default())
     }
 
     /// Creates a new builder for a [`SignalingServer`] with client-server topology.
     pub fn client_server_builder(
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState> {
-        SignalingServerBuilder::<_, _, _, DefaultAcceptor>::new(
-            socket_addr,
-            ClientServer,
-            ClientServerState::default(),
-        )
+        SignalingServerBuilder::new(socket_addr, ClientServer, ClientServerState::default())
     }
 
     /// Returns a clone to a server handle for introspection.

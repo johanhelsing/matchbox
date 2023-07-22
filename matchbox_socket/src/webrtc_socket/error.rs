@@ -3,9 +3,9 @@ use cfg_if::cfg_if;
 use futures_channel::mpsc::TrySendError;
 
 /// An error that can occur when getting a socket's channel through
-/// `get_channel` or `take_channel`.
+/// `get_channel`, `take_channel` or `try_update_peers`.
 #[derive(Debug, thiserror::Error)]
-pub enum GetChannelError {
+pub enum ChannelError {
     /// Can occur if trying to get a channel with an Id that was not added while building the
     /// socket
     #[error("This channel was never created")]
@@ -13,6 +13,11 @@ pub enum GetChannelError {
     /// The channel has already been taken and is no longer on the socket
     #[error("This channel has already been taken and is no longer on the socket")]
     Taken,
+    /// Channel might have been opened but later closed, or never opened in the first place.
+    /// The latter can for example occur when an one calls `try_update_peers` on a socket that was
+    /// given an invalid room URL.
+    #[error("This channel is closed.")]
+    Closed,
 }
 
 /// An error that can occur with WebRTC signaling.

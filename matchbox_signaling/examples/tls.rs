@@ -14,7 +14,10 @@ async fn main() -> Result<(), matchbox_signaling::Error> {
         .on_id_assignment(|(socket, id)| info!("{socket} received {id}"))
         .on_peer_connected(|id| info!("Joined: {id}"))
         .on_peer_disconnected(|id| info!("Left: {id}"))
-        .tls("", "")
+        .tls(
+            "matchbox_signaling/examples/self-signed-certs/cert.pem",
+            "matchbox_signaling/examples/self-signed-certs/key.pem",
+        )
         .await
         .trace()
         .build();

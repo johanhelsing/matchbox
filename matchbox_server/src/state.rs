@@ -9,6 +9,7 @@ use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
 };
+use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RoomId(pub String);
@@ -23,7 +24,7 @@ pub(crate) struct RequestedRoom {
 pub(crate) struct Peer {
     pub uuid: PeerId,
     pub room: RequestedRoom,
-    pub sender: tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, Error>>,
+    pub sender: UnboundedSender<Result<Message, Error>>,
 }
 
 #[derive(Default, Debug, Clone)]

@@ -1,5 +1,5 @@
 use crate::signaling_server::{
-    handlers::WsStateMeta, NoOpCallouts, NoState, SignalingCallbacks, SignalingState,
+    handlers::WsStateMeta, NoCallbacks, NoState, SignalingCallbacks, SignalingState,
 };
 use async_trait::async_trait;
 use futures::{future::BoxFuture, Future};
@@ -39,16 +39,17 @@ where
 
 /// Topology produced by the signaling server
 #[async_trait]
-pub trait SignalingTopology<Cb = NoOpCallouts, S = NoState>
+pub trait SignalingTopology<Cb = NoCallbacks, S = NoState>
 where
     Cb: SignalingCallbacks,
     S: SignalingState,
 {
-    /// A run-to-completion state machine, spawned once for every websocket.
+    /// A run-to-completion state machine, spawned once for every socket.
     async fn state_machine(upgrade: WsStateMeta<Cb, S>);
 }
 
-pub(crate) mod common_logic {
+/// Common, re-usable logic and types shared between topologies and which may be useful if building your own topology.
+pub mod common_logic {
     use crate::signaling_server::error::{ClientRequestError, SignalingError};
     use axum::extract::ws::{Message, WebSocket};
     use futures::{stream::SplitSink, StreamExt};
@@ -60,7 +61,10 @@ pub(crate) mod common_logic {
     use tokio::sync::mpsc::{self, UnboundedSender};
     use tokio_stream::wrappers::UnboundedReceiverStream;
 
+    /// Alias for Arc<Mutex<T>>
     pub type StateObj<T> = Arc<Mutex<T>>;
+
+    /// Alias for UnboundedSender<Result<Message, axum::Error>>
     pub type SignalingChannel = UnboundedSender<Result<Message, axum::Error>>;
 
     /// Send a message to a channel without blocking.

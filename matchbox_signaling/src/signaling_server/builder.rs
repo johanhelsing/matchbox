@@ -2,7 +2,7 @@ use crate::{
     signaling_server::{
         callbacks::{Callback, SharedCallbacks},
         handlers::{ws_handler, WsUpgradeMeta},
-        NoOpCallouts, NoState,
+        NoCallbacks, NoState,
     },
     topologies::{SignalingStateMachine, SignalingTopology},
     SignalingCallbacks, SignalingServer, SignalingState,
@@ -21,7 +21,7 @@ use tracing::Level;
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
 /// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
-pub struct SignalingServerBuilder<Topology, Cb = NoOpCallouts, S = NoState>
+pub struct SignalingServerBuilder<Topology, Cb = NoCallbacks, S = NoState>
 where
     Topology: SignalingTopology<Cb, S>,
     Cb: SignalingCallbacks,
@@ -66,15 +66,15 @@ where
 
     /// Modify the router with a mutable closure. This is where one may apply middleware or other
     /// layers to the Router.
-    pub fn mutate_router(mut self, mut alter: impl FnMut(&mut Router)) -> Self {
-        alter(&mut self.router);
+    pub fn mutate_router(mut self, mut alter: impl FnMut(Router) -> Router) -> Self {
+        self.router = alter(self.router);
         self
     }
 
     /// Set a callback triggered before websocket upgrade to determine if the connection is allowed.
     pub fn on_connection_request<F>(mut self, callback: F) -> Self
     where
-        F: Fn(WsUpgradeMeta) -> Result<bool, Response> + Send + Sync + 'static,
+        F: FnMut(WsUpgradeMeta) -> Result<bool, Response> + Send + Sync + 'static,
     {
         self.shared_callbacks.on_connection_request = Callback::from(callback);
         self
@@ -84,7 +84,7 @@ where
     /// connection is allowed, right before finalizing the websocket upgrade.
     pub fn on_id_assignment<F>(mut self, callback: F) -> Self
     where
-        F: Fn((SocketAddr, PeerId)) + Send + Sync + 'static,
+        F: FnMut((SocketAddr, PeerId)) + Send + Sync + 'static,
     {
         self.shared_callbacks.on_id_assignment = Callback::from(callback);
         self

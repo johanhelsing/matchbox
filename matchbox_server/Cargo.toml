@@ -17,21 +17,19 @@ homepage = "https://github.com/johanhelsing/matchbox"
 readme = "../README.md"
 
 [dependencies]
-matchbox_protocol = { path = "../matchbox_protocol", version = "0.6", features = [
-  "json",
-] }
+matchbox_protocol = { path = "../matchbox_protocol", features = ["json"] }
 axum = { version = "0.6", features = ["ws"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.4", features = ["cors", "trace"] }
-tokio = { version = "1.10", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.29", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
-uuid = { version = "1.0", features = ["serde", "v4"] }
-clap = { version = "4.0", features = ["derive", "env"] }
+uuid = { version = "1.4", features = ["serde", "v4"] }
+clap = { version = "4.3", features = ["derive", "env"] }
 thiserror = "1.0"
 tokio-stream = "0.1"
 
 [dev-dependencies]
-tokio-tungstenite = "0.18.0"
+tokio-tungstenite = "0.19.0"

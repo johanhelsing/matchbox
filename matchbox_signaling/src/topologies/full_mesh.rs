@@ -17,6 +17,7 @@ use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 
+/// A full mesh network topolgoy
 #[derive(Debug, Default)]
 pub struct FullMesh;
 
@@ -64,10 +65,10 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                     match e {
                         ClientRequestError::Axum(_) => {
                             // Most likely a ConnectionReset or similar.
-                            warn!("Unrecoverable error with {peer_id:?}: {e:?}");
+                            warn!("Unrecoverable error with {peer_id}: {e:?}");
                         }
                         ClientRequestError::Close => {
-                            info!("Connection closed by {peer_id:?}");
+                            info!("Connection closed by {peer_id}");
                         }
                         ClientRequestError::Json(_) | ClientRequestError::UnsupportedType(_) => {
                             error!("Error with request: {e:?}");
@@ -91,7 +92,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                         .to_string(),
                     );
                     if let Err(e) = state.try_send_to_peer(receiver, event) {
-                        error!("error sending: {:?}", e);
+                        error!("error sending: {e:?}");
                     }
                 }
                 PeerRequest::KeepAlive => {
@@ -134,7 +135,7 @@ impl FullMeshState {
         let peers = { self.peers.lock().unwrap().clone() };
         peers.keys().for_each(|peer_id| {
             if let Err(e) = self.try_send_to_peer(*peer_id, event.clone()) {
-                error!("error sending to {peer_id:?}: {e:?}");
+                error!("error sending to {peer_id}: {e:?}");
             }
         });
         // Safety: All prior locks in this method must be freed prior to this call
@@ -157,7 +158,7 @@ impl FullMeshState {
             let peers = { self.peers.lock().unwrap().clone() };
             peers.keys().for_each(
                 |peer_id| match self.try_send_to_peer(*peer_id, event.clone()) {
-                    Ok(()) => info!("Sent peer remove to: {peer_id:?}"),
+                    Ok(()) => info!("Sent peer remove to: {peer_id}"),
                     Err(e) => error!("Failure sending peer remove: {e:?}"),
                 },
             );

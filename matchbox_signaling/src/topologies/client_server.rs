@@ -17,6 +17,7 @@ use matchbox_protocol::{JsonPeerEvent, PeerId, PeerRequest};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 
+/// A client server network topology
 #[derive(Debug, Default)]
 pub struct ClientServer;
 
@@ -87,7 +88,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                     callbacks.on_client_connected.emit(peer_id);
                 }
                 Err(e) => {
-                    error!("error sending peer {peer_id:?} to host: {e:?}");
+                    error!("error sending peer {peer_id} to host: {e:?}");
                     return;
                 }
             }
@@ -107,13 +108,13 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                     match e {
                         ClientRequestError::Axum(_) => {
                             // Most likely a ConnectionReset or similar.
-                            warn!("Unrecoverable error with {peer_id:?}: {e:?}");
+                            warn!("Unrecoverable error with {peer_id}: {e:?}");
                         }
                         ClientRequestError::Close => {
-                            info!("Connection closed by {peer_id:?}");
+                            info!("Connection closed by {peer_id}");
                         }
                         ClientRequestError::Json(_) | ClientRequestError::UnsupportedType(_) => {
-                            error!("Error with request: {:?}", e);
+                            error!("Error with request: {e:?}");
                             continue; // Recoverable error
                         }
                     };
@@ -212,7 +213,7 @@ impl ClientServerState {
         let event = Message::Text(JsonPeerEvent::PeerLeft(*peer_id).to_string());
         match self.try_send_to_host(event) {
             Ok(()) => {
-                info!("Notified host of peer remove: {:?}", peer_id)
+                info!("Notified host of peer remove: {peer_id}")
             }
             Err(e) => {
                 error!("Failure sending peer remove to host: {e:?}")
@@ -243,6 +244,7 @@ impl ClientServerState {
             .and_then(|(_id, sender)| try_send(sender, message))
     }
 
+    /// Inform all clients that the host has disconnected.
     pub fn reset(&mut self) {
         // Safety: Lock must be scoped/dropped to ensure no deadlock with next section
         let host_id = {
@@ -261,10 +263,10 @@ impl ClientServerState {
             clients.keys().for_each(|peer_id| {
                 match self.try_send_to_client(*peer_id, event.clone()) {
                     Ok(()) => {
-                        info!("Sent host peer remove to: {peer_id:?}")
+                        info!("Sent host peer remove to: {peer_id}")
                     }
                     Err(e) => {
-                        error!("Failure sending host peer remove to {peer_id:?}: {e:?}")
+                        error!("Failure sending host peer remove to {peer_id}: {e:?}")
                     }
                 }
             });

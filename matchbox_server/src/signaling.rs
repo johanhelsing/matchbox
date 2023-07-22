@@ -161,9 +161,9 @@ async fn handle_ws(
         let event = Message::Text(event_text.clone());
 
         if let Err(e) = add_peer_state.try_send(peer_uuid, event) {
-            error!("error sending to {peer_uuid:?}: {e:?}");
+            error!("error sending to {peer_uuid}: {e:?}");
         } else {
-            info!("{:?} -> {:?}", peer_uuid, event_text);
+            info!("{peer_uuid} -> {event_text:?}");
         };
 
         let event_text = JsonPeerEvent::NewPeer(peer_uuid).to_string();
@@ -172,9 +172,9 @@ async fn handle_ws(
         for peer_id in peers {
             // Tell everyone about this new peer
             if let Err(e) = add_peer_state.try_send(peer_id, event.clone()) {
-                error!("error sending to {peer_id:?}: {e:?}");
+                error!("error sending to {peer_id}: {e:?}");
             } else {
-                info!("{:?} -> {:?}", peer_id, event_text);
+                info!("{peer_id} -> {event_text:?}");
             }
         }
     }
@@ -185,21 +185,21 @@ async fn handle_ws(
             Ok(request) => request,
             Err(ClientRequestError::Axum(e)) => {
                 // Most likely a ConnectionReset or similar.
-                error!("Axum error while receiving request: {:?}", e);
-                warn!("Severing connection with {peer_uuid:?}");
+                error!("Axum error while receiving request: {e:?}");
+                warn!("Severing connection with {peer_uuid}");
                 break; // give up on this peer.
             }
             Err(ClientRequestError::Close) => {
-                info!("Received websocket close from {peer_uuid:?}");
+                info!("Received websocket close from {peer_uuid}");
                 break;
             }
             Err(e) => {
-                error!("Error untangling request: {:?}", e);
+                error!("Error untangling request: {e:?}");
                 continue;
             }
         };
 
-        info!("{:?} <- {:?}", peer_uuid, request);
+        info!("{peer_uuid} <- {request:?}");
 
         match request {
             PeerRequest::Signal { receiver, data } => {
@@ -213,10 +213,10 @@ async fn handle_ws(
                 let state = state.lock().await;
                 if let Some(peer) = state.clients.get(&receiver) {
                     if let Err(e) = peer.sender.send(Ok(event)) {
-                        error!("error sending: {:?}", e);
+                        error!("error sending: {e:?}");
                     }
                 } else {
-                    warn!("peer not found ({receiver:?}), ignoring signal");
+                    warn!("peer not found ({receiver}), ignoring signal");
                 }
             }
             PeerRequest::KeepAlive => {
@@ -227,7 +227,7 @@ async fn handle_ws(
     }
 
     // Peer disconnected or otherwise ended communication.
-    info!("Removing peer: {:?}", peer_uuid);
+    info!("Removing peer: {peer_uuid}");
     let mut state = state.lock().await;
     if let Some(removed_peer) = state.remove_peer(&peer_uuid) {
         let room = removed_peer.room;
@@ -246,7 +246,7 @@ async fn handle_ws(
         let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer.uuid).to_string());
         for peer_id in peers {
             match state.try_send(peer_id, event.clone()) {
-                Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
+                Ok(()) => info!("Sent peer remove to: {peer_id}"),
                 Err(e) => error!("Failure sending peer remove: {e:?}"),
             }
         }

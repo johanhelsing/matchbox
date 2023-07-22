@@ -1,25 +1,19 @@
 mod args;
-mod error;
-mod signaling;
+mod state;
+mod topology;
 
-use crate::signaling::{ws_handler, ServerState};
-use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
-use clap::Parser;
-use std::{net::SocketAddr, sync::Arc};
-use tower_http::{
-    cors::{Any, CorsLayer},
-    trace::{DefaultOnResponse, TraceLayer},
-    LatencyUnit,
+use crate::{
+    state::{RequestedRoom, RoomId, ServerState},
+    topology::MatchmakingDemoTopology,
 };
-use tracing::{info, Level};
+use args::Args;
+use axum::{http::StatusCode, response::IntoResponse, routing::get};
+use clap::Parser;
+use matchbox_signaling::SignalingServerBuilder;
+use tracing::info;
 use tracing_subscriber::prelude::*;
 
-pub use args::Args;
-pub use matchbox_protocol::PeerId;
-
-#[tokio::main]
-async fn main() {
-    // Initialize logger
+fn setup_logging() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -32,39 +26,48 @@ async fn main() {
                 .with_target(false),
         )
         .init();
+}
 
-    // Parse clap arguments
+#[tokio::main]
+async fn main() {
+    setup_logging();
     let args = Args::parse();
 
     // Setup router
-    let server_state = Arc::new(futures::lock::Mutex::new(ServerState::default()));
-    let app = Router::new()
-        .route("/health", get(health_handler))
-        .route("/", get(ws_handler))
-        .route("/:room_id", get(ws_handler))
-        .layer(
-            // Allow requests from anywhere - Not ideal for production!
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
-        .layer(
-            // Middleware for logging from tower-http
-            TraceLayer::new_for_http().on_response(
-                DefaultOnResponse::new()
-                    .level(Level::INFO)
-                    .latency_unit(LatencyUnit::Micros),
-            ),
-        )
-        .with_state(server_state);
-
-    // Run server
     info!("Matchbox Signaling Server: {}", args.host);
-    axum::Server::bind(&args.host)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+
+    let mut state = ServerState::default();
+    let server = SignalingServerBuilder::new(args.host, MatchmakingDemoTopology, state.clone())
+        .on_connection_request({
+            let mut state = state.clone();
+            move |connection| {
+                let room_id = RoomId(connection.path.clone().unwrap_or_default());
+                let next = connection
+                    .query_params
+                    .get("next")
+                    .and_then(|next| next.parse::<usize>().ok());
+                let room = RequestedRoom { id: room_id, next };
+                state.add_waiting_client(connection.origin, room);
+                Ok(true) // allow all clients
+            }
+        })
+        .on_id_assignment({
+            move |(origin, peer_id)| {
+                info!("Client connected {origin:?}: {peer_id:?}");
+                state.assign_id_to_waiting_client(origin, peer_id);
+            }
+        })
+        .cors()
+        .trace()
+        .mutate_router(|router| {
+            // Apply router transformations
+            router.route("/health", get(|| async { StatusCode::OK }))
+        })
+        .build();
+    server
+        .serve()
         .await
-        .expect("Unable to run signaling server, is it already running?");
+        .expect("Unable to run signaling server, is it already running?")
 }
 
 pub async fn health_handler() -> impl IntoResponse {

@@ -22,10 +22,15 @@ use tracing::{error, info};
 
 /// Metastate used during by a signaling server's runtime
 pub struct WsStateMeta<Cb, S> {
+    /// The peer connecting, by their ID
     pub peer_id: PeerId,
+    /// The channel to signal this peer through
     pub sender: SignalingChannel,
+    /// The receiver to receive from this peer through
     pub receiver: SplitStream<WebSocket>,
+    /// Callbacks associated with the topology
     pub callbacks: Cb,
+    /// State associated with the topology
     pub state: S,
 }
 

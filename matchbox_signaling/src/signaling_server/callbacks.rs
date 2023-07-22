@@ -12,10 +12,10 @@ use std::{
 /// An `Arc` wrapper is used to make it cloneable and thread safe.
 pub struct Callback<In, Out = ()> {
     /// A callback which can be called multiple times
-    pub(crate) cb: Arc<Mutex<dyn Fn(In) -> Out + Send + Sync>>,
+    pub(crate) cb: Arc<Mutex<dyn FnMut(In) -> Out + Send + Sync>>,
 }
 
-impl<In, Out, F: Fn(In) -> Out + Send + Sync + 'static> From<F> for Callback<In, Out> {
+impl<In, Out, F: FnMut(In) -> Out + Send + Sync + 'static> From<F> for Callback<In, Out> {
     fn from(func: F) -> Self {
         Callback {
             cb: Arc::new(Mutex::new(func)),
@@ -40,7 +40,7 @@ impl<In, Out> fmt::Debug for Callback<In, Out> {
 impl<In, Out> Callback<In, Out> {
     /// This method calls the callback's function.
     pub fn emit(&self, value: In) -> Out {
-        let lock = self.cb.lock().expect("lock");
+        let mut lock = self.cb.lock().expect("lock");
         (*lock)(value)
     }
 }

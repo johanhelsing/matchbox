@@ -3050,10 +3050,12 @@ dependencies = [
 name = "matchbox_server"
 version = "0.6.0"
 dependencies = [
+ "async-trait",
  "axum",
  "clap",
  "futures",
  "matchbox_protocol",
+ "matchbox_signaling",
  "serde",
  "serde_json",
  "thiserror",

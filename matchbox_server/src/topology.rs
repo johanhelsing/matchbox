@@ -1,253 +1,108 @@
-use crate::error::{ClientRequestError, ServerError};
-use axum::{
-    extract::{
-        connect_info::ConnectInfo,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-        Path, Query, State,
-    },
-    response::IntoResponse,
-    Error,
+use crate::state::{Peer, ServerState};
+use async_trait::async_trait;
+use axum::extract::ws::Message;
+use futures::StreamExt;
+use matchbox_protocol::{JsonPeerEvent, PeerRequest};
+use matchbox_signaling::{
+    common_logic::parse_request, ClientRequestError, NoCallbacks, SignalingTopology, WsStateMeta,
 };
-use futures::{lock::Mutex, stream::SplitSink, StreamExt};
-use matchbox_protocol::{JsonPeerEvent, JsonPeerRequest, PeerId, PeerRequest};
-use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    net::SocketAddr,
-    str::FromStr,
-    sync::Arc,
-};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};
 
-#[derive(Debug, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct RoomId(String);
+#[derive(Debug, Default)]
+pub struct MatchmakingDemoTopology;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct RequestedRoom {
-    id: RoomId,
-    next: Option<usize>,
-}
+#[async_trait]
+impl SignalingTopology<NoCallbacks, ServerState> for MatchmakingDemoTopology {
+    async fn state_machine(upgrade: WsStateMeta<NoCallbacks, ServerState>) {
+        let WsStateMeta {
+            peer_id,
+            sender,
+            mut receiver,
+            mut state,
+            ..
+        } = upgrade;
 
-#[derive(Debug, Clone)]
-pub(crate) struct Peer {
-    pub uuid: PeerId,
-    pub room: RequestedRoom,
-    pub sender: tokio::sync::mpsc::UnboundedSender<std::result::Result<Message, Error>>,
-}
-
-#[derive(Default, Debug, Clone)]
-pub(crate) struct ServerState {
-    clients: HashMap<PeerId, Peer>,
-    rooms: HashMap<RequestedRoom, HashSet<PeerId>>,
-}
-
-impl ServerState {
-    /// Add a peer, returning the peers already in room
-    fn add_peer(&mut self, peer: Peer) -> Vec<PeerId> {
-        let peer_id = peer.uuid;
-        let room = peer.room.clone();
-        self.clients.insert(peer.uuid, peer);
-        let peers = self.rooms.entry(room.clone()).or_default();
-
-        let ret = peers.iter().cloned().collect();
-        match room.next {
-            None => {
-                peers.insert(peer_id);
-                ret
-            }
-            Some(num_players) => {
-                if peers.len() == num_players - 1 {
-                    peers.clear(); // the room is complete, we can forget about it now
-                } else {
-                    peers.insert(peer_id);
-                }
-                ret
-            }
-        }
-    }
-
-    /// Remove a peer from the state if it existed, returning the peer removed.
-    #[must_use]
-    fn remove_peer(&mut self, peer_id: &PeerId) -> Option<Peer> {
-        let peer = self.clients.remove(peer_id);
-
-        if let Some(ref peer) = peer {
-            // Best effort to remove peer from their room
-            _ = self
-                .rooms
-                .get_mut(&peer.room)
-                .map(|room| room.remove(peer_id));
-        }
-        peer
-    }
-
-    /// Send a message to a peer without blocking.
-    fn try_send(&self, id: PeerId, message: Message) -> Result<(), ServerError> {
-        let peer = self.clients.get(&id);
-        let peer = match peer {
-            Some(peer) => peer,
-            None => {
-                return Err(ServerError::UnknownPeer);
-            }
-        };
-
-        peer.sender.send(Ok(message)).map_err(ServerError::from)
-    }
-}
-
-/// The handler for the HTTP request to upgrade to WebSockets.
-/// This is the last point where we can extract TCP/IP metadata such as IP address of the client.
-pub(crate) async fn ws_handler(
-    ws: WebSocketUpgrade,
-    room_id: Option<Path<RoomId>>,
-    Query(params): Query<HashMap<String, String>>,
-    State(state): State<Arc<Mutex<ServerState>>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-) -> impl IntoResponse {
-    info!("`{addr}` connected.");
-
-    let room_id = room_id.map(|path| path.0).unwrap_or_default();
-    let next = params
-        .get("next")
-        .and_then(|next| next.parse::<usize>().ok());
-
-    // Finalize the upgrade process by returning upgrade callback to client
-    ws.on_upgrade(move |websocket| handle_ws(websocket, state, RequestedRoom { id: room_id, next }))
-}
-
-fn parse_request(request: Result<Message, Error>) -> Result<JsonPeerRequest, ClientRequestError> {
-    let request = request?;
-
-    let request = match request {
-        Message::Text(text) => JsonPeerRequest::from_str(&text)?,
-        Message::Close(_) => return Err(ClientRequestError::Close),
-        _ => return Err(ClientRequestError::UnsupportedType),
-    };
-
-    Ok(request)
-}
-
-fn spawn_sender_task(
-    sender: SplitSink<WebSocket, Message>,
-) -> mpsc::UnboundedSender<Result<Message, Error>> {
-    let (client_sender, receiver) = mpsc::unbounded_channel();
-    tokio::task::spawn(UnboundedReceiverStream::new(receiver).forward(sender));
-    client_sender
-}
-
-/// One of these handlers is spawned for every web socket.
-async fn handle_ws(
-    websocket: WebSocket,
-    state: Arc<Mutex<ServerState>>,
-    requested_room: RequestedRoom,
-) {
-    let (ws_sender, mut ws_receiver) = websocket.split();
-    let sender = spawn_sender_task(ws_sender);
-
-    let peer_uuid = uuid::Uuid::new_v4().into();
-
-    {
-        let mut add_peer_state = state.lock().await;
-
-        let peers = add_peer_state.add_peer(Peer {
-            uuid: peer_uuid,
+        let room = state.remove_waiting_peer(peer_id);
+        let peer = Peer {
+            uuid: peer_id,
             sender: sender.clone(),
-            room: requested_room.clone(),
-        });
-
-        let event_text = JsonPeerEvent::IdAssigned(peer_uuid).to_string();
-        let event = Message::Text(event_text.clone());
-
-        if let Err(e) = add_peer_state.try_send(peer_uuid, event) {
-            error!("error sending to {peer_uuid}: {e:?}");
-        } else {
-            info!("{peer_uuid} -> {event_text:?}");
+            room,
         };
 
-        let event_text = JsonPeerEvent::NewPeer(peer_uuid).to_string();
+        // Tell other waiting peers about me!
+        let peers = state.add_peer(peer);
+        let event_text = JsonPeerEvent::NewPeer(peer_id).to_string();
         let event = Message::Text(event_text.clone());
-
         for peer_id in peers {
-            // Tell everyone about this new peer
-            if let Err(e) = add_peer_state.try_send(peer_id, event.clone()) {
-                error!("error sending to {peer_id}: {e:?}");
+            if let Err(e) = state.try_send(peer_id, event.clone()) {
+                error!("error sending to {peer_id:?}: {e:?}");
             } else {
                 info!("{peer_id} -> {event_text:?}");
             }
         }
-    }
 
-    // The state machine for the data channel established for this websocket.
-    while let Some(request) = ws_receiver.next().await {
-        let request = match parse_request(request) {
-            Ok(request) => request,
-            Err(ClientRequestError::Axum(e)) => {
-                // Most likely a ConnectionReset or similar.
-                error!("Axum error while receiving request: {e:?}");
-                warn!("Severing connection with {peer_uuid}");
-                break; // give up on this peer.
-            }
-            Err(ClientRequestError::Close) => {
-                info!("Received websocket close from {peer_uuid}");
-                break;
-            }
-            Err(e) => {
-                error!("Error untangling request: {e:?}");
-                continue;
-            }
-        };
+        // The state machine for the data channel established for this websocket.
+        while let Some(request) = receiver.next().await {
+            let request = match parse_request(request) {
+                Ok(request) => request,
+                Err(e) => {
+                    match e {
+                        ClientRequestError::Axum(_) => {
+                            // Most likely a ConnectionReset or similar.
+                            warn!("Unrecoverable error with {peer_id:?}: {e:?}");
+                            break;
+                        }
+                        ClientRequestError::Close => {
+                            info!("Connection closed by {peer_id:?}");
+                            break;
+                        }
+                        ClientRequestError::Json(_) | ClientRequestError::UnsupportedType(_) => {
+                            error!("Error with request: {:?}", e);
+                            continue; // Recoverable error
+                        }
+                    };
+                }
+            };
 
-        info!("{peer_uuid} <- {request:?}");
-
-        match request {
-            PeerRequest::Signal { receiver, data } => {
-                let event = Message::Text(
-                    JsonPeerEvent::Signal {
-                        sender: peer_uuid,
-                        data,
+            match request {
+                PeerRequest::Signal { receiver, data } => {
+                    let event = Message::Text(
+                        JsonPeerEvent::Signal {
+                            sender: peer_id,
+                            data,
+                        }
+                        .to_string(),
+                    );
+                    if let Some(peer) = state.get_peer(&receiver) {
+                        if let Err(e) = peer.sender.send(Ok(event)) {
+                            error!("error sending signal event: {e:?}");
+                        }
+                    } else {
+                        warn!("peer not found ({receiver:?}), ignoring signal");
                     }
-                    .to_string(),
-                );
-                let state = state.lock().await;
-                if let Some(peer) = state.clients.get(&receiver) {
-                    if let Err(e) = peer.sender.send(Ok(event)) {
-                        error!("error sending: {e:?}");
-                    }
-                } else {
-                    warn!("peer not found ({receiver}), ignoring signal");
+                }
+                PeerRequest::KeepAlive => {
+                    // Do nothing. KeepAlive packets are used to protect against idle websocket
+                    // connections getting automatically disconnected, common for reverse proxies.
                 }
             }
-            PeerRequest::KeepAlive => {
-                // Do nothing. KeepAlive packets are used to protect against idle websocket
-                // connections getting automatically disconnected, common for reverse proxies.
-            }
         }
-    }
 
-    // Peer disconnected or otherwise ended communication.
-    info!("Removing peer: {peer_uuid}");
-    let mut state = state.lock().await;
-    if let Some(removed_peer) = state.remove_peer(&peer_uuid) {
-        let room = removed_peer.room;
-        let peers = state
-            .rooms
-            .get(&room)
-            .map(|room_peers| {
-                room_peers
-                    .iter()
-                    .copied()
-                    .filter(|peer_id| *peer_id != peer_uuid)
-                    .collect::<Vec<PeerId>>()
-            })
-            .unwrap_or_default();
-        // Tell each connected peer about the disconnected peer.
-        let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer.uuid).to_string());
-        for peer_id in peers {
-            match state.try_send(peer_id, event.clone()) {
-                Ok(()) => info!("Sent peer remove to: {peer_id}"),
-                Err(e) => error!("Failure sending peer remove: {e:?}"),
+        // Peer disconnected or otherwise ended communication.
+        info!("Removing peer: {:?}", peer_id);
+        if let Some(removed_peer) = state.remove_peer(&peer_id) {
+            let room = removed_peer.room;
+            let other_peers = state
+                .get_room_peers(&room)
+                .into_iter()
+                .filter(|other_id| *other_id != peer_id);
+            // Tell each connected peer about the disconnected peer.
+            let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer.uuid).to_string());
+            for peer_id in other_peers {
+                match state.try_send(peer_id, event.clone()) {
+                    Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
+                    Err(e) => error!("Failure sending peer remove: {e:?}"),
+                }
             }
         }
     }
@@ -255,23 +110,46 @@ async fn handle_ws(
 
 #[cfg(test)]
 mod tests {
-    use crate::{ws_handler, PeerId, ServerState};
-    use axum::{routing::get, Router};
-    use futures::{lock::Mutex, pin_mut, SinkExt, StreamExt};
-    use matchbox_protocol::JsonPeerEvent;
-    use std::{
-        net::{Ipv4Addr, SocketAddr},
-        str::FromStr,
-        sync::Arc,
-        time::Duration,
+    use super::MatchmakingDemoTopology;
+    use crate::{
+        state::{RequestedRoom, RoomId},
+        ServerState,
     };
+    use futures::{pin_mut, SinkExt, StreamExt};
+    use matchbox_protocol::{JsonPeerEvent, PeerId};
+    use matchbox_signaling::{SignalingServer, SignalingServerBuilder};
+    use std::{net::Ipv4Addr, str::FromStr, time::Duration};
     use tokio::{net::TcpStream, select, time};
     use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-    fn app() -> Router {
-        Router::new()
-            .route("/:room_id", get(ws_handler))
-            .with_state(Arc::new(Mutex::new(ServerState::default())))
+    fn app() -> SignalingServer {
+        let mut state = ServerState::default();
+        SignalingServerBuilder::new(
+            (Ipv4Addr::LOCALHOST, 0),
+            MatchmakingDemoTopology,
+            state.clone(),
+        )
+        .on_connection_request({
+            let mut state = state.clone();
+            move |connection| {
+                let room_id = RoomId(connection.path.clone().unwrap_or_default());
+                let next = connection
+                    .query_params
+                    .get("next")
+                    .and_then(|next| next.parse::<usize>().ok());
+                let room = RequestedRoom { id: room_id, next };
+                {
+                    state.add_waiting_client(connection.origin, room);
+                }
+                Ok(true)
+            }
+        })
+        .on_id_assignment({
+            move |(origin, peer_id)| {
+                state.assign_id_to_waiting_client(origin, peer_id);
+            }
+        })
+        .build()
     }
 
     // Helper to take the next PeerEvent from a stream
@@ -296,10 +174,9 @@ mod tests {
 
     #[tokio::test]
     async fn ws_connect() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
@@ -308,10 +185,9 @@ mod tests {
 
     #[tokio::test]
     async fn uuid_assigned() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         let (mut client, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -325,10 +201,9 @@ mod tests {
 
     #[tokio::test]
     async fn new_peer() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -351,10 +226,9 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_peer() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -383,10 +257,9 @@ mod tests {
 
     #[tokio::test]
     async fn signal() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -426,10 +299,9 @@ mod tests {
 
     #[tokio::test]
     async fn match_pairs() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
@@ -478,10 +350,9 @@ mod tests {
     }
     #[tokio::test]
     async fn match_pair_and_other_alone_room_without_next() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
@@ -521,10 +392,9 @@ mod tests {
 
     #[tokio::test]
     async fn match_different_id_same_next() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))
@@ -573,10 +443,9 @@ mod tests {
     }
     #[tokio::test]
     async fn match_same_id_different_next() {
-        let server = axum::Server::bind(&SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .serve(app().into_make_service_with_connect_info::<SocketAddr>());
+        let server = app();
         let addr = server.local_addr();
-        tokio::spawn(server);
+        tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))

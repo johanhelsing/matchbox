@@ -8,8 +8,10 @@ use crate::{
     SignalingCallbacks, SignalingServer, SignalingState,
 };
 use axum::{response::Response, routing::get, Extension, Router};
+use axum_server::{accept::DefaultAcceptor, tls_rustls::RustlsConfig, Handle};
 use matchbox_protocol::PeerId;
 use std::net::SocketAddr;
+use std::path::Path;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
@@ -21,7 +23,7 @@ use tracing::Level;
 ///
 /// Begin with [`SignalingServerBuilder::new`] and add parameters before calling
 /// [`SignalingServerBuilder::build`] to produce the desired [`SignalingServer`].
-pub struct SignalingServerBuilder<Topology, Cb = NoCallbacks, S = NoState>
+pub struct SignalingServerBuilder<Topology, Cb = NoCallbacks, S = NoState, Tls = DefaultAcceptor>
 where
     Topology: SignalingTopology<Cb, S>,
     Cb: SignalingCallbacks,
@@ -44,6 +46,9 @@ where
 
     /// Arbitrary state accompanying a server
     pub(crate) state: S,
+
+    /// A server acceptor
+    pub(crate) acceptor: Tls,
 }
 
 impl<Topology, Cb, S> SignalingServerBuilder<Topology, Cb, S>
@@ -53,14 +58,19 @@ where
     S: SignalingState,
 {
     /// Creates a new builder for a [`SignalingServer`].
-    pub fn new(socket_addr: impl Into<SocketAddr>, topology: Topology, state: S) -> Self {
-        Self {
+    pub fn new(
+        socket_addr: impl Into<SocketAddr>,
+        topology: Topology,
+        state: S,
+    ) -> SignalingServerBuilder<Topology, Cb, S, DefaultAcceptor> {
+        SignalingServerBuilder {
             socket_addr: socket_addr.into(),
             router: Router::new(),
             shared_callbacks: SharedCallbacks::default(),
             callbacks: Cb::default(),
             topology,
             state,
+            acceptor: DefaultAcceptor,
         }
     }
 
@@ -90,6 +100,24 @@ where
         self
     }
 
+    /// Configure TLS with a certificate (.pem) and private key (.key) file
+    pub async fn tls(
+        self,
+        cert: impl AsRef<Path>,
+        key: impl AsRef<Path>,
+    ) -> SignalingServerBuilder<Topology, Cb, S, RustlsConfig> {
+        let config = RustlsConfig::from_pem_file(cert, key).await.unwrap();
+        SignalingServerBuilder {
+            socket_addr: self.socket_addr,
+            router: self.router,
+            shared_callbacks: self.shared_callbacks,
+            callbacks: self.callbacks,
+            topology: self.topology,
+            state: self.state,
+            acceptor: config,
+        }
+    }
+
     /// Apply permissive CORS middleware for debug purposes.
     pub fn cors(mut self) -> Self {
         self.router = self.router.layer(
@@ -113,16 +141,22 @@ where
         );
         self
     }
+}
 
+impl<Topology, Cb, S> SignalingServerBuilder<Topology, Cb, S, DefaultAcceptor>
+where
+    Topology: SignalingTopology<Cb, S>,
+    Cb: SignalingCallbacks,
+    S: SignalingState,
+{
     /// Create a [`SignalingServer`].
     ///
     /// # Panics
     /// This method will panic if the socket address requested cannot be bound.
-    pub fn build(mut self) -> SignalingServer {
-        // Insert topology
+    pub fn build(self) -> SignalingServer {
         let state_machine: SignalingStateMachine<Cb, S> =
             SignalingStateMachine::from_topology(self.topology);
-        self.router = self
+        let router = self
             .router
             .route("/", get(ws_handler::<Cb, S>))
             .route("/:path", get(ws_handler::<Cb, S>))
@@ -130,14 +164,47 @@ where
             .layer(Extension(self.shared_callbacks))
             .layer(Extension(self.callbacks))
             .layer(Extension(self.state));
-        let server = axum::Server::bind(&self.socket_addr).serve(
-            self.router
-                .into_make_service_with_connect_info::<SocketAddr>(),
-        );
-        let socket_addr = server.local_addr();
+        let handle = Handle::new();
         SignalingServer {
-            server,
-            socket_addr,
+            server: Box::pin(
+                axum_server::bind(self.socket_addr)
+                    .handle(handle.clone())
+                    .serve(router.into_make_service_with_connect_info::<SocketAddr>()),
+            ),
+            handle,
+        }
+    }
+}
+
+impl<Topology, Cb, S> SignalingServerBuilder<Topology, Cb, S, RustlsConfig>
+where
+    Topology: SignalingTopology<Cb, S>,
+    Cb: SignalingCallbacks,
+    S: SignalingState,
+{
+    /// Create a [`SignalingServer`].
+    ///
+    /// # Panics
+    /// This method will panic if the socket address requested cannot be bound.
+    pub fn build(self) -> SignalingServer {
+        let state_machine: SignalingStateMachine<Cb, S> =
+            SignalingStateMachine::from_topology(self.topology);
+        let router = self
+            .router
+            .route("/", get(ws_handler::<Cb, S>))
+            .route("/:path", get(ws_handler::<Cb, S>))
+            .layer(Extension(state_machine))
+            .layer(Extension(self.shared_callbacks))
+            .layer(Extension(self.callbacks))
+            .layer(Extension(self.state));
+        let handle = Handle::new();
+        SignalingServer {
+            server: Box::pin(
+                axum_server::bind_rustls(self.socket_addr, self.acceptor)
+                    .handle(handle.clone())
+                    .serve(router.into_make_service_with_connect_info::<SocketAddr>()),
+            ),
+            handle,
         }
     }
 }

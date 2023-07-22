@@ -1,3 +1,5 @@
+use std::io;
+
 use crate::signaling_server::error::SignalingError;
 
 /// Errors that can occur in the lifetime of a signaling server.
@@ -8,6 +10,6 @@ pub enum Error {
     Signaling(#[from] SignalingError),
 
     /// An error occurring from hyper
-    #[error("Hyper error")]
-    Hyper(#[from] hyper::Error),
+    #[error("IO Error")]
+    Io(#[from] io::Error),
 }

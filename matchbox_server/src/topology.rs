@@ -122,7 +122,7 @@ mod tests {
     use tokio::{net::TcpStream, select, time};
     use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-    fn app() -> SignalingServer {
+    async fn app() -> SignalingServer {
         let mut state = ServerState::default();
         SignalingServerBuilder::new(
             (Ipv4Addr::LOCALHOST, 0),
@@ -174,9 +174,10 @@ mod tests {
 
     #[tokio::test]
     async fn ws_connect() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
@@ -185,9 +186,10 @@ mod tests {
 
     #[tokio::test]
     async fn uuid_assigned() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut client, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -201,9 +203,10 @@ mod tests {
 
     #[tokio::test]
     async fn new_peer() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -226,9 +229,10 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_peer() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -257,9 +261,10 @@ mod tests {
 
     #[tokio::test]
     async fn signal() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -299,9 +304,10 @@ mod tests {
 
     #[tokio::test]
     async fn match_pairs() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
@@ -350,9 +356,10 @@ mod tests {
     }
     #[tokio::test]
     async fn match_pair_and_other_alone_room_without_next() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_name?next=2"))
@@ -392,9 +399,10 @@ mod tests {
 
     #[tokio::test]
     async fn match_different_id_same_next() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))
@@ -443,9 +451,10 @@ mod tests {
     }
     #[tokio::test]
     async fn match_same_id_different_next() {
-        let server = app();
-        let addr = server.local_addr();
+        let server = app().await;
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut client_a, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/scope_1?next=2"))

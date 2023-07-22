@@ -5,18 +5,17 @@ use crate::{
         full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
     },
 };
-use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router, Server};
-use hyper::server::conn::AddrIncoming;
-use std::net::SocketAddr;
+use axum_server::{accept::DefaultAcceptor, Handle};
+use futures::Future;
+use std::{io, net::SocketAddr, pin::Pin};
 
 /// Contains the interface end of a signaling server
-#[derive(Debug)]
 pub struct SignalingServer {
-    /// The socket address bound for this server
-    pub(crate) socket_addr: SocketAddr,
+    /// The handle used for server introspection
+    pub(crate) handle: Handle,
 
     /// The low-level axum server
-    pub(crate) server: Server<AddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
+    pub(crate) server: Pin<Box<dyn Future<Output = io::Result<()>> + Send>>,
 }
 
 /// Common methods
@@ -25,19 +24,27 @@ impl SignalingServer {
     pub fn full_mesh_builder(
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<FullMesh, FullMeshCallbacks, FullMeshState> {
-        SignalingServerBuilder::new(socket_addr, FullMesh, FullMeshState::default())
+        SignalingServerBuilder::<_, _, _, DefaultAcceptor>::new(
+            socket_addr,
+            FullMesh,
+            FullMeshState::default(),
+        )
     }
 
     /// Creates a new builder for a [`SignalingServer`] with client-server topology.
     pub fn client_server_builder(
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState> {
-        SignalingServerBuilder::new(socket_addr, ClientServer, ClientServerState::default())
+        SignalingServerBuilder::<_, _, _, DefaultAcceptor>::new(
+            socket_addr,
+            ClientServer,
+            ClientServerState::default(),
+        )
     }
 
-    /// Returns the local address this server is bound to
-    pub fn local_addr(&self) -> SocketAddr {
-        self.socket_addr
+    /// Returns a clone to a server handle for introspection.
+    pub fn handle(&self) -> Handle {
+        self.handle.clone()
     }
 
     /// Serve the signaling server

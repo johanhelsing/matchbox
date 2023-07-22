@@ -20,6 +20,7 @@ repository = "https://github.com/johanhelsing/matchbox"
 [dependencies]
 matchbox_protocol = { path = "../matchbox_protocol", features = ["json"] }
 axum = { version = "0.6", features = ["ws"] }
+axum-server = { version = "0.5", features = ["tls-rustls"] }
 hyper = { version = "0.14", features = ["server"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

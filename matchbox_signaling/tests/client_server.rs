@@ -49,8 +49,9 @@ mod tests {
     #[tokio::test]
     async fn ws_connect() {
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
@@ -60,8 +61,9 @@ mod tests {
     #[tokio::test]
     async fn uuid_assigned() {
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut host, _response) = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
@@ -75,8 +77,9 @@ mod tests {
     #[tokio::test]
     async fn new_client() {
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut host, _response) = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
@@ -97,8 +100,9 @@ mod tests {
     #[tokio::test]
     async fn disconnect_client() {
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut host, _response) = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
@@ -125,8 +129,9 @@ mod tests {
     #[tokio::test]
     async fn signal() {
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         let (mut host, _response) = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
             .await
@@ -174,8 +179,9 @@ mod tests {
                 }
             })
             .build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         // Connect
         _ = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a")).await;
@@ -202,8 +208,9 @@ mod tests {
                 move |_| peer_connected.store(true, std::sync::atomic::Ordering::Release)
             })
             .build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         // Connect
         _ = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a")).await;
@@ -222,8 +229,9 @@ mod tests {
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })
             .build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         // Connect
         tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -243,8 +251,9 @@ mod tests {
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })
             .build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         // Connect
         tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -264,8 +273,9 @@ mod tests {
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })
             .build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         // Connect
         {
@@ -288,8 +298,9 @@ mod tests {
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })
             .build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         // First Connect = Host
         let (mut _host, _response) =
@@ -316,8 +327,9 @@ mod tests {
                 move |_| success.store(true, std::sync::atomic::Ordering::Release)
             })
             .build();
-        let addr = server.local_addr();
+        let handle = server.handle();
         tokio::spawn(server.serve());
+        let addr = handle.listening().await.unwrap();
 
         // Connect Host
         let (mut _host, _response) =

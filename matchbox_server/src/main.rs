@@ -7,7 +7,7 @@ use crate::{
     topology::MatchmakingDemoTopology,
 };
 use args::Args;
-use axum::{http::StatusCode, response::IntoResponse, routing::get};
+use axum::{http::StatusCode, routing::get};
 use clap::Parser;
 use matchbox_signaling::SignalingServerBuilder;
 use tracing::info;
@@ -68,8 +68,4 @@ async fn main() {
         .serve()
         .await
         .expect("Unable to run signaling server, is it already running?")
-}
-
-pub async fn health_handler() -> impl IntoResponse {
-    StatusCode::OK
 }

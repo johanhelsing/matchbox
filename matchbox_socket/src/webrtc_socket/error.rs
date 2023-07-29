@@ -1,6 +1,8 @@
-use crate::webrtc_socket::messages::PeerEvent;
+use super::messages::PeerRequest;
+use crate::{webrtc_socket::messages::PeerEvent, PeerState};
 use cfg_if::cfg_if;
 use futures_channel::mpsc::TrySendError;
+use matchbox_protocol::PeerId;
 
 /// An error that can occur when getting a socket's channel through
 /// `get_channel`, `take_channel` or `try_update_peers`.
@@ -24,7 +26,7 @@ pub enum ChannelError {
 #[derive(Debug, thiserror::Error)]
 pub enum SignalingError {
     // Common
-    #[error("failed to send event to signaling server")]
+    #[error("Failed to send to signaling server")]
     Undeliverable(#[from] TrySendError<PeerEvent>),
     #[error("The stream is exhausted")]
     StreamExhausted,
@@ -45,15 +47,25 @@ pub enum SignalingError {
 }
 
 /// An error that can occur with WebRTC messaging.
-#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, thiserror::Error)]
-#[error("failed to send message to peer")]
-pub(crate) struct MessagingError(#[from] futures_channel::mpsc::TrySendError<crate::Packet>);
+pub enum MessageLoopSendError {
+    #[error("Failed to send id to peer {0}")]
+    PeerId(#[from] crossbeam_channel::TrySendError<PeerId>),
 
-#[cfg(target_arch = "wasm32")]
-#[derive(Debug, thiserror::Error)]
-#[error("failed to send message to peer")]
-pub(crate) struct MessagingError(#[from] JsError);
+    #[error("Failed to send report peer state ({}) to peer {}", 0.1, 0.0)]
+    PeerState(#[from] TrySendError<(PeerId, PeerState)>),
+
+    #[error("Failed to send request to peer")]
+    Request(#[from] TrySendError<PeerRequest>),
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("Failed to send message to peer")]
+    Packet(#[from] TrySendError<crate::Packet>),
+
+    #[cfg(target_arch = "wasm32")]
+    #[error("failed to send message to peer")]
+    Packet(#[from] JsError),
+}
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

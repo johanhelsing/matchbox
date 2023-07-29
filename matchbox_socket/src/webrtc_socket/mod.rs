@@ -3,7 +3,7 @@ mod messages;
 mod signal_peer;
 mod socket;
 
-use self::error::{MessagingError, SignalingError};
+use self::error::{MessageLoopSendError, SignalingError};
 use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
@@ -11,7 +11,7 @@ use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, Strea
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use matchbox_protocol::PeerId;
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
@@ -88,7 +88,7 @@ async fn signaling_loop<S: Signaller>(
 pub type Packet = Box<[u8]>;
 
 trait PeerDataSender {
-    fn send(&mut self, packet: Packet) -> Result<(), MessagingError>;
+    fn send(&mut self, packet: Packet) -> Result<(), MessageLoopSendError>;
 }
 
 struct HandshakeResult<D: PeerDataSender, M> {
@@ -128,7 +128,7 @@ async fn message_loop<M: Messenger>(
     channel_configs: &[ChannelConfig],
     channels: MessageLoopChannels,
     keep_alive_interval: Option<Duration>,
-) {
+) -> Result<(), Error> {
     let MessageLoopChannels {
         requests_sender,
         mut events_receiver,
@@ -160,10 +160,13 @@ async fn message_loop<M: Messenger>(
 
         select! {
             _  = &mut timeout => {
-                requests_sender.unbounded_send(PeerRequest::KeepAlive).expect("send failed");
-                // UNWRAP: we will only ever get here if there already was a timeout
-                let interval = keep_alive_interval.unwrap();
-                timeout = Either::Left(Delay::new(interval)).fuse();
+                // We don't care if a KeepAlive fails to send
+                if let Err(e) = requests_sender.unbounded_send(PeerRequest::KeepAlive) {
+                    warn!("failed to send KeepAlive: {e:?}");
+                }
+                if let Some(interval) = keep_alive_interval {
+                    timeout = Either::Left(Delay::new(interval)).fuse();
+                }
             }
 
             message = events_receiver.next().fuse() => {
@@ -171,7 +174,7 @@ async fn message_loop<M: Messenger>(
                     debug!("{event:?}");
                     match event {
                         PeerEvent::IdAssigned(peer_uuid) => {
-                            id_tx.try_send(peer_uuid.to_owned()).unwrap();
+                            id_tx.try_send(peer_uuid.to_owned()).map_err(error::MessageLoopSendError::PeerId)?;
                         },
                         PeerEvent::NewPeer(peer_uuid) => {
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
@@ -179,7 +182,10 @@ async fn message_loop<M: Messenger>(
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
                             handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
                         },
-                        PeerEvent::PeerLeft(peer_uuid) => {peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("fail to report peer as disconnected");},
+                        PeerEvent::PeerLeft(peer_uuid) => {
+                            peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
+                                .map_err(MessageLoopSendError::PeerState)?;
+                        },
                         PeerEvent::Signal { sender, data } => {
                             let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
                                 let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
@@ -198,13 +204,15 @@ async fn message_loop<M: Messenger>(
 
             handshake_result = handshakes.select_next_some() => {
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
-                peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected)).expect("failed to report peer as connected");
+                peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected))
+                    .map_err(MessageLoopSendError::PeerState)?;
                 peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
 
             peer_uuid = peer_loops.select_next_some() => {
                 debug!("peer {peer_uuid} finished");
-                peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).expect("failed to report peer as disconnected");
+                peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
+                    .map_err(MessageLoopSendError::PeerState)?;
             }
 
             message = next_peer_message_out => {
@@ -214,7 +222,11 @@ async fn message_loop<M: Messenger>(
                             .get_mut(&peer)
                             .expect("couldn't find data channel for peer")
                             .get_mut(channel_index).unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
-                        data_channel.send(packet).unwrap();
+                        if let Err(e) = data_channel.send(packet) {
+                            // Peer is defunct, remove them
+                            error!("peer {peer} has become defunct: {e:?}");
+                            // TODO: do we need to remove the peer or do anything special here?
+                        };
 
                     }
                     Some((_, None)) | None => {
@@ -223,12 +235,12 @@ async fn message_loop<M: Messenger>(
                         // There could probably be cleaner ways to handle this,
                         // but for now, just exit cleanly.
                         debug!("Outgoing message queue closed");
-                        break;
+                        break Ok(());
                     }
                 }
             }
 
-            complete => break
+            complete => break Ok(())
         }
     }
 }

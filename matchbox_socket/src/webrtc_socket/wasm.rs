@@ -1,8 +1,10 @@
 use super::{error::JsErrorExt, HandshakeResult, PeerDataSender};
 use crate::webrtc_socket::{
-    error::MessageSendError, error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
-    socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, RtcIceServerConfig,
-    Signaller,
+    error::{MessageSendError, SignalingError},
+    messages::PeerSignal,
+    signal_peer::SignalPeer,
+    socket::create_data_channels_ready_fut,
+    ChannelConfig, Messenger, Packet, RtcIceServerConfig, Signaller,
 };
 use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
@@ -13,8 +15,7 @@ use js_sys::{Function, Reflect};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
-use std::pin::Pin;
-use std::time::Duration;
+use std::{pin::Pin, time::Duration};
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{

@@ -8,8 +8,11 @@ pub mod topologies;
 
 pub use error::Error;
 pub use signaling_server::{
-    builder::SignalingServerBuilder, callbacks::Callback, error::ClientRequestError,
-    error::SignalingError, handlers::WsStateMeta, server::SignalingServer, NoCallbacks, NoState,
-    SignalingCallbacks, SignalingState,
+    builder::SignalingServerBuilder,
+    callbacks::Callback,
+    error::{ClientRequestError, SignalingError},
+    handlers::WsStateMeta,
+    server::SignalingServer,
+    NoCallbacks, NoState, SignalingCallbacks, SignalingState,
 };
 pub use topologies::{common_logic, SignalingTopology};

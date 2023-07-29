@@ -48,7 +48,8 @@ where
     async fn state_machine(upgrade: WsStateMeta<Cb, S>);
 }
 
-/// Common, re-usable logic and types shared between topologies and which may be useful if building your own topology.
+/// Common, re-usable logic and types shared between topologies and which may be useful if building
+/// your own topology.
 pub mod common_logic {
     use crate::signaling_server::error::{ClientRequestError, SignalingError};
     use axum::extract::ws::{Message, WebSocket};

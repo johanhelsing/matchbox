@@ -48,7 +48,7 @@ pub enum SignalingError {
 
 /// An error that can occur with WebRTC messaging.
 #[derive(Debug, thiserror::Error)]
-pub enum MessageLoopSendError {
+pub enum MessageSendError {
     #[error("Failed to send id to peer {0}")]
     PeerId(#[from] crossbeam_channel::TrySendError<PeerId>),
 

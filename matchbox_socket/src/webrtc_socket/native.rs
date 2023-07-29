@@ -1,4 +1,4 @@
-use super::{error::MessageLoopSendError, HandshakeResult, PeerDataSender};
+use super::{error::MessageSendError, HandshakeResult, PeerDataSender};
 use crate::{
     webrtc_socket::{
         error::SignalingError,
@@ -92,9 +92,8 @@ impl Signaller for NativeSignaller {
 pub(crate) struct NativeMessenger;
 
 impl PeerDataSender for UnboundedSender<Packet> {
-    fn send(&mut self, packet: Packet) -> Result<(), super::error::MessageLoopSendError> {
-        self.unbounded_send(packet)
-            .map_err(MessageLoopSendError::from)
+    fn send(&mut self, packet: Packet) -> Result<(), super::error::MessageSendError> {
+        self.unbounded_send(packet).map_err(MessageSendError::from)
     }
 }
 

@@ -347,6 +347,9 @@ impl WebRtcChannel {
     }
 
     /// Send a packet to the given peer.
+    ///
+    /// # Panics
+    /// Panics if sending the message fails
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
         self.tx.unbounded_send((peer, packet)).expect("Send failed");
     }
@@ -562,22 +565,12 @@ impl WebRtcSocket<SingleChannel> {
     ///
     /// Messages are removed from the socket when called.
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
-        self.channels
-            .get_mut(0)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .receive()
+        self.channel(0).receive()
     }
 
     /// Send a packet to the given peer.
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
-        self.channels
-            .get_mut(0)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .send(packet, peer)
+        self.channel(0).send(packet, peer)
     }
 }
 
@@ -659,7 +652,7 @@ async fn run_socket(
         select! {
             _ = message_loop_done => {
                 debug!("Message loop completed");
-                break;
+                break Ok(())
             }
 
             sigloop = signaling_loop_done => {
@@ -673,10 +666,9 @@ async fn run_socket(
                 }
             }
 
-            complete => break
+            complete => break Ok(())
         }
     }
-    Ok(())
 }
 
 #[cfg(test)]

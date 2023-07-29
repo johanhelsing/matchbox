@@ -1,8 +1,8 @@
 use super::{error::JsErrorExt, HandshakeResult, PeerDataSender};
 use crate::webrtc_socket::{
-    error::MessageLoopSendError, error::SignalingError, messages::PeerSignal,
-    signal_peer::SignalPeer, socket::create_data_channels_ready_fut, ChannelConfig, Messenger,
-    Packet, RtcIceServerConfig, Signaller,
+    error::MessageSendError, error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
+    socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, RtcIceServerConfig,
+    Signaller,
 };
 use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
@@ -75,10 +75,10 @@ impl Signaller for WasmSignaller {
 }
 
 impl PeerDataSender for RtcDataChannel {
-    fn send(&mut self, packet: Packet) -> Result<(), MessageLoopSendError> {
+    fn send(&mut self, packet: Packet) -> Result<(), MessageSendError> {
         self.send_with_u8_array(&packet)
             .efix()
-            .map_err(MessageLoopSendError::from)
+            .map_err(MessageSendError::from)
     }
 }
 

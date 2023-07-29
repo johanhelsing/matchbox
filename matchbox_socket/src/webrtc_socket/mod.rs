@@ -3,7 +3,7 @@ mod messages;
 mod signal_peer;
 mod socket;
 
-use self::error::{MessageLoopSendError, SignalingError};
+use self::error::{MessageSendError, SignalingError};
 use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
@@ -88,7 +88,7 @@ async fn signaling_loop<S: Signaller>(
 pub type Packet = Box<[u8]>;
 
 trait PeerDataSender {
-    fn send(&mut self, packet: Packet) -> Result<(), MessageLoopSendError>;
+    fn send(&mut self, packet: Packet) -> Result<(), MessageSendError>;
 }
 
 struct HandshakeResult<D: PeerDataSender, M> {
@@ -174,7 +174,7 @@ async fn message_loop<M: Messenger>(
                     debug!("{event:?}");
                     match event {
                         PeerEvent::IdAssigned(peer_uuid) => {
-                            id_tx.try_send(peer_uuid.to_owned()).map_err(error::MessageLoopSendError::PeerId)?;
+                            id_tx.try_send(peer_uuid.to_owned()).map_err(error::MessageSendError::PeerId)?;
                         },
                         PeerEvent::NewPeer(peer_uuid) => {
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
@@ -184,7 +184,7 @@ async fn message_loop<M: Messenger>(
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {
                             peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
-                                .map_err(MessageLoopSendError::PeerState)?;
+                                .map_err(MessageSendError::PeerState)?;
                         },
                         PeerEvent::Signal { sender, data } => {
                             let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
@@ -205,14 +205,14 @@ async fn message_loop<M: Messenger>(
             handshake_result = handshakes.select_next_some() => {
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
                 peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected))
-                    .map_err(MessageLoopSendError::PeerState)?;
+                    .map_err(MessageSendError::PeerState)?;
                 peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
 
             peer_uuid = peer_loops.select_next_some() => {
                 debug!("peer {peer_uuid} finished");
                 peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
-                    .map_err(MessageLoopSendError::PeerState)?;
+                    .map_err(MessageSendError::PeerState)?;
             }
 
             message = next_peer_message_out => {

@@ -92,8 +92,8 @@ impl Signaller for NativeSignaller {
 pub(crate) struct NativeMessenger;
 
 impl PeerDataSender for UnboundedSender<Packet> {
-    fn send(&mut self, packet: Packet) -> Result<(), super::error::MessageSendError> {
-        self.unbounded_send(packet).map_err(MessageSendError::from)
+    fn send(&mut self, packet: Packet) -> Result<(), MessageSendError> {
+        Ok(self.unbounded_send(packet)?)
     }
 }
 

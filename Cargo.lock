@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_ggrs_example"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy_ggrs",
@@ -1024,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_matchbox"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "cfg-if 1.0.0",
@@ -3065,7 +3065,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_protocol"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
@@ -3076,7 +3076,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_server"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -3098,7 +3098,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_signaling"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -3120,7 +3120,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_socket"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-compat",
  "async-trait",

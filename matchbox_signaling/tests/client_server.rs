@@ -1,33 +1,14 @@
 #[cfg(test)]
 mod tests {
-    use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
-    use futures_timer::Delay;
+    use futures::{SinkExt, StreamExt};
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signaling::SignalingServer;
-    use std::{
-        net::Ipv4Addr,
-        str::FromStr,
-        sync::{atomic::AtomicBool, Arc},
+    use std::{net::Ipv4Addr, str::FromStr};
+    use tokio::{
+        net::TcpStream,
+        sync::mpsc::{error::TryRecvError, unbounded_channel},
     };
-    use tokio::{net::TcpStream, select, time::Duration};
     use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
-
-    async fn wait_for_success(success: Arc<AtomicBool>) {
-        // Give adaquete time for the callback to trigger
-        let fetch = Delay::new(Duration::from_millis(1)).fuse();
-        let timeout = Delay::new(Duration::from_millis(100)).fuse();
-        pin_mut!(timeout, fetch);
-        select! {
-            _ = &mut fetch => {
-                if !success.load(std::sync::atomic::Ordering::Acquire) {
-                    // Reset the clock
-                    fetch.set(Delay::new(Duration::from_millis(1)).fuse());
-                }
-            }
-            _ = timeout => panic!("timeout")
-        };
-        assert!(success.load(std::sync::atomic::Ordering::Acquire))
-    }
 
     // Helper to take the next PeerEvent from a stream
     async fn recv_peer_event(
@@ -163,13 +144,15 @@ mod tests {
 
     #[tokio::test]
     async fn on_connection_req_callback() {
-        let success = Arc::new(AtomicBool::new(false));
+        let (connection_requested_tx, mut connection_requested_rx) = unbounded_channel();
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_connection_request({
-                let success = success.clone();
+                let connection_requested_tx = connection_requested_tx.clone();
                 move |_| {
-                    success.store(true, std::sync::atomic::Ordering::Release);
+                    connection_requested_tx
+                        .send(())
+                        .expect("send connection requested");
                     Ok(true)
                 }
             })
@@ -180,26 +163,29 @@ mod tests {
         // Connect
         _ = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a")).await;
 
-        wait_for_success(success).await
+        connection_requested_rx
+            .recv()
+            .await
+            .expect("connection requested");
     }
 
     #[tokio::test]
     async fn deny_on_connection_req_callback() {
-        let upgrade_called = Arc::new(AtomicBool::new(false));
-        let peer_connected = Arc::new(AtomicBool::new(false));
+        let (upgrade_called_tx, mut upgrade_called_rx) = unbounded_channel();
+        let (peer_connected_tx, mut peer_connected_rx) = unbounded_channel();
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_connection_request({
-                let upgrade_called = upgrade_called.clone();
+                let upgrade_called_tx = upgrade_called_tx.clone();
                 move |_| {
-                    upgrade_called.store(true, std::sync::atomic::Ordering::Release);
+                    upgrade_called_tx.send(()).expect("send upgrade called");
                     Ok(false) // <-- Deny access!
                 }
             })
             .on_host_connected({
                 // This should not get called because we deny all connections on upgrade
-                let peer_connected = peer_connected.clone();
-                move |_| peer_connected.store(true, std::sync::atomic::Ordering::Release)
+                let peer_connected_tx = peer_connected_tx.clone();
+                move |_| peer_connected_tx.send(()).expect("send peer connected")
             })
             .build();
         let addr = server.local_addr();
@@ -208,18 +194,18 @@ mod tests {
         // Connect
         _ = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a")).await;
 
-        wait_for_success(upgrade_called).await;
-        assert!(!peer_connected.load(std::sync::atomic::Ordering::Acquire))
+        upgrade_called_rx.recv().await.expect("upgrade called");
+        assert_eq!(peer_connected_rx.try_recv(), Err(TryRecvError::Empty));
     }
 
     #[tokio::test]
     async fn on_id_assignment_callback() {
-        let success = Arc::new(AtomicBool::new(false));
+        let (id_assigned_tx, mut id_assigned_rx) = unbounded_channel();
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_id_assignment({
-                let success = success.clone();
-                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+                let id_assigned_tx = id_assigned_tx.clone();
+                move |_| id_assigned_tx.send(()).expect("send id assigned")
             })
             .build();
         let addr = server.local_addr();
@@ -230,17 +216,17 @@ mod tests {
             .await
             .expect("handshake");
 
-        wait_for_success(success).await
+        id_assigned_rx.recv().await.expect("id assigned");
     }
 
     #[tokio::test]
     async fn on_host_connect_callback() {
-        let success = Arc::new(AtomicBool::new(false));
+        let (host_connected_tx, mut host_connected_rx) = unbounded_channel();
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_host_connected({
-                let success = success.clone();
-                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+                let host_connected_tx = host_connected_tx.clone();
+                move |_| host_connected_tx.send(()).unwrap()
             })
             .build();
         let addr = server.local_addr();
@@ -251,17 +237,19 @@ mod tests {
             .await
             .expect("handshake");
 
-        wait_for_success(success).await
+        host_connected_rx.recv().await.expect("host connected");
     }
 
     #[tokio::test]
     async fn on_host_disconnect_callback() {
-        let success = Arc::new(AtomicBool::new(false));
+        let (disconnected_tx, mut disconnected_rx) = unbounded_channel::<()>();
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_host_disconnected({
-                let success = success.clone();
-                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+                let disconnected_tx = disconnected_tx.clone();
+                move |_| {
+                    disconnected_tx.send(()).expect("send disconnected");
+                }
             })
             .build();
         let addr = server.local_addr();
@@ -275,17 +263,17 @@ mod tests {
         }
         // Disconnects due to scope drop
 
-        wait_for_success(success).await
+        disconnected_rx.recv().await.expect("disconnected");
     }
 
     #[tokio::test]
     async fn on_client_connect_callback() {
-        let success = Arc::new(AtomicBool::new(false));
+        let (client_connected_tx, mut client_connected_rx) = unbounded_channel();
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_client_connected({
-                let success = success.clone();
-                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+                let client_connected_tx = client_connected_tx.clone();
+                move |_| client_connected_tx.send(()).expect("send client connected")
             })
             .build();
         let addr = server.local_addr();
@@ -303,17 +291,21 @@ mod tests {
                 .await
                 .unwrap();
 
-        wait_for_success(success).await
+        client_connected_rx.recv().await.expect("client_connected");
     }
 
     #[tokio::test]
     async fn on_client_disconnect_callback() {
-        let success = Arc::new(AtomicBool::new(false));
+        let (client_disconnected_tx, mut client_disconnected_rx) = unbounded_channel();
 
         let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_client_disconnected({
-                let success = success.clone();
-                move |_| success.store(true, std::sync::atomic::Ordering::Release)
+                let client_disconnected_tx = client_disconnected_tx.clone();
+                move |_| {
+                    client_disconnected_tx
+                        .send(())
+                        .expect("send client disconnected")
+                }
             })
             .build();
         let addr = server.local_addr();
@@ -333,6 +325,9 @@ mod tests {
         }
         // Client disconnects due to scope drop, host remains active
 
-        wait_for_success(success).await
+        client_disconnected_rx
+            .recv()
+            .await
+            .expect("client disconnected");
     }
 }

@@ -3104,7 +3104,6 @@ dependencies = [
  "axum",
  "clap",
  "futures",
- "futures-timer",
  "hyper",
  "matchbox_protocol",
  "serde",

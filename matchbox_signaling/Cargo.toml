@@ -18,7 +18,7 @@ categories = [
 repository = "https://github.com/johanhelsing/matchbox"
 
 [dependencies]
-matchbox_protocol = { path = "../matchbox_protocol", features = ["json"] }
+matchbox_protocol = { version = "0.7", path = "../matchbox_protocol", features = ["json"] }
 axum = { version = "0.6", features = ["ws"] }
 hyper = { version = "0.14", features = ["server"] }
 tracing = { version = "0.1", features = ["log"] }

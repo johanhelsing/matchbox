@@ -17,8 +17,8 @@ homepage = "https://github.com/johanhelsing/matchbox"
 readme = "../README.md"
 
 [dependencies]
-matchbox_signaling = { path = "../matchbox_signaling" }
-matchbox_protocol = { path = "../matchbox_protocol", features = ["json"] }
+matchbox_signaling = { version = "0.7", path = "../matchbox_signaling" }
+matchbox_protocol = { version = "0.7", path = "../matchbox_protocol", features = ["json"] }
 async-trait = "0.1"
 axum = { version = "0.6", features = ["ws"] }
 tracing = { version = "0.1", features = ["log"] }

@@ -25,8 +25,8 @@ signaling = ["matchbox_signaling"]
 
 [dependencies]
 bevy = { version = "0.11", default-features = false }
-matchbox_socket = { path = "../matchbox_socket" }
+matchbox_socket = { version = "0.7", path = "../matchbox_socket" }
 cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-matchbox_signaling = { path = "../matchbox_signaling", optional = true }
+matchbox_signaling = { version = "0.7", path = "../matchbox_signaling", optional = true }

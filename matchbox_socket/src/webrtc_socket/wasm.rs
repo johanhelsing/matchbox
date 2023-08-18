@@ -18,14 +18,17 @@ use js_sys::{Function, Reflect};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
-    RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcPeerConnectionIceEvent,
-    RtcSdpType, RtcSessionDescriptionInit,
+    Event, HtmlElement, MediaStream, MessageEvent, RtcConfiguration, RtcDataChannel,
+    RtcDataChannelInit, RtcDataChannelType, RtcIceCandidateInit, RtcIceGatheringState,
+    RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
+    RtcSessionDescriptionInit, RtcTrackEvent,
 };
+
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 
 pub(crate) struct WasmSignaller {
@@ -91,7 +94,8 @@ pub(crate) struct WasmMessenger;
 #[async_trait(?Send)]
 impl Messenger for WasmMessenger {
     type DataChannel = RtcDataChannel;
-    type HandshakeMeta = Receiver<()>;
+    type HandshakeMeta = (UnboundedReceiver<(PeerId, Packet)>, Receiver<()>);
+    type TrackChannel = RtcDataChannel; // lies. TODO.
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
@@ -99,7 +103,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> HandshakeResult<Self::DataChannel, Self::TrackChannel, Self::HandshakeMeta> {
         debug!("making offer");
 
         let conn = create_rtc_peer_connection(ice_server_config);
@@ -118,8 +122,16 @@ impl Messenger for WasmMessenger {
             channel_configs,
         );
 
-        // Create offer
-        let offer = JsFuture::from(conn.create_offer()).await.efix().unwrap();
+        let track_event_rx = create_track_channel(conn.clone(), signal_peer.id);
+
+        let mut opts = RtcOfferOptions::new();
+        opts.offer_to_receive_audio(true);
+        opts.offer_to_receive_video(true);
+
+        let offer = JsFuture::from(conn.create_offer_with_rtc_offer_options(&opts))
+            .await
+            .efix()
+            .unwrap();
         let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
             .efix()
             .unwrap()
@@ -185,7 +197,8 @@ impl Messenger for WasmMessenger {
         HandshakeResult {
             peer_id: signal_peer.id,
             data_channels,
-            metadata: peer_disconnected_rx,
+            track_channels: None,
+            metadata: (track_event_rx, peer_disconnected_rx),
         }
     }
 
@@ -195,7 +208,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> HandshakeResult<Self::DataChannel, Self::TrackChannel, Self::HandshakeMeta> {
         debug!("handshake_accept");
 
         let conn = create_rtc_peer_connection(ice_server_config);
@@ -287,15 +300,18 @@ impl Messenger for WasmMessenger {
         )
         .await;
 
+        let (_, dummy_rx) = futures_channel::mpsc::unbounded();
+
         HandshakeResult {
             peer_id: signal_peer.id,
             data_channels,
-            metadata: peer_disconnected_rx,
+            track_channels: None,
+            metadata: (dummy_rx, peer_disconnected_rx),
         }
     }
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
-        let mut peer_loop_finished_rx = handshake_meta;
+        let mut peer_loop_finished_rx = handshake_meta.1;
         peer_loop_finished_rx.next().await;
         peer_uuid
     }
@@ -543,6 +559,65 @@ fn create_data_channel(
     );
 
     channel
+}
+
+fn create_track_channel(
+    connection: RtcPeerConnection,
+    peer_id: PeerId,
+) -> futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)> {
+    let (channel_tx, channel_rx) = futures_channel::mpsc::unbounded();
+
+    leaking_channel_event_handler(
+        |f| connection.set_ontrack(f),
+        move |event: RtcTrackEvent| {
+            debug!("ontrack {:?}", event);
+            match create_media_element(&event) {
+                Ok(element_id) => {
+                    if let Err(e) = channel_tx.unbounded_send((
+                        peer_id.clone(),
+                        element_id.as_bytes().to_vec().into_boxed_slice(),
+                    )) {
+                        warn!("Failed to send media element ID on channel: {:?}", e);
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to create media element for ontrack event: {:?}", e);
+                }
+            }
+        },
+    );
+
+    channel_rx
+}
+
+fn create_media_element(event: &RtcTrackEvent) -> Result<String, JsValue> {
+    let stream = event.streams().get(0);
+    let stream = event.streams().get(0);
+    let stream = stream.dyn_into::<web_sys::MediaStream>()?;
+
+    let document = web_sys::window().unwrap().document().unwrap();
+
+    let element = document.create_element(&event.track().kind())?;
+    let element_id = generate_unique_element_id();
+    element.set_attribute("id", &element_id)?;
+    element.set_attribute("autoplay", "true")?;
+    element.set_attribute("controls", "true")?;
+
+    let video_element = element.clone().dyn_into::<web_sys::HtmlVideoElement>()?;
+    video_element.set_src_object(Some(&stream));
+    video_element.set_autoplay(true);
+    video_element.set_controls(true);
+
+    let remote_videos = document.get_element_by_id("remoteVideos").unwrap();
+    remote_videos.set_inner_html("");
+    remote_videos.append_child(&element)?;
+
+    Ok(element_id)
+}
+
+fn generate_unique_element_id() -> String {
+    static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+    format!("video_{}", NEXT_ID.fetch_add(1, Ordering::SeqCst))
 }
 
 /// Note that this function leaks some memory because the rust closure is dropped but still needs to

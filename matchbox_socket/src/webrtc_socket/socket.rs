@@ -6,12 +6,12 @@ use crate::{
     },
     Error,
 };
+use futures::SinkExt;
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
 use std::{collections::HashMap, marker::PhantomData, pin::Pin, time::Duration};
-
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
 #[derive(Debug, Clone)]
@@ -279,8 +279,13 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
 
         let (messages_from_peers_tx, messages_from_peers_rx) =
             new_senders_and_receivers(&self.config.channels);
+
         let (peer_messages_out_tx, peer_messages_out_rx) =
             new_senders_and_receivers(&self.config.channels);
+
+        let (peer_tracks_out_tx, peer_tracks_out_rx) =
+            new_senders_and_receivers(&self.config.channels);
+
         let channels = messages_from_peers_rx
             .into_iter()
             .zip(peer_messages_out_tx.into_iter())
@@ -297,11 +302,13 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 peers: Default::default(),
                 channels,
                 channel_plurality: PhantomData::default(),
+                tracks: peer_tracks_out_tx,
             },
             Box::pin(run_socket(
                 id_tx,
                 self.config,
                 peer_messages_out_rx,
+                peer_tracks_out_rx,
                 peer_state_tx,
                 messages_from_peers_tx,
             )),
@@ -361,6 +368,7 @@ pub struct WebRtcSocket<C: ChannelPlurality = SingleChannel> {
     peers: HashMap<PeerId, PeerState>,
     channels: Vec<Option<WebRtcChannel>>,
     channel_plurality: PhantomData<C>,
+    tracks: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 }
 
 impl WebRtcSocket {
@@ -560,6 +568,15 @@ impl WebRtcSocket<SingleChannel> {
             .unwrap()
             .send(packet, peer)
     }
+
+    /// Send a packet to the given peer.
+    pub fn send_sample(&mut self, packet: Packet, peer: PeerId) {
+        self.tracks
+            .get_mut(0)
+            .unwrap()
+            .unbounded_send((peer, packet))
+            .expect("Send failed");
+    }
 }
 
 pub(crate) fn new_senders_and_receivers<T>(
@@ -596,6 +613,7 @@ pub struct MessageLoopChannels {
     pub requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     pub events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     pub peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
+    pub peer_tracks_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     pub peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     pub messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 }
@@ -604,6 +622,7 @@ async fn run_socket(
     id_tx: crossbeam_channel::Sender<PeerId>,
     config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
+    peer_tracks_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) -> Result<(), Error> {
@@ -623,9 +642,11 @@ async fn run_socket(
         requests_sender,
         events_receiver,
         peer_messages_out_rx,
+        peer_tracks_out_rx,
         peer_state_tx,
         messages_from_peers_tx,
     };
+
     let message_loop_fut = message_loop::<UseMessenger>(
         id_tx,
         &config.ice_server,

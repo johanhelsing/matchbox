@@ -59,20 +59,28 @@ futures-timer = { version = "3.0", default-features = false, features = [
 js-sys = { version = "0.3", default-features = false }
 web-sys = { version = "0.3.22", default-features = false, features = [
   "MessageEvent",
+  "MediaStream",
   "RtcConfiguration",
+  "RtcTrackEvent",
   "RtcDataChannel",
   "RtcDataChannelInit",
   "RtcDataChannelType",
+  "RtcOfferOptions",
   "RtcIceCandidate",
   "RtcIceCandidateInit",
   "RtcIceConnectionState",
   "RtcIceGatheringState",
   "RtcPeerConnection",
+  "RtcRtpTransceiver",
   "RtcPeerConnectionIceEvent",
   "RtcSdpType",
   "RtcSessionDescription",
   "RtcSessionDescriptionInit",
+  "MediaStream",
+  "MediaStreamTrack",
+  "HtmlElement",
 ] }
+
 serde-wasm-bindgen = { version = "0.5" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

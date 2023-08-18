@@ -28,6 +28,15 @@ use futures_util::{lock::Mutex, select};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use std::{pin::Pin, sync::Arc, time::Duration};
+use webrtc::api::interceptor_registry::register_default_interceptors;
+use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS};
+use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
+use webrtc::interceptor::registry::Registry;
+use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use webrtc::rtp_transceiver::rtp_sender::RTCRtpSender;
+use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use webrtc::track::track_local::TrackLocal;
 use webrtc::{
     api::APIBuilder,
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
@@ -35,6 +44,8 @@ use webrtc::{
         ice_candidate::{RTCIceCandidate, RTCIceCandidateInit},
         ice_server::RTCIceServer,
     },
+    media::io::h264_reader::H264Reader,
+    media::Sample,
     peer_connection::{
         configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
         RTCPeerConnection,
@@ -100,9 +111,12 @@ impl PeerDataSender for UnboundedSender<Packet> {
 #[async_trait]
 impl Messenger for NativeMessenger {
     type DataChannel = UnboundedSender<Packet>;
+    type TrackChannel = UnboundedSender<Packet>;
     type HandshakeMeta = (
         Vec<UnboundedReceiver<Packet>>,
         Vec<Arc<RTCDataChannel>>,
+        Vec<UnboundedReceiver<Packet>>,
+        Vec<Arc<TrackLocalStaticSample>>,
         Pin<Box<dyn FusedFuture<Output = Result<(), webrtc::Error>> + Send>>,
         Receiver<()>,
     );
@@ -113,10 +127,13 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> HandshakeResult<Self::DataChannel, Self::TrackChannel, Self::HandshakeMeta> {
         async {
+            let (to_peer_track_tx, to_peer_track_rx) = new_senders_and_receivers(channel_configs);
+
             let (to_peer_message_tx, to_peer_message_rx) =
                 new_senders_and_receivers(channel_configs);
+
             let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
             debug!("making offer");
@@ -138,6 +155,7 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
+            let tracks = create_tracks(&connection).await;
             // TODO: maybe pass in options? ice restart etc.?
             let offer = connection.create_offer(None).await.unwrap();
             let sdp = offer.sdp.clone();
@@ -177,12 +195,15 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
-            HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
+            HandshakeResult::<Self::DataChannel, Self::TrackChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
                 data_channels: to_peer_message_tx,
+                track_channels: Some(to_peer_track_tx),
                 metadata: (
                     to_peer_message_rx,
                     data_channels,
+                    to_peer_track_rx,
+                    tracks,
                     trickle_fut,
                     peer_disconnected_rx,
                 ),
@@ -198,13 +219,15 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> HandshakeResult<Self::DataChannel, Self::TrackChannel, Self::HandshakeMeta> {
         async {
-            let (to_peer_message_tx, to_peer_message_rx) =
-                new_senders_and_receivers(channel_configs);
+            let (to_peer_track_tx, to_peer_track_rx) = new_senders_and_receivers(channel_configs);
+
             let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
-            debug!("handshake_accept");
+            let (to_peer_message_tx, to_peer_message_rx) =
+                new_senders_and_receivers(channel_configs);
+
             let (connection, trickle) =
                 create_rtc_peer_connection(signal_peer.clone(), ice_server_config)
                     .await
@@ -222,6 +245,8 @@ impl Messenger for NativeMessenger {
                 channel_configs,
             )
             .await;
+
+            let tracks = create_tracks(&connection).await;
 
             let offer = loop {
                 match peer_signal_rx.next().await.expect("error") {
@@ -252,12 +277,15 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
-            HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
+            HandshakeResult::<Self::DataChannel, Self::TrackChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
                 data_channels: to_peer_message_tx,
+                track_channels: Some(to_peer_track_tx),
                 metadata: (
                     to_peer_message_rx,
                     data_channels,
+                    to_peer_track_rx,
+                    tracks,
                     trickle_fut,
                     peer_disconnected_rx,
                 ),
@@ -269,8 +297,14 @@ impl Messenger for NativeMessenger {
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
         async {
-            let (mut to_peer_message_rx, data_channels, mut trickle_fut, mut peer_disconnected) =
-                handshake_meta;
+            let (
+                mut to_peer_message_rx,
+                data_channels,
+                mut to_peer_tracks_rx,
+                mut tracks,
+                mut trickle_fut,
+                mut peer_disconnected,
+            ) = handshake_meta;
 
             assert_eq!(
                 data_channels.len(),
@@ -283,7 +317,6 @@ impl Messenger for NativeMessenger {
                 .zip(to_peer_message_rx.iter_mut())
                 .map(|(data_channel, rx)| async move {
                     while let Some(message) = rx.next().await {
-                        trace!("sending packet {message:?}");
                         let message = message.clone();
                         let message = Bytes::from(message);
                         if let Err(e) = data_channel.send(&message).await {
@@ -293,11 +326,29 @@ impl Messenger for NativeMessenger {
                 })
                 .collect();
 
+            let mut track_loop_futs: FuturesUnordered<_> = tracks
+                .iter()
+                .zip(to_peer_tracks_rx.iter_mut())
+                .map(|(track, rx)| async move {
+                    while let Some(message) = rx.next().await {
+                        let message = Bytes::from(message);
+                        let sample = Sample {
+                            data: message,
+                            duration: Duration::from_millis(2),
+                            ..Default::default()
+                        };
+                        if let Err(e) = track.write_sample(&sample).await {
+                            error!("error sending to track: {:?}", e);
+                        }
+                    }
+                })
+                .collect();
+
             loop {
                 select! {
-                    _ = peer_disconnected.next() => break,
-
-                    _ = message_loop_futs.next() => break,
+                  _ = peer_disconnected.next() => break,
+                  _ = track_loop_futs.next() => break,
+                  _ = message_loop_futs.next() => break,
                     // TODO: this means that the signaling is down, should return an
                     // error
                     _ = trickle_fut => continue,
@@ -420,7 +471,16 @@ async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
     ice_server_config: &RtcIceServerConfig,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
-    let api = APIBuilder::new().build();
+    let mut m = MediaEngine::default();
+    m.register_default_codecs();
+
+    let mut registry = Registry::new();
+    registry = register_default_interceptors(registry, &mut m)?;
+
+    let api = APIBuilder::new()
+        .with_media_engine(m)
+        .with_interceptor_registry(registry)
+        .build();
 
     let config = RTCConfiguration {
         ice_servers: vec![RTCIceServer {
@@ -433,6 +493,7 @@ async fn create_rtc_peer_connection(
     };
 
     let connection = api.new_peer_connection(config).await?;
+
     let connection = Arc::new(connection);
 
     let trickle = Arc::new(CandidateTrickle::new(signal_peer));
@@ -539,4 +600,29 @@ async fn create_data_channel(
     }));
 
     channel
+}
+
+async fn create_tracks(connection: &RTCPeerConnection) -> Vec<Arc<TrackLocalStaticSample>> {
+    let mut tracks = vec![];
+    let track = create_track(connection).await;
+    tracks.push(track);
+
+    tracks
+}
+
+async fn create_track(connection: &RTCPeerConnection) -> Arc<TrackLocalStaticSample> {
+    let video_track = Arc::new(TrackLocalStaticSample::new(
+        RTCRtpCodecCapability {
+            mime_type: MIME_TYPE_H264.to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
+
+    connection
+        .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
+        .await;
+
+    video_track
 }

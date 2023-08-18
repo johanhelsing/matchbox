@@ -2,7 +2,6 @@ pub(crate) mod error;
 mod messages;
 mod signal_peer;
 mod socket;
-
 use self::error::{MessagingError, SignalingError};
 use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
@@ -10,6 +9,7 @@ use cfg_if::cfg_if;
 use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
+use futures_util::future::Fuse;
 use futures_util::select;
 use log::{debug, warn};
 use matchbox_protocol::PeerId;
@@ -91,9 +91,10 @@ trait PeerDataSender {
     fn send(&mut self, packet: Packet) -> Result<(), MessagingError>;
 }
 
-struct HandshakeResult<D: PeerDataSender, M> {
+struct HandshakeResult<D: PeerDataSender, S: PeerDataSender, M> {
     peer_id: PeerId,
     data_channels: Vec<D>,
+    track_channels: Option<Vec<S>>,
     metadata: M,
 }
 
@@ -101,6 +102,7 @@ struct HandshakeResult<D: PeerDataSender, M> {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 trait Messenger {
     type DataChannel: PeerDataSender;
+    type TrackChannel: PeerDataSender;
     type HandshakeMeta: Send;
 
     async fn offer_handshake(
@@ -109,7 +111,7 @@ trait Messenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
+    ) -> HandshakeResult<Self::DataChannel, Self::TrackChannel, Self::HandshakeMeta>;
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
@@ -117,7 +119,7 @@ trait Messenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
+    ) -> HandshakeResult<Self::DataChannel, Self::TrackChannel, Self::HandshakeMeta>;
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
 }
@@ -133,6 +135,7 @@ async fn message_loop<M: Messenger>(
         requests_sender,
         mut events_receiver,
         mut peer_messages_out_rx,
+        mut peer_tracks_out_rx,
         messages_from_peers_tx,
         peer_state_tx,
     } = channels;
@@ -141,6 +144,7 @@ async fn message_loop<M: Messenger>(
     let mut peer_loops = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
     let mut data_channels = HashMap::new();
+    let mut track_channels: HashMap<PeerId, Vec<<M as Messenger>::TrackChannel>> = HashMap::new();
 
     let mut timeout = if let Some(interval) = keep_alive_interval {
         Either::Left(Delay::new(interval))
@@ -157,6 +161,14 @@ async fn message_loop<M: Messenger>(
             .collect::<FuturesUnordered<_>>();
 
         let mut next_peer_message_out = next_peer_messages_out.next().fuse();
+
+        let mut next_peer_tracks_out = peer_tracks_out_rx
+            .iter_mut()
+            .enumerate()
+            .map(|(channel, rx)| async move { (channel, rx.next().await) })
+            .collect::<FuturesUnordered<_>>();
+
+        let mut next_peer_track_out = next_peer_tracks_out.next().fuse();
 
         select! {
             _  = &mut timeout => {
@@ -198,6 +210,9 @@ async fn message_loop<M: Messenger>(
 
             handshake_result = handshakes.select_next_some() => {
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
+                if let Some(res) = handshake_result.track_channels {
+                    track_channels.insert(handshake_result.peer_id, res);
+                }
                 peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected)).expect("failed to report peer as connected");
                 peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
@@ -215,6 +230,27 @@ async fn message_loop<M: Messenger>(
                             .expect("couldn't find data channel for peer")
                             .get_mut(channel_index).unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
                         data_channel.send(packet).unwrap();
+
+                    }
+                    Some((_, None)) | None => {
+                        // Receiver end of outgoing message channel closed,
+                        // which most likely means the socket was dropped.
+                        // There could probably be cleaner ways to handle this,
+                        // but for now, just exit cleanly.
+                        debug!("Outgoing message queue closed");
+                        break;
+                    }
+                }
+            }
+
+            message = next_peer_track_out => {
+                match message {
+                    Some((channel_index, Some((peer, packet)))) => {
+                        let track_channel = track_channels
+                            .get_mut(&peer)
+                            .expect("couldn't find track channel for peer")
+                            .get_mut(channel_index).unwrap_or_else(|| panic!("couldn't find track channel with index {channel_index}"));
+                        track_channel.send(packet).unwrap();
 
                     }
                     Some((_, None)) | None => {

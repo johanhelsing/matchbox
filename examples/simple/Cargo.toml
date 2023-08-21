@@ -16,5 +16,5 @@ wasm-bindgen-futures = "0.4.29"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 futures = "0.3"
-tokio = "1.29"
+tokio = "1.32"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

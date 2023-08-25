@@ -41,7 +41,7 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.6.2
+        uses: Swatinem/rust-cache@v2.6
 
       - name: Run cargo check
         run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo check >

@@ -89,7 +89,7 @@ jobs:
           components: clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.6.2
+        uses: Swatinem/rust-cache@v2.6
 
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings

@@ -21,7 +21,7 @@ jobs:
           toolchain: stable
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.6.2
+        uses: Swatinem/rust-cache@v2.6
 
       - name: Run cargo test
         run: cargo test --all-targets

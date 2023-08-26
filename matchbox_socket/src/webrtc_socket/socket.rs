@@ -283,7 +283,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
             new_senders_and_receivers(&self.config.channels);
         let channels = messages_from_peers_rx
             .into_iter()
-            .zip(peer_messages_out_tx.into_iter())
+            .zip(peer_messages_out_tx)
             .map(|(rx, tx)| Some(WebRtcChannel { rx, tx }))
             .collect();
 

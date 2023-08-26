@@ -40,7 +40,7 @@ pub enum SignalingError {
 
     // WASM
     #[cfg(target_arch = "wasm32")]
-    #[error("socket failure communicating with signaling server")]
+    #[error("socket failure communicating with signaling server: {0}")]
     Socket(#[from] ws_stream_wasm::WsErr),
 }
 

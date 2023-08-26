@@ -24,18 +24,18 @@ pub enum ChannelError {
 #[derive(Debug, thiserror::Error)]
 pub enum SignalingError {
     // Common
-    #[error("failed to send event to signaling server")]
+    #[error("failed to send event to signaling server: {0}")]
     Undeliverable(#[from] TrySendError<PeerEvent>),
     #[error("The stream is exhausted")]
     StreamExhausted,
     #[error("Message received in unknown format")]
     UnknownFormat,
-    #[error("failed to establish initial connection")]
+    #[error("failed to establish initial connection: {0}")]
     ConnectionFailed(#[from] Box<SignalingError>),
 
     // Native
     #[cfg(not(target_arch = "wasm32"))]
-    #[error("socket failure communicating with signaling server")]
+    #[error("socket failure communicating with signaling server: {0}")]
     Socket(#[from] async_tungstenite::tungstenite::Error),
 
     // WASM
@@ -47,12 +47,12 @@ pub enum SignalingError {
 /// An error that can occur with WebRTC messaging.
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, thiserror::Error)]
-#[error("failed to send message to peer")]
+#[error("failed to send message to peer: {0}")]
 pub(crate) struct MessagingError(#[from] futures_channel::mpsc::TrySendError<crate::Packet>);
 
 #[cfg(target_arch = "wasm32")]
 #[derive(Debug, thiserror::Error)]
-#[error("failed to send message to peer")]
+#[error("failed to send message to peer: {0}")]
 pub(crate) struct MessagingError(#[from] JsError);
 
 cfg_if! {

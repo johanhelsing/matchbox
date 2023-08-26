@@ -5,19 +5,19 @@ use tokio::sync::mpsc::error::SendError;
 #[derive(Debug, thiserror::Error)]
 pub enum ClientRequestError {
     /// An error originating from Axum
-    #[error("Axum error")]
+    #[error("Axum error: {0}")]
     Axum(#[from] axum::Error),
 
     /// The socket is closed
-    #[error("Message is close")]
+    #[error("Socket is closed.")]
     Close,
 
     /// Message received was not JSON
-    #[error("Json error")]
+    #[error("Json error: {0}")]
     Json(#[from] serde_json::Error),
 
     /// Unsupported message type (not JSON)
-    #[error("Unsupported message type")]
+    #[error("Unsupported message type: {0:?}")]
     UnsupportedType(Message),
 }
 
@@ -29,6 +29,6 @@ pub enum SignalingError {
     UnknownPeer,
 
     /// The message was undeliverable (socket may be closed or a future was dropped prematurely)
-    #[error("Undeliverable message")]
+    #[error("Undeliverable message: {0}")]
     Undeliverable(#[from] SendError<Result<Message, axum::Error>>),
 }

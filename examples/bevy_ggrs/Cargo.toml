@@ -36,5 +36,5 @@ bevy = { version = "0.11", default-features = false, features = [
 ggrs = "0.9"
 bevy_ggrs = "0.13"
 bytemuck = { version = "1.7", features = ["derive"] }
-clap = { version = "4.3", features = ["derive"] }
+clap = { version = "4.4", features = ["derive"] }
 serde = "1.0"

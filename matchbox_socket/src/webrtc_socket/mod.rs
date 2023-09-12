@@ -11,7 +11,7 @@ use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, Strea
 use futures_channel::mpsc::{TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use matchbox_protocol::PeerId;
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
@@ -220,12 +220,7 @@ async fn message_loop<M: Messenger>(
                             .get_mut(&peer)
                             .expect("couldn't find data channel for peer")
                             .get_mut(channel_index).unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
-                        if let Err(e) = data_channel.send(packet) {
-                            // Peer is defunct, remove them
-                            error!("peer {peer} has become defunct: {e:?}");
-                            // TODO: do we need to remove the peer or do anything special here?
-                        };
-
+                        data_channel.send(packet)?;
                     }
                     Some((_, None)) | None => {
                         // Receiver end of outgoing message channel closed,

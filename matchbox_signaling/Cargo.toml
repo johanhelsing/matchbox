@@ -36,3 +36,4 @@ async-trait = { version = "0.1" }
 
 [dev-dependencies]
 tokio-tungstenite = "0.20.0"
+tracing-subscriber = "0.3"

@@ -66,7 +66,7 @@ impl WebRtcSocket {
 
 impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
-    pub fn players(&self) -> Vec<PlayerType<PeerId>> {
+    pub fn players(&mut self) -> Vec<PlayerType<PeerId>> {
         let Some(our_id) = self.id() else {
             // we're still waiting for the server to initialize our id
             // no peers should be added at this point anyway

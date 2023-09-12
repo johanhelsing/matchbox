@@ -22,7 +22,7 @@ use futures::{
     stream::FuturesUnordered,
     Future, FutureExt, SinkExt, StreamExt,
 };
-use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{Receiver, Sender, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, info, trace, warn};
@@ -93,7 +93,9 @@ pub(crate) struct NativeMessenger;
 
 impl PeerDataSender for UnboundedSender<Packet> {
     fn send(&mut self, packet: Packet) -> Result<(), MessageSendError> {
-        Ok(self.unbounded_send(packet)?)
+        Ok(self
+            .unbounded_send(packet)
+            .map_err(TrySendError::into_send_error)?)
     }
 }
 

@@ -650,9 +650,18 @@ async fn run_socket(
     let mut signaling_loop_done = Box::pin(signaling_loop_fut.fuse());
     loop {
         select! {
-            _ = message_loop_done => {
-                debug!("Message loop completed");
-                break Ok(())
+            msgloop = message_loop_done => {
+                match msgloop {
+                    Ok(()) => {
+                        debug!("Message loop completed");
+                        break Ok(())
+                    },
+                    Err(e) => {
+                        // TODO: Reconnect X attempts if configured to reconnect.
+                        error!("{e:?}");
+                        return Err(Error::from(e));
+                    },
+                }
             }
 
             sigloop = signaling_loop_done => {

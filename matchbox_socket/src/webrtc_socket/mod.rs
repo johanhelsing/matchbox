@@ -220,7 +220,11 @@ async fn message_loop<M: Messenger>(
                             .get_mut(&peer)
                             .expect("couldn't find data channel for peer")
                             .get_mut(channel_index).unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
-                        data_channel.send(packet)?;
+                        if let Err(e) = data_channel.send(packet) {
+                            // Peer closed connection. We anticipate a PeerLeft event soon, but we sent a message before it came.
+                            warn!("failed to send to peer {peer} (socket closed): {e:?}");
+                        };
+
                     }
                     Some((_, None)) | None => {
                         // Receiver end of outgoing message channel closed,

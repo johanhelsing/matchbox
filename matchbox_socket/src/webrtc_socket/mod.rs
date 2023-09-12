@@ -161,10 +161,7 @@ async fn message_loop<M: Messenger>(
 
         select! {
             _  = &mut timeout => {
-                // We don't care if a KeepAlive fails to send
-                if let Err(e) = requests_sender.unbounded_send(PeerRequest::KeepAlive) {
-                    warn!("failed to send KeepAlive: {e:?}");
-                }
+                requests_sender.unbounded_send(PeerRequest::KeepAlive).map_err(TrySendError::into_send_error)?;
                 if let Some(interval) = keep_alive_interval {
                     timeout = Either::Left(Delay::new(interval)).fuse();
                 }

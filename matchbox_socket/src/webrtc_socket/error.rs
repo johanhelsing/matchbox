@@ -53,10 +53,9 @@ pub enum MessageSendError {
 
     #[error("failed to send message to peer")]
     #[cfg(target_arch = "wasm32")]
-    Packet(#[from] JsError),
+    JsPacket(#[from] JsError),
 
     #[error("failed to send message to peer")]
-    #[cfg(not(target_arch = "wasm32"))]
     Packet(#[from] SendError),
 }
 

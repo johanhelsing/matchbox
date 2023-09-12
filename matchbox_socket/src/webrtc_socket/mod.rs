@@ -8,7 +8,7 @@ use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
 use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
 use log::{debug, error, warn};
@@ -123,12 +123,12 @@ trait Messenger {
 }
 
 async fn message_loop<M: Messenger>(
-    id_tx: crossbeam_channel::Sender<PeerId>,
+    id_tx: futures_channel::oneshot::Sender<PeerId>,
     ice_server_config: &RtcIceServerConfig,
     channel_configs: &[ChannelConfig],
     channels: MessageLoopChannels,
     keep_alive_interval: Option<Duration>,
-) -> Result<(), Error> {
+) -> Result<(), MessageSendError> {
     let MessageLoopChannels {
         requests_sender,
         mut events_receiver,
@@ -141,6 +141,7 @@ async fn message_loop<M: Messenger>(
     let mut peer_loops = FuturesUnordered::new();
     let mut handshake_signals = HashMap::new();
     let mut data_channels = HashMap::new();
+    let mut id_tx = Option::Some(id_tx);
 
     let mut timeout = if let Some(interval) = keep_alive_interval {
         Either::Left(Delay::new(interval))
@@ -174,7 +175,7 @@ async fn message_loop<M: Messenger>(
                     debug!("{event:?}");
                     match event {
                         PeerEvent::IdAssigned(peer_uuid) => {
-                            id_tx.try_send(peer_uuid.to_owned()).map_err(error::MessageSendError::PeerId)?;
+                            id_tx.take().expect("already sent peer id").send(peer_uuid.to_owned()).map_err(MessageSendError::PeerId)?;
                         },
                         PeerEvent::NewPeer(peer_uuid) => {
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
@@ -184,7 +185,7 @@ async fn message_loop<M: Messenger>(
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {
                             peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
-                                .map_err(MessageSendError::PeerState)?;
+                            .map_err(TrySendError::into_send_error)?;
                         },
                         PeerEvent::Signal { sender, data } => {
                             let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
@@ -205,14 +206,14 @@ async fn message_loop<M: Messenger>(
             handshake_result = handshakes.select_next_some() => {
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
                 peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected))
-                    .map_err(MessageSendError::PeerState)?;
+                    .map_err(TrySendError::into_send_error)?;
                 peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
 
             peer_uuid = peer_loops.select_next_some() => {
                 debug!("peer {peer_uuid} finished");
                 peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
-                    .map_err(MessageSendError::PeerState)?;
+                    .map_err(TrySendError::into_send_error)?;
             }
 
             message = next_peer_message_out => {

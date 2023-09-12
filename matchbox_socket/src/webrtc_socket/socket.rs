@@ -287,7 +287,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
             .map(|(rx, tx)| Some(WebRtcChannel { rx, tx }))
             .collect();
 
-        let (id_tx, id_rx) = crossbeam_channel::bounded(1);
+        let (id_tx, id_rx) = futures_channel::oneshot::channel();
 
         (
             WebRtcSocket {
@@ -359,7 +359,7 @@ impl WebRtcChannel {
 #[derive(Debug)]
 pub struct WebRtcSocket<C: ChannelPlurality = SingleChannel> {
     id: once_cell::race::OnceBox<PeerId>,
-    id_rx: crossbeam_channel::Receiver<PeerId>,
+    id_rx: futures_channel::oneshot::Receiver<PeerId>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
     peers: HashMap<PeerId, PeerState>,
     channels: Vec<Option<WebRtcChannel>>,
@@ -482,10 +482,10 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
 
     /// Returns the id of this peer, this may be `None` if an id has not yet
     /// been assigned by the server.
-    pub fn id(&self) -> Option<PeerId> {
+    pub fn id(&mut self) -> Option<PeerId> {
         if let Some(id) = self.id.get() {
             Some(*id)
-        } else if let Ok(id) = self.id_rx.try_recv() {
+        } else if let Ok(Some(id)) = self.id_rx.try_recv() {
             let id = self.id.get_or_init(|| id.into());
             Some(*id)
         } else {
@@ -613,7 +613,7 @@ pub struct MessageLoopChannels {
 }
 
 async fn run_socket(
-    id_tx: crossbeam_channel::Sender<PeerId>,
+    id_tx: futures_channel::oneshot::Sender<PeerId>,
     config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,

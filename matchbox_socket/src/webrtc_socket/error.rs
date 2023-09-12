@@ -25,23 +25,23 @@ pub enum ChannelError {
 #[derive(Debug, thiserror::Error)]
 pub enum SignalingError {
     // Common
-    #[error("Failed to send to signaling server")]
+    #[error("failed to send event to signaling server: {0}")]
     Undeliverable(#[from] TrySendError<PeerEvent>),
     #[error("The stream is exhausted")]
     StreamExhausted,
     #[error("Message received in unknown format")]
     UnknownFormat,
-    #[error("failed to establish initial connection")]
+    #[error("failed to establish initial connection: {0}")]
     ConnectionFailed(#[from] Box<SignalingError>),
 
     // Native
     #[cfg(not(target_arch = "wasm32"))]
-    #[error("socket failure communicating with signaling server")]
+    #[error("socket failure communicating with signaling server: {0}")]
     Socket(#[from] async_tungstenite::tungstenite::Error),
 
     // WASM
     #[cfg(target_arch = "wasm32")]
-    #[error("socket failure communicating with signaling server")]
+    #[error("socket failure communicating with signaling server: {0}")]
     Socket(#[from] ws_stream_wasm::WsErr),
 }
 

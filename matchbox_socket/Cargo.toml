@@ -1,6 +1,6 @@
 [package]
 name = "matchbox_socket"
-version = "0.6.1"
+version = "0.7.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "Painless WebRTC peer-to-peer full-mesh networking socket"
 edition = "2021"
@@ -18,7 +18,7 @@ repository = "https://github.com/johanhelsing/matchbox"
 ggrs = ["dep:bincode", "dep:ggrs"]
 
 [dependencies]
-matchbox_protocol = { path = "../matchbox_protocol", default-features = false }
+matchbox_protocol = { version = "0.7", path = "../matchbox_protocol", default-features = false }
 futures-channel = { version = "0.3", default-features = false, features = [
   "sink",
 ] }
@@ -41,11 +41,11 @@ once_cell = { version = "1.17", default-features = false, features = [
 ] }
 derive_more = "0.99"
 
-ggrs = { git = "https://github.com/gschup/ggrs", default-features = false, optional = true }
+ggrs = { version = "0.9", default-features = false, optional = true }
 bincode = { version = "1.3", default-features = false, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-ggrs = { git = "https://github.com/gschup/ggrs", default-features = false, optional = true, features = [
+ggrs = { version = "0.9", default-features = false, optional = true, features = [
   "wasm-bindgen",
 ] }
 ws_stream_wasm = { version = "0.7", default-features = false }
@@ -76,7 +76,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
 serde-wasm-bindgen = { version = "0.5" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-async-tungstenite = { version = "0.22", default-features = false, features = [
+async-tungstenite = { version = "0.23", default-features = false, features = [
   "async-std-runtime",
   "async-tls",
 ] }

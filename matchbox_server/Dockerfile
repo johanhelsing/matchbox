@@ -3,7 +3,7 @@
 # to build, run `docker build -f matchbox_server/Dockerfile` from root of the
 # repository
 
-FROM rust:1.70 as builder
+FROM rust:1.72 as builder
 
 WORKDIR /usr/src/matchbox_server/
 
@@ -17,7 +17,7 @@ COPY matchbox_signaling /usr/src/matchbox_signaling
 
 RUN cargo build --release
 
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y libssl1.1
 RUN rm -rf /var/lib/apt/lists/*
 COPY --from=builder /usr/src/matchbox_server/target/release/matchbox_server /usr/local/bin/matchbox_server

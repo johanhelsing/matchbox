@@ -2868,7 +2868,6 @@ version = "0.7.0"
 dependencies = [
  "async-trait",
  "axum",
- "clap",
  "futures",
  "hyper",
  "matchbox_protocol",
@@ -2880,7 +2879,6 @@ dependencies = [
  "tokio-tungstenite",
  "tower-http",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 
@@ -2894,7 +2892,6 @@ dependencies = [
  "bincode",
  "bytes",
  "cfg-if",
- "crossbeam-channel",
  "derive_more",
  "futures",
  "futures-channel",

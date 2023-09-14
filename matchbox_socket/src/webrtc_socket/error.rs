@@ -1,7 +1,6 @@
 use crate::webrtc_socket::messages::PeerEvent;
 use cfg_if::cfg_if;
 use futures_channel::mpsc::{SendError, TrySendError};
-use matchbox_protocol::PeerId;
 
 /// An error that can occur when getting a socket's channel through
 /// `get_channel`, `take_channel` or `try_update_peers`.
@@ -48,9 +47,6 @@ pub enum SignalingError {
 /// An error that can occur with WebRTC messaging.
 #[derive(Debug, thiserror::Error)]
 pub enum MessageSendError {
-    #[error("failed to send peer id to recipient: {0}")]
-    PeerId(PeerId),
-
     #[error("failed to send message to peer")]
     #[cfg(target_arch = "wasm32")]
     JsPacket(#[from] JsError),

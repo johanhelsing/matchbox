@@ -8,6 +8,6 @@ pub enum Error {
     Signaling(#[from] SignalingError),
 
     /// An error occurring during the messaging loop.
-    #[error("An error in the message loop")]
+    #[error("An error in the message loop: {0}")]
     Messaging(#[from] MessageSendError),
 }

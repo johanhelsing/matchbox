@@ -33,6 +33,7 @@ use webrtc::{
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
     ice_transport::{
         ice_candidate::{RTCIceCandidate, RTCIceCandidateInit},
+        ice_credential_type::RTCIceCredentialType,
         ice_server::RTCIceServer,
     },
     peer_connection::{
@@ -427,7 +428,7 @@ async fn create_rtc_peer_connection(
             urls: ice_server_config.urls.clone(),
             username: ice_server_config.username.clone().unwrap_or_default(),
             credential: ice_server_config.credential.clone().unwrap_or_default(),
-            ..Default::default()
+            credential_type: RTCIceCredentialType::Password,
         }],
         ..Default::default()
     };

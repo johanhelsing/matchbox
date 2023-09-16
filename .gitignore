@@ -6,3 +6,4 @@ crates/*/target
 /.vscode
 /benches/target
 *.code-workspace
+.DS_Store

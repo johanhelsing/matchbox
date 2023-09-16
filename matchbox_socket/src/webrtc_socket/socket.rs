@@ -306,7 +306,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 #[cfg(not(target_arch = "wasm32"))]
                 SignalingError::Packet(_) => Error::Disconnected,
                 #[cfg(target_arch = "wasm32")]
-                SignalingError::JsPacket(_) => todo!(),
+                SignalingError::JsPacket(_) => Error::Disconnected,
             })
         });
 

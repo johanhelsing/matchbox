@@ -7,7 +7,7 @@ use crate::{
     Error,
 };
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{SendError, TrySendError, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
 use std::{collections::HashMap, marker::PhantomData, pin::Pin, time::Duration};
@@ -360,12 +360,19 @@ impl WebRtcChannel {
             .collect()
     }
 
+    /// Try to send a packet to the given peer.
+    pub fn try_send(&mut self, packet: Packet, peer: PeerId) -> Result<(), SendError> {
+        self.tx
+            .unbounded_send((peer, packet))
+            .map_err(TrySendError::into_send_error)
+    }
+
     /// Send a packet to the given peer.
     ///
     /// # Panics
     /// Panics if sending the message fails
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
-        self.tx.unbounded_send((peer, packet)).expect("Send failed");
+        self.try_send(packet, peer).expect("Send failed");
     }
 }
 

@@ -303,7 +303,6 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 SignalingError::UnknownFormat => Error::Communication(e),
                 SignalingError::ConnectionFailed(_) => Error::ConnectionFailed,
                 SignalingError::Socket(_) => Error::Disconnected,
-                #[cfg(not(target_arch = "wasm32"))]
                 SignalingError::Packet(_) => Error::Disconnected,
                 #[cfg(target_arch = "wasm32")]
                 SignalingError::JsPacket(_) => Error::Disconnected,

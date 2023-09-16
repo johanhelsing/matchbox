@@ -235,7 +235,7 @@ async fn message_loop<M: Messenger>(
                         // which most likely means the socket was dropped.
                         // There could probably be cleaner ways to handle this,
                         // but for now, just exit cleanly.
-                        warn!("Outgoing message queue closed");
+                        warn!("Outgoing message queue closed, message not sent");
                         break Ok(());
                     }
                 }

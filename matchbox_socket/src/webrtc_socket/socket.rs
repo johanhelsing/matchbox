@@ -1,4 +1,4 @@
-use super::error::ChannelError;
+use super::error::{ChannelError, SignalingError};
 use crate::{
     webrtc_socket::{
         message_loop, signaling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
@@ -289,6 +289,27 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
 
         let (id_tx, id_rx) = futures_channel::oneshot::channel();
 
+        let socket_fut = run_socket(
+            id_tx,
+            self.config,
+            peer_messages_out_rx,
+            peer_state_tx,
+            messages_from_peers_tx,
+        )
+        .map(|f| {
+            f.map_err(|e| match e {
+                SignalingError::Undeliverable(_) => Error::Disconnected,
+                SignalingError::StreamExhausted => Error::Disconnected,
+                SignalingError::UnknownFormat => Error::Communication(e),
+                SignalingError::ConnectionFailed(_) => Error::ConnectionFailed,
+                SignalingError::Socket(_) => Error::Disconnected,
+                #[cfg(not(target_arch = "wasm32"))]
+                SignalingError::Packet(_) => Error::Disconnected,
+                #[cfg(target_arch = "wasm32")]
+                SignalingError::JsPacket(_) => todo!(),
+            })
+        });
+
         (
             WebRtcSocket {
                 id: Default::default(),
@@ -298,13 +319,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 channels,
                 channel_plurality: PhantomData,
             },
-            Box::pin(run_socket(
-                id_tx,
-                self.config,
-                peer_messages_out_rx,
-                peer_state_tx,
-                messages_from_peers_tx,
-            )),
+            Box::pin(socket_fut),
         )
     }
 }
@@ -618,7 +633,7 @@ async fn run_socket(
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
-) -> Result<(), Error> {
+) -> Result<(), SignalingError> {
     debug!("Starting WebRtcSocket");
 
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
@@ -659,7 +674,7 @@ async fn run_socket(
                     Err(e) => {
                         // TODO: Reconnect X attempts if configured to reconnect.
                         error!("{e:?}");
-                        return Err(Error::from(e));
+                        return Err(e);
                     },
                 }
             }
@@ -670,7 +685,7 @@ async fn run_socket(
                     Err(e) => {
                         // TODO: Reconnect X attempts if configured to reconnect.
                         error!("{e:?}");
-                        return Err(Error::from(e));
+                        return Err(e);
                     },
                 }
             }
@@ -682,7 +697,7 @@ async fn run_socket(
 
 #[cfg(test)]
 mod test {
-    use crate::{webrtc_socket::error::SignalingError, ChannelConfig, Error, WebRtcSocketBuilder};
+    use crate::{ChannelConfig, Error, WebRtcSocketBuilder};
 
     #[futures_test::test]
     async fn unreachable_server() {
@@ -693,7 +708,7 @@ mod test {
 
         let result = fut.await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::Signaling(_)));
+        assert!(matches!(result.unwrap_err(), Error::ConnectionFailed));
     }
 
     #[futures_test::test]
@@ -705,9 +720,6 @@ mod test {
 
         let result = loop_fut.await;
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            Error::Signaling(SignalingError::ConnectionFailed(_))
-        ));
+        assert!(matches!(result.unwrap_err(), Error::ConnectionFailed,));
     }
 }

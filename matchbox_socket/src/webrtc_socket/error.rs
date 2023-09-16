@@ -20,16 +20,19 @@ pub enum ChannelError {
     Closed,
 }
 
-/// An error that can occur with WebRTC signaling.
+/// An error that can occur with WebRTC messaging.
 #[derive(Debug, thiserror::Error)]
 pub enum SignalingError {
     // Common
     #[error("failed to send to signaling server: {0}")]
     Undeliverable(#[from] TrySendError<PeerEvent>),
+
     #[error("The stream is exhausted")]
     StreamExhausted,
+
     #[error("Message received in unknown format")]
     UnknownFormat,
+
     #[error("failed to establish initial connection: {0}")]
     ConnectionFailed(#[from] Box<SignalingError>),
 
@@ -42,16 +45,13 @@ pub enum SignalingError {
     #[cfg(target_arch = "wasm32")]
     #[error("socket failure communicating with signaling server: {0}")]
     Socket(#[from] ws_stream_wasm::WsErr),
-}
 
-/// An error that can occur with WebRTC messaging.
-#[derive(Debug, thiserror::Error)]
-pub enum MessageSendError {
     #[error("failed to send message to peer")]
     #[cfg(target_arch = "wasm32")]
     JsPacket(#[from] JsError),
 
     #[error("failed to send message to peer")]
+    #[cfg(not(target_arch = "wasm32"))]
     Packet(#[from] SendError),
 }
 

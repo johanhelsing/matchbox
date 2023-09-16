@@ -3,7 +3,7 @@ mod messages;
 mod signal_peer;
 mod socket;
 
-use self::error::{MessageSendError, SignalingError};
+use self::error::SignalingError;
 use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
@@ -88,7 +88,7 @@ async fn signaling_loop<S: Signaller>(
 pub type Packet = Box<[u8]>;
 
 trait PeerDataSender {
-    fn send(&mut self, packet: Packet) -> Result<(), MessageSendError>;
+    fn send(&mut self, packet: Packet) -> Result<(), SignalingError>;
 }
 
 struct HandshakeResult<D: PeerDataSender, M> {
@@ -128,7 +128,7 @@ async fn message_loop<M: Messenger>(
     channel_configs: &[ChannelConfig],
     channels: MessageLoopChannels,
     keep_alive_interval: Option<Duration>,
-) -> Result<(), MessageSendError> {
+) -> Result<(), SignalingError> {
     let MessageLoopChannels {
         requests_sender,
         mut events_receiver,

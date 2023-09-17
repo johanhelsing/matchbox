@@ -428,7 +428,12 @@ async fn create_rtc_peer_connection(
             urls: ice_server_config.urls.clone(),
             username: ice_server_config.username.clone().unwrap_or_default(),
             credential: ice_server_config.credential.clone().unwrap_or_default(),
-            credential_type: RTCIceCredentialType::Password,
+            credential_type: ice_server_config
+                .credential
+                .as_ref()
+                .map_or(RTCIceCredentialType::Unspecified, |_| {
+                    RTCIceCredentialType::Password
+                }),
         }],
         ..Default::default()
     };

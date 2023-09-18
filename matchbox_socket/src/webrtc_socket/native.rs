@@ -54,7 +54,7 @@ impl Signaller for NativeSignaller {
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {
                         if *attempts <= 1 {
-                            return Err(SignalingError::ConnectionFailed(Box::new(e)));
+                            return Err(SignalingError::NegotiationFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
                             warn!("connection to signaling server failed, {attempts} attempt(s) remain");

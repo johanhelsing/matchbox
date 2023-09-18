@@ -296,16 +296,31 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
             peer_state_tx,
             messages_from_peers_tx,
         )
+        // Transform the source into a user-error.
         .map(|f| {
             f.map_err(|e| match e {
-                SignalingError::Undeliverable(_) => Error::Disconnected,
-                SignalingError::StreamExhausted => Error::Disconnected,
-                SignalingError::UnknownFormat => Error::Communication(e),
-                SignalingError::ConnectionFailed(_) => Error::ConnectionFailed,
-                SignalingError::Socket(_) => Error::Disconnected,
-                SignalingError::Packet(_) => Error::Disconnected,
+                SignalingError::Undeliverable(source) => Error::Disconnected {
+                    source: source.into(),
+                },
+                SignalingError::StreamExhausted => Error::Disconnected {
+                    source: SignalingError::StreamExhausted,
+                },
+                SignalingError::UnknownFormat => Error::Runtime {
+                    source: SignalingError::UnknownFormat,
+                },
+                SignalingError::NegotiationFailed(source) => {
+                    Error::ConnectionFailed { source: *source }
+                }
+                SignalingError::Socket(source) => Error::Disconnected {
+                    source: source.into(),
+                },
+                SignalingError::Packet(source) => Error::Disconnected {
+                    source: source.into(),
+                },
                 #[cfg(target_arch = "wasm32")]
-                SignalingError::JsPacket(_) => Error::Disconnected,
+                SignalingError::JsPacket(source) => Error::Disconnected {
+                    source: source.into(),
+                },
             })
         });
 
@@ -714,7 +729,10 @@ mod test {
 
         let result = fut.await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::ConnectionFailed));
+        assert!(matches!(
+            result.unwrap_err(),
+            Error::ConnectionFailed { .. }
+        ));
     }
 
     #[futures_test::test]
@@ -726,6 +744,9 @@ mod test {
 
         let result = loop_fut.await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::ConnectionFailed,));
+        assert!(matches!(
+            result.unwrap_err(),
+            Error::ConnectionFailed { .. },
+        ));
     }
 }

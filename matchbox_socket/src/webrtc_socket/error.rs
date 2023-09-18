@@ -34,7 +34,7 @@ pub enum SignalingError {
     UnknownFormat,
 
     #[error("failed to establish initial connection: {0}")]
-    ConnectionFailed(#[from] Box<SignalingError>),
+    NegotiationFailed(#[from] Box<SignalingError>),
 
     // Native
     #[cfg(not(target_arch = "wasm32"))]
@@ -46,11 +46,11 @@ pub enum SignalingError {
     #[error("socket failure communicating with signaling server: {0}")]
     Socket(#[from] ws_stream_wasm::WsErr),
 
-    #[error("failed to send message to peer")]
+    #[error("failed to send message to peer over javascript: {0}")]
     #[cfg(target_arch = "wasm32")]
     JsPacket(#[from] JsError),
 
-    #[error("failed to send message to peer")]
+    #[error("failed to send message to peer: {0}")]
     Packet(#[from] SendError),
 }
 

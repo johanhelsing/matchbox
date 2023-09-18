@@ -236,7 +236,7 @@ async fn message_loop<M: Messenger>(
                         // There could probably be cleaner ways to handle this,
                         // but for now, just exit cleanly.
                         warn!("Outgoing message queue closed, message not sent");
-                        break Ok(());
+                        break Err(SignalingError::StreamExhausted);
                     }
                 }
             }

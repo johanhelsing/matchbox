@@ -346,7 +346,6 @@ async fn complete_handshake(
             }
             msg = peer_signal_rx.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
-                    debug!("received ice candidate: {candidate:?}");
                     try_add_rtc_ice_candidate(&conn, &candidate).await;
                 }
             }
@@ -375,7 +374,7 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
     let parsed_candidate = match js_sys::JSON::parse(candidate_string) {
         Ok(c) => c,
         Err(err) => {
-            error!("failed to parse candidate json: {err:?}");
+            warn!("failed to parse ice candidate json, ignoring: {err:?}");
             return;
         }
     };
@@ -384,7 +383,9 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
         debug!("Received null ice candidate, this means there are no further ice candidates");
         None
     } else {
-        Some(RtcIceCandidateInit::from(parsed_candidate))
+        let candidate = RtcIceCandidateInit::from(parsed_candidate);
+        debug!("ice candidate received: {candidate:?}");
+        Some(candidate)
     };
 
     JsFuture::from(

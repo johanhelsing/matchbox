@@ -340,10 +340,11 @@ impl WebRtcChannel {
     ///
     /// Messages are removed from the socket when called.
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
-        std::iter::repeat_with(|| self.rx.try_next())
-            .map_while(Result::ok)
-            .flatten()
-            .collect()
+        let mut messages = vec![];
+        while let Ok(Some(x)) = self.rx.try_next() {
+            messages.push(x);
+        }
+        messages
     }
 
     /// Send a packet to the given peer.

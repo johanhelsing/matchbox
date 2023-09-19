@@ -15,6 +15,7 @@ const FPS: usize = 60;
 enum AppState {
     #[default]
     Lobby,
+    ConnectionFailed,
     InGame,
 }
 
@@ -64,8 +65,10 @@ fn main() {
             (lobby_startup, start_matchbox_socket),
         )
         .add_systems(Update, lobby_system.run_if(in_state(AppState::Lobby)))
-        .add_systems(OnExit(AppState::Lobby), lobby_cleanup)
-        .add_systems(OnEnter(AppState::InGame), setup_scene_system)
+        .add_systems(
+            OnEnter(AppState::InGame),
+            (lobby_cleanup, setup_scene_system),
+        )
         .add_systems(Update, log_ggrs_events.run_if(in_state(AppState::InGame)))
         // these systems will be executed as part of the advance frame update
         .add_systems(GgrsSchedule, (move_cube_system, increase_frame_system))
@@ -81,7 +84,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {room_url:?}");
 
-    commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
+    commands.open_socket(WebRtcSocketBuilder::new(room_url).add_ggrs_channel());
 }
 
 // Marker components for UI
@@ -144,7 +147,17 @@ fn lobby_system(
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {
     // regularly call update_peers to update the list of connected peers
-    for (peer, new_state) in socket.update_peers() {
+    let Ok(peer_updates) = socket.try_update_peers() else {
+        commands.close_socket::<SingleChannel>();
+        error!(
+            socket_closed = socket.is_closed(),
+            "Failed to connect to signaling server, is it up?"
+        );
+        query.single_mut().sections[0].value = "Connection failed, is the signaler up?".to_string();
+        app_state.set(AppState::ConnectionFailed);
+        return;
+    };
+    for (peer, new_state) in peer_updates {
         // you can also handle the specific dis(connections) as they occur:
         match new_state {
             PeerState::Connected => info!("peer {peer} connected"),
@@ -154,7 +167,11 @@ fn lobby_system(
 
     let connected_peers = socket.connected_peers().count();
     let remaining = args.players - (connected_peers + 1);
-    query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);
+    if socket.id().is_some() {
+        query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);
+    } else {
+        query.single_mut().sections[0].value = "Waiting for signaler...".to_string();
+    };
     if remaining > 0 {
         return;
     }

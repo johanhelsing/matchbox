@@ -396,10 +396,15 @@ impl CandidateTrickle {
                     debug!("received ice candidate: {candidate_json:?}");
                     match serde_json::from_str::<RTCIceCandidateInit>(&candidate_json) {
                         Ok(candidate_init) => {
+                            debug!("ice candidate received: {}", candidate_init.candidate);
                             peer_connection.add_ice_candidate(candidate_init).await?;
                         }
                         Err(err) => {
-                            error!("failed to parse ice candidate json, ignoring: {err:?}");
+                            if *candidate_json == *"null" {
+                                debug!("Received null ice candidate, this means there are no further ice candidates");
+                            } else {
+                                warn!("failed to parse ice candidate json, ignoring: {err:?}");
+                            }
                         }
                     }
                 }

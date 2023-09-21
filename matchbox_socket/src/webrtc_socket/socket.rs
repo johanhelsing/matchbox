@@ -299,7 +299,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
         // Transform the source into a user-error.
         .map(|f| {
             f.map_err(|e| match e {
-                SignalingError::Undeliverable(source) => Error::Disconnected {
+                SignalingError::UndeliverableSignal(source) => Error::Disconnected {
                     source: source.into(),
                 },
                 SignalingError::NegotiationFailed(source) => {
@@ -308,11 +308,11 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 SignalingError::Socket(source) => Error::Disconnected {
                     source: source.into(),
                 },
-                SignalingError::Packet(source) => Error::Disconnected {
+                SignalingError::UndeliverablePacket(source) => Error::Disconnected {
                     source: source.into(),
                 },
                 #[cfg(target_arch = "wasm32")]
-                SignalingError::JsPacket(source) => Error::Disconnected {
+                SignalingError::UndeliverableJsPacket(source) => Error::Disconnected {
                     source: source.into(),
                 },
                 SignalingError::UnknownFormat | SignalingError::StreamExhausted => {

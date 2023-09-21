@@ -1,6 +1,5 @@
 use crate::webrtc_socket::messages::PeerEvent;
 use cfg_if::cfg_if;
-use futures_channel::mpsc::{SendError, TrySendError};
 
 /// An error that can occur when getting a socket's channel through
 /// `get_channel`, `take_channel` or `try_update_peers`.
@@ -25,7 +24,10 @@ pub enum ChannelError {
 pub enum SignalingError {
     // Common
     #[error("failed to send to signaling server: {0}")]
-    Undeliverable(#[from] TrySendError<PeerEvent>),
+    UndeliverableSignal(#[from] futures_channel::mpsc::TrySendError<PeerEvent>),
+
+    #[error("failed to send message to peer: {0}")]
+    UndeliverablePacket(#[from] futures_channel::mpsc::SendError),
 
     #[error("The stream is exhausted")]
     StreamExhausted,
@@ -48,10 +50,7 @@ pub enum SignalingError {
 
     #[error("failed to send message to peer over javascript: {0}")]
     #[cfg(target_arch = "wasm32")]
-    JsPacket(#[from] JsError),
-
-    #[error("failed to send message to peer: {0}")]
-    Packet(#[from] SendError),
+    UndeliverableJsPacket(#[from] JsError),
 }
 
 cfg_if! {

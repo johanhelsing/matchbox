@@ -11,7 +11,7 @@ use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, Strea
 use futures_channel::mpsc::{TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use matchbox_protocol::PeerId;
 use messages::*;
 pub(crate) use socket::MessageLoopChannels;
@@ -164,6 +164,8 @@ async fn message_loop<M: Messenger>(
                 requests_sender.unbounded_send(PeerRequest::KeepAlive).map_err(TrySendError::into_send_error)?;
                 if let Some(interval) = keep_alive_interval {
                     timeout = Either::Left(Delay::new(interval)).fuse();
+                } else {
+                    error!("no keep alive timeout, please file a bug");
                 }
             }
 

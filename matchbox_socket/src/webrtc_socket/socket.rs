@@ -302,12 +302,6 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 SignalingError::Undeliverable(source) => Error::Disconnected {
                     source: source.into(),
                 },
-                SignalingError::StreamExhausted => Error::Disconnected {
-                    source: SignalingError::StreamExhausted,
-                },
-                SignalingError::UnknownFormat => Error::Runtime {
-                    source: SignalingError::UnknownFormat,
-                },
                 SignalingError::NegotiationFailed(source) => {
                     Error::ConnectionFailed { source: *source }
                 }
@@ -321,6 +315,9 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 SignalingError::JsPacket(source) => Error::Disconnected {
                     source: source.into(),
                 },
+                SignalingError::UnknownFormat | SignalingError::StreamExhausted => {
+                    unimplemented!("these errors should never be propagated here")
+                }
             })
         });
 

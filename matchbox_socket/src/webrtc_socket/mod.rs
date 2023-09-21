@@ -73,7 +73,9 @@ async fn signaling_loop<S: Signaller>(
                             .unwrap_or_else(|err| panic!("couldn't parse peer event: {err}.\nEvent: {message}"));
                         events_sender.unbounded_send(event).map_err(SignalingError::from)?;
                     }
-                    Err(SignalingError::UnknownFormat) => warn!("ignoring unexpected non-text message from signaling server"),
+                    Err(SignalingError::UnknownFormat) => {
+                        warn!("ignoring unexpected non-text message from signaling server")
+                    },
                     Err(err) => break Err(err)
                 }
 
@@ -238,7 +240,7 @@ async fn message_loop<M: Messenger>(
                         // There could probably be cleaner ways to handle this,
                         // but for now, just exit cleanly.
                         warn!("Outgoing message queue closed, message not sent");
-                        break Err(SignalingError::StreamExhausted);
+                        break Ok(());
                     }
                 }
             }

@@ -10,12 +10,6 @@ pub enum Error {
         /// The source of the connection failure
         source: SignalingError,
     },
-    /// Unexpected fatal error ocurred with messaging. Please file an issue or triage.
-    #[error("An unexpected error ocurred at runtime with messaging: {source}")]
-    Runtime {
-        /// The source of the connection failure
-        source: SignalingError,
-    },
     /// Kicked by the server or disconnected
     #[error("The signaling server connection was severed.")]
     Disconnected {

@@ -373,7 +373,7 @@ impl WebRtcChannel {
         messages
     }
 
-    /// Try to send a packet to the given peer. An error is propagated if the receiver
+    /// Try to send a packet to the given peer. An error is propagated if the socket future
     /// is dropped. `Ok` is not a guarantee of delivery.
     pub fn try_send(&mut self, packet: Packet, peer: PeerId) -> Result<(), SendError> {
         self.tx
@@ -384,7 +384,7 @@ impl WebRtcChannel {
     /// Send a packet to the given peer. There is no guarantee of delivery.
     ///
     /// # Panics
-    /// Panics if the receiver is dropped.
+    /// Panics if the socket future is dropped.
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
         self.try_send(packet, peer).expect("Send failed");
     }
@@ -603,7 +603,7 @@ impl WebRtcSocket<SingleChannel> {
         self.channel(0).receive()
     }
 
-    /// Try to send a packet to the given peer. An error is propagated if the receiver
+    /// Try to send a packet to the given peer. An error is propagated if the socket future
     /// is dropped. `Ok` is not a guarantee of delivery.
     pub fn try_send(&mut self, packet: Packet, peer: PeerId) -> Result<(), SendError> {
         self.channel(0).try_send(packet, peer)
@@ -612,7 +612,7 @@ impl WebRtcSocket<SingleChannel> {
     /// Send a packet to the given peer. There is no guarantee of delivery.
     ///
     /// # Panics
-    /// Panics if the receiver is dropped.
+    /// Panics if socket future is dropped.
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
         self.try_send(packet, peer).expect("Send failed");
     }

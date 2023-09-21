@@ -27,7 +27,7 @@ jobs:
       - name: Build Website
         run: |
           cd website
-          trunk build
+          trunk build --public-url matchbox
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v1.0.9

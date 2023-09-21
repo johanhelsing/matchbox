@@ -156,7 +156,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: "."
           file: "matchbox_server/Dockerfile"

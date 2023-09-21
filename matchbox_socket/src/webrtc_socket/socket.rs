@@ -362,11 +362,6 @@ pub struct WebRtcChannel {
 }
 
 impl WebRtcChannel {
-    /// Returns whether this channel is closed
-    pub fn is_closed(&self) -> bool {
-        self.tx.is_closed()
-    }
-
     /// Call this where you want to handle new received messages. Returns immediately.
     ///
     /// Messages are removed from the socket when called.
@@ -531,15 +526,6 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
         } else {
             None
         }
-    }
-
-    /// Returns whether this socket is closed; this is considered closed as soon as any channel (not
-    /// taken) is closed.
-    pub fn is_closed(&self) -> bool {
-        self.channels
-            .iter()
-            .filter_map(Option::as_ref)
-            .any(|c| c.is_closed())
     }
 
     /// Gets a mutable reference to the [`WebRtcChannel`] of a given id.

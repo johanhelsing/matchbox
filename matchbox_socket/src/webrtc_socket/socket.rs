@@ -535,7 +535,8 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
         }
     }
 
-    /// Returns whether this socket is closed; this is considered closed as soon as any channel (not taken) is closed.
+    /// Returns whether this socket is closed; this is considered closed as soon as any channel (not
+    /// taken) is closed.
     pub fn is_closed(&self) -> bool {
         self.channels
             .iter()

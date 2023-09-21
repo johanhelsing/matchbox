@@ -370,7 +370,7 @@ impl WebRtcChannel {
         self.tx.is_closed()
     }
 
-    /// Call this where you want to handle new received messages.
+    /// Call this where you want to handle new received messages. Returns immediately.
     ///
     /// Messages are removed from the socket when called.
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
@@ -381,7 +381,8 @@ impl WebRtcChannel {
         messages
     }
 
-    /// Try to send a packet to the given peer.
+    /// Try to send a packet to the given peer. An error is propagated if the receiver
+    /// is dropped. `Ok` is not a guarantee of delivery.
     pub fn try_send(&mut self, packet: Packet, peer: PeerId) -> Result<(), SendError> {
         self.tx
             .unbounded_send((peer, packet))

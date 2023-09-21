@@ -436,8 +436,8 @@ async fn create_rtc_peer_connection(
             // other hand, will error if credential is present and
             // `credential_type` is `Unspecified` So while our pubic API mirrors
             // the web spec/MDN with non-standard fields removed (no
-            // credential_type), here we set the type to `Password`, so
-            // if, and only if there is a `credential`, so webrtc-rs cooperates.
+            // credential_type), here we set the type to `Password` if and only
+            // if there is a `credential`, so webrtc-rs cooperates.
             //
             // In the future if webrtc-rs follows the spec more closely, this
             // workaround can be removed.

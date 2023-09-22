@@ -8,7 +8,7 @@ use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
 use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{TrySendError, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
 use log::{debug, error, warn};
@@ -89,8 +89,18 @@ async fn signaling_loop<S: Signaller>(
 /// The raw format of data being sent and received.
 pub type Packet = Box<[u8]>;
 
+/// Errors that can happen when sending packets
+#[derive(Debug, thiserror::Error)]
+#[error("The socket was dropped and package could not be sent")]
+struct PacketSendError {
+    #[cfg(not(target_arch = "wasm32"))]
+    source: futures_channel::mpsc::SendError,
+    #[cfg(target_arch = "wasm32")]
+    source: error::JsError,
+}
+
 trait PeerDataSender {
-    fn send(&mut self, packet: Packet) -> Result<(), SignalingError>;
+    fn send(&mut self, packet: Packet) -> Result<(), PacketSendError>;
 }
 
 struct HandshakeResult<D: PeerDataSender, M> {
@@ -163,7 +173,10 @@ async fn message_loop<M: Messenger>(
 
         select! {
             _  = &mut timeout => {
-                requests_sender.unbounded_send(PeerRequest::KeepAlive).map_err(TrySendError::into_send_error)?;
+                if requests_sender.unbounded_send(PeerRequest::KeepAlive).is_err() {
+                    // socket dropped
+                    break Ok(());
+                }
                 if let Some(interval) = keep_alive_interval {
                     timeout = Either::Left(Delay::new(interval)).fuse();
                 } else {
@@ -188,8 +201,10 @@ async fn message_loop<M: Messenger>(
                             handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {
-                            peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
-                            .map_err(TrySendError::into_send_error)?;
+                            if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
+                                // socket dropped, exit cleanly
+                                break Ok(());
+                            }
                         },
                         PeerEvent::Signal { sender, data } => {
                             let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
@@ -209,15 +224,19 @@ async fn message_loop<M: Messenger>(
 
             handshake_result = handshakes.select_next_some() => {
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
-                peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected))
-                    .map_err(TrySendError::into_send_error)?;
+                if peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected)).is_err() {
+                    // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
+                    break Ok(());
+                }
                 peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
 
             peer_uuid = peer_loops.select_next_some() => {
                 debug!("peer {peer_uuid} finished");
-                peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
-                    .map_err(TrySendError::into_send_error)?;
+                if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
+                    // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
+                    break Ok(());
+                }
             }
 
             message = next_peer_message_out => {

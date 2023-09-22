@@ -6,14 +6,8 @@ pub enum Error {
     /// An error occurring if the connection fails to establish. Perhaps check your connection or
     /// try again.
     #[error("The connection failed to establish. Check your connection and try again.")]
-    ConnectionFailed {
-        /// The source of the connection failure
-        source: SignalingError,
-    },
-    /// Kicked by the server or disconnected
+    ConnectionFailed(SignalingError),
+    /// Disconnected from the signaling server
     #[error("The signaling server connection was severed.")]
-    Disconnected {
-        /// The source of the connection failure
-        source: SignalingError,
-    },
+    Disconnected(SignalingError),
 }

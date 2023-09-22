@@ -299,22 +299,9 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
         // Transform the source into a user-error.
         .map(|f| {
             f.map_err(|e| match e {
-                SignalingError::UndeliverableSignal(source) => Error::Disconnected {
-                    source: source.into(),
-                },
-                SignalingError::NegotiationFailed(source) => {
-                    Error::ConnectionFailed { source: *source }
-                }
-                SignalingError::Socket(source) => Error::Disconnected {
-                    source: source.into(),
-                },
-                SignalingError::UndeliverablePacket(source) => Error::Disconnected {
-                    source: source.into(),
-                },
-                #[cfg(target_arch = "wasm32")]
-                SignalingError::UndeliverableJsPacket(source) => Error::Disconnected {
-                    source: source.into(),
-                },
+                SignalingError::UndeliverableSignal(e) => Error::Disconnected(e.into()),
+                SignalingError::NegotiationFailed(e) => Error::ConnectionFailed(*e),
+                SignalingError::WebSocket(e) => Error::Disconnected(e.into()),
                 SignalingError::UnknownFormat | SignalingError::StreamExhausted => {
                     unimplemented!("these errors should never be propagated here")
                 }

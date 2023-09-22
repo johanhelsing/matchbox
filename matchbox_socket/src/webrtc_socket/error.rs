@@ -26,9 +26,6 @@ pub enum SignalingError {
     #[error("failed to send to signaling server: {0}")]
     UndeliverableSignal(#[from] futures_channel::mpsc::TrySendError<PeerEvent>),
 
-    #[error("failed to send message to peer: {0}")]
-    UndeliverablePacket(#[from] futures_channel::mpsc::SendError),
-
     #[error("The stream is exhausted")]
     StreamExhausted,
 
@@ -41,16 +38,12 @@ pub enum SignalingError {
     // Native
     #[cfg(not(target_arch = "wasm32"))]
     #[error("socket failure communicating with signaling server: {0}")]
-    Socket(#[from] async_tungstenite::tungstenite::Error),
+    WebSocket(#[from] async_tungstenite::tungstenite::Error),
 
     // WASM
     #[cfg(target_arch = "wasm32")]
     #[error("socket failure communicating with signaling server: {0}")]
-    Socket(#[from] ws_stream_wasm::WsErr),
-
-    #[error("failed to send message to peer over javascript: {0}")]
-    #[cfg(target_arch = "wasm32")]
-    UndeliverableJsPacket(#[from] JsError),
+    WebSocket(#[from] ws_stream_wasm::WsErr),
 }
 
 cfg_if! {

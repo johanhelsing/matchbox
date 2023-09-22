@@ -1,4 +1,4 @@
-use super::error::ChannelError;
+use super::error::{ChannelError, SignalingError};
 use crate::{
     webrtc_socket::{
         message_loop, signaling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
@@ -7,7 +7,7 @@ use crate::{
     Error,
 };
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{SendError, TrySendError, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
 use std::{collections::HashMap, marker::PhantomData, pin::Pin, time::Duration};
@@ -287,7 +287,26 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
             .map(|(rx, tx)| Some(WebRtcChannel { rx, tx }))
             .collect();
 
-        let (id_tx, id_rx) = crossbeam_channel::bounded(1);
+        let (id_tx, id_rx) = futures_channel::oneshot::channel();
+
+        let socket_fut = run_socket(
+            id_tx,
+            self.config,
+            peer_messages_out_rx,
+            peer_state_tx,
+            messages_from_peers_tx,
+        )
+        // Transform the source into a user-error.
+        .map(|f| {
+            f.map_err(|e| match e {
+                SignalingError::UndeliverableSignal(e) => Error::Disconnected(e.into()),
+                SignalingError::NegotiationFailed(e) => Error::ConnectionFailed(*e),
+                SignalingError::WebSocket(e) => Error::Disconnected(e.into()),
+                SignalingError::UnknownFormat | SignalingError::StreamExhausted => {
+                    unimplemented!("these errors should never be propagated here")
+                }
+            })
+        });
 
         (
             WebRtcSocket {
@@ -298,13 +317,7 @@ impl<C: BuildablePlurality> WebRtcSocketBuilder<C> {
                 channels,
                 channel_plurality: PhantomData,
             },
-            Box::pin(run_socket(
-                id_tx,
-                self.config,
-                peer_messages_out_rx,
-                peer_state_tx,
-                messages_from_peers_tx,
-            )),
+            Box::pin(socket_fut),
         )
     }
 }
@@ -336,7 +349,7 @@ pub struct WebRtcChannel {
 }
 
 impl WebRtcChannel {
-    /// Call this where you want to handle new received messages.
+    /// Call this where you want to handle new received messages. Returns immediately.
     ///
     /// Messages are removed from the socket when called.
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
@@ -347,9 +360,20 @@ impl WebRtcChannel {
         messages
     }
 
-    /// Send a packet to the given peer.
+    /// Try to send a packet to the given peer. An error is propagated if the socket future
+    /// is dropped. `Ok` is not a guarantee of delivery.
+    pub fn try_send(&mut self, packet: Packet, peer: PeerId) -> Result<(), SendError> {
+        self.tx
+            .unbounded_send((peer, packet))
+            .map_err(TrySendError::into_send_error)
+    }
+
+    /// Send a packet to the given peer. There is no guarantee of delivery.
+    ///
+    /// # Panics
+    /// Panics if the socket future is dropped.
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
-        self.tx.unbounded_send((peer, packet)).expect("Send failed");
+        self.try_send(packet, peer).expect("Send failed");
     }
 }
 
@@ -357,7 +381,7 @@ impl WebRtcChannel {
 #[derive(Debug)]
 pub struct WebRtcSocket<C: ChannelPlurality = SingleChannel> {
     id: once_cell::race::OnceBox<PeerId>,
-    id_rx: crossbeam_channel::Receiver<PeerId>,
+    id_rx: futures_channel::oneshot::Receiver<PeerId>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
     peers: HashMap<PeerId, PeerState>,
     channels: Vec<Option<WebRtcChannel>>,
@@ -480,10 +504,10 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
 
     /// Returns the id of this peer, this may be `None` if an id has not yet
     /// been assigned by the server.
-    pub fn id(&self) -> Option<PeerId> {
+    pub fn id(&mut self) -> Option<PeerId> {
         if let Some(id) = self.id.get() {
             Some(*id)
-        } else if let Ok(id) = self.id_rx.try_recv() {
+        } else if let Ok(Some(id)) = self.id_rx.try_recv() {
             let id = self.id.get_or_init(|| id.into());
             Some(*id)
         } else {
@@ -563,22 +587,21 @@ impl WebRtcSocket<SingleChannel> {
     ///
     /// Messages are removed from the socket when called.
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
-        self.channels
-            .get_mut(0)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .receive()
+        self.channel(0).receive()
     }
 
-    /// Send a packet to the given peer.
+    /// Try to send a packet to the given peer. An error is propagated if the socket future
+    /// is dropped. `Ok` is not a guarantee of delivery.
+    pub fn try_send(&mut self, packet: Packet, peer: PeerId) -> Result<(), SendError> {
+        self.channel(0).try_send(packet, peer)
+    }
+
+    /// Send a packet to the given peer. There is no guarantee of delivery.
+    ///
+    /// # Panics
+    /// Panics if socket future is dropped.
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
-        self.channels
-            .get_mut(0)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .send(packet, peer)
+        self.try_send(packet, peer).expect("Send failed");
     }
 }
 
@@ -621,12 +644,12 @@ pub struct MessageLoopChannels {
 }
 
 async fn run_socket(
-    id_tx: crossbeam_channel::Sender<PeerId>,
+    id_tx: futures_channel::oneshot::Sender<PeerId>,
     config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
-) -> Result<(), Error> {
+) -> Result<(), SignalingError> {
     debug!("Starting WebRtcSocket");
 
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
@@ -658,9 +681,18 @@ async fn run_socket(
     let mut signaling_loop_done = Box::pin(signaling_loop_fut.fuse());
     loop {
         select! {
-            _ = message_loop_done => {
-                debug!("Message loop completed");
-                break;
+            msgloop = message_loop_done => {
+                match msgloop {
+                    Ok(()) => {
+                        debug!("Message loop completed");
+                        break Ok(())
+                    },
+                    Err(e) => {
+                        // TODO: Reconnect X attempts if configured to reconnect.
+                        error!("The message loop finished with an error: {e:?}");
+                        break Err(e);
+                    },
+                }
             }
 
             sigloop = signaling_loop_done => {
@@ -668,21 +700,20 @@ async fn run_socket(
                     Ok(()) => debug!("Signaling loop completed"),
                     Err(e) => {
                         // TODO: Reconnect X attempts if configured to reconnect.
-                        error!("{e:?}");
-                        return Err(Error::from(e));
+                        error!("The signaling loop finished with an error: {e:?}");
+                        break Err(e);
                     },
                 }
             }
 
-            complete => break
+            complete => break Ok(())
         }
     }
-    Ok(())
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{webrtc_socket::error::SignalingError, ChannelConfig, Error, WebRtcSocketBuilder};
+    use crate::{ChannelConfig, Error, WebRtcSocketBuilder};
 
     #[futures_test::test]
     async fn unreachable_server() {
@@ -693,7 +724,10 @@ mod test {
 
         let result = fut.await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::Signaling(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            Error::ConnectionFailed { .. }
+        ));
     }
 
     #[futures_test::test]
@@ -707,7 +741,7 @@ mod test {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            Error::Signaling(SignalingError::ConnectionFailed(_))
+            Error::ConnectionFailed { .. },
         ));
     }
 }

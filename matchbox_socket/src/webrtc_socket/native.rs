@@ -1,4 +1,4 @@
-use super::{error::MessagingError, HandshakeResult, PeerDataSender};
+use super::{HandshakeResult, PacketSendError, PeerDataSender};
 use crate::{
     webrtc_socket::{
         error::SignalingError,
@@ -22,7 +22,7 @@ use futures::{
     stream::FuturesUnordered,
     Future, FutureExt, SinkExt, StreamExt,
 };
-use futures_channel::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{Receiver, Sender, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, info, trace, warn};
@@ -55,7 +55,7 @@ impl Signaller for NativeSignaller {
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {
                         if *attempts <= 1 {
-                            return Err(SignalingError::ConnectionFailed(Box::new(e)));
+                            return Err(SignalingError::NegotiationFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
                             warn!("connection to signaling server failed, {attempts} attempt(s) remain");
@@ -93,8 +93,11 @@ impl Signaller for NativeSignaller {
 pub(crate) struct NativeMessenger;
 
 impl PeerDataSender for UnboundedSender<Packet> {
-    fn send(&mut self, packet: Packet) -> Result<(), super::error::MessagingError> {
-        self.unbounded_send(packet).map_err(MessagingError::from)
+    fn send(&mut self, packet: Packet) -> Result<(), PacketSendError> {
+        self.unbounded_send(packet)
+            .map_err(|source| PacketSendError {
+                source: TrySendError::into_send_error(source),
+            })
     }
 }
 

@@ -39,7 +39,6 @@ once_cell = { version = "1.17", default-features = false, features = [
   "race",
   "alloc",
 ] }
-crossbeam-channel = "0.5"
 derive_more = "0.99"
 
 ggrs = { version = "0.9", default-features = false, optional = true }

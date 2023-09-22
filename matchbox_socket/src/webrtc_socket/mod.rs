@@ -188,8 +188,11 @@ async fn message_loop<M: Messenger>(
                             handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {
-                            peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
-                            .map_err(TrySendError::into_send_error)?;
+                            // if sending on this channel fails, it means the
+                            // socket has been dropped, in which case there is
+                            // no way for calling API to know the peer has been
+                            // dropped anyway, so ignore send errors.
+                            let _ = peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected));
                         },
                         PeerEvent::Signal { sender, data } => {
                             let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {

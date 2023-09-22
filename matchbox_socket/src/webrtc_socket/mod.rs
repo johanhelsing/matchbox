@@ -212,15 +212,19 @@ async fn message_loop<M: Messenger>(
 
             handshake_result = handshakes.select_next_some() => {
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
-                peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected))
-                    .map_err(TrySendError::into_send_error)?;
+                if peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected)).is_err() {
+                    // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
+                    break Ok(());
+                }
                 peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
 
             peer_uuid = peer_loops.select_next_some() => {
                 debug!("peer {peer_uuid} finished");
-                peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected))
-                    .map_err(TrySendError::into_send_error)?;
+                if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
+                    // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
+                    break Ok(());
+                }
             }
 
             message = next_peer_message_out => {

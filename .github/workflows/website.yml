@@ -30,6 +30,9 @@ jobs:
       - name: Copy index.html
         run: cp website/index.html dist/index.html
 
+      - name: Copy assets
+        run: cp -r assets dist/assets
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v1.0.9
         with:

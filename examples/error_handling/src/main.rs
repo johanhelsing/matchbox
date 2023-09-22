@@ -45,12 +45,12 @@ async fn async_main() {
         match loop_fut.await {
             Ok(()) => info!("Exited cleanly :)"),
             Err(e) => match e {
-                SocketError::ConnectionFailed { .. } => {
-                    warn!("couldn't connect to signaling server, please check your connection");
+                SocketError::ConnectionFailed(e) => {
+                    warn!("couldn't connect to signaling server, please check your connection: {e}");
                     // todo: show prompt and reconnect?
                 }
-                SocketError::Disconnected { .. } => {
-                    warn!("you were kicked, or your connection went down, or the signaling server stopped");
+                SocketError::Disconnected(e)  => {
+                    warn!("you were kicked, or your connection went down, or the signaling server stopped: {e}");
                 }
             },
         }
@@ -94,7 +94,7 @@ async fn async_main() {
                     let packet = "ping!".as_bytes().to_vec().into_boxed_slice();
                     socket.send(packet, peer);
                 }
-                timeout.reset(Duration::from_nanos(1));
+                timeout.reset(Duration::from_millis(10));
             }
 
             _ = (&mut fake_user_quit).fuse() => {

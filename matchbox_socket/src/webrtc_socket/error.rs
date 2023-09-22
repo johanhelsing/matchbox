@@ -27,7 +27,7 @@ pub enum SignalingError {
     UndeliverableSignal(#[from] futures_channel::mpsc::TrySendError<PeerEvent>),
 
     #[error("failed to send message to peer: {0}")]
-    UndeliverablePacket(#[from] futures_channel::mpsc::SendError),
+    UndeliverablePacket(futures_channel::mpsc::SendError),
 
     #[error("The stream is exhausted")]
     StreamExhausted,

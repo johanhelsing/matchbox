@@ -18,8 +18,8 @@ jobs:
           toolchain: stable
           target: wasm32-unknown-unknown
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.5.0
+      #- name: Rust Cache
+      #  uses: Swatinem/rust-cache@v2.5.0
 
       - name: Install bevy_wasm_pack
         run: cargo install --git https://github.com/johanhelsing/bevy_wasm_pack

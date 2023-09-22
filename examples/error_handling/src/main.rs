@@ -1,10 +1,3 @@
-//! This example shows one way failures can be handled, logging at the
-//! appropriate points.
-//!
-//! The example tries to connect to a room, then sends messages to all peers as
-//! quickly as possible, logging any messages received, then disconnects after a
-//! timeout.
-
 use futures::{select, FutureExt};
 use futures_timer::Delay;
 use log::{info, warn};

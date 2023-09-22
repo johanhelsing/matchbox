@@ -1,6 +1,8 @@
-# Simple Example
+# Error handling example
 
-Shows how to use `matchbox_socket` in a simple example.
+This example shows one way failures can be handled, logging at the appropriate points.
+
+The example tries to connect to a room, then sends messages to all peers as quickly as possible, logging any messages received, then disconnects after a timeout.
 
 ## Instructions
 

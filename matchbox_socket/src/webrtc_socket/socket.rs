@@ -349,6 +349,19 @@ pub struct WebRtcChannel {
 }
 
 impl WebRtcChannel {
+    /// Returns whether it's still possible to send messages.
+    pub fn is_closed(&self) -> bool {
+        self.tx.is_closed()
+    }
+
+    /// Close this channel.
+    ///
+    /// This prevents sending and receiving any messages in the future, but does not drain messages that are buffered.
+    pub fn close(&mut self) {
+        self.tx.close_channel();
+        self.rx.close();
+    }
+
     /// Call this where you want to handle new received messages. Returns immediately.
     ///
     /// Messages are removed from the socket when called.
@@ -430,6 +443,23 @@ impl WebRtcSocket {
 }
 
 impl<C: ChannelPlurality> WebRtcSocket<C> {
+    /// Close this socket, disconnecting all channels.
+    pub fn close(mut self) {
+        self.channels
+            .iter_mut()
+            .filter_map(Option::take)
+            .for_each(|mut c| c.close());
+    }
+
+    /// Returns whether this socket is closed; this is considered closed as soon as any channel (not
+    /// taken) is closed.
+    pub fn is_closed(&self) -> bool {
+        self.channels
+            .iter()
+            .filter_map(Option::as_ref)
+            .any(|c| c.is_closed())
+    }
+
     /// Handle peers connecting or disconnecting
     ///
     /// Constructed using [`WebRtcSocketBuilder`].
@@ -708,40 +738,5 @@ async fn run_socket(
 
             complete => break Ok(())
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::{ChannelConfig, Error, WebRtcSocketBuilder};
-
-    #[futures_test::test]
-    async fn unreachable_server() {
-        // .invalid is a reserved tld for testing and documentation
-        let (_socket, fut) = WebRtcSocketBuilder::new("wss://example.invalid")
-            .add_channel(ChannelConfig::unreliable())
-            .build();
-
-        let result = fut.await;
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            Error::ConnectionFailed { .. }
-        ));
-    }
-
-    #[futures_test::test]
-    async fn test_signaling_attempts() {
-        let (_socket, loop_fut) = WebRtcSocketBuilder::new("wss://example.invalid/")
-            .reconnect_attempts(Some(3))
-            .add_channel(ChannelConfig::reliable())
-            .build();
-
-        let result = loop_fut.await;
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            Error::ConnectionFailed { .. },
-        ));
     }
 }

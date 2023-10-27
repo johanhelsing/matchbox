@@ -937,6 +937,7 @@ dependencies = [
 name = "bevy_matchbox"
 version = "0.7.0"
 dependencies = [
+ "async-compat",
  "bevy",
  "cfg-if",
  "matchbox_signaling",

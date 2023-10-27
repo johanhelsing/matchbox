@@ -1,5 +1,4 @@
-use std::net::SocketAddr;
-
+use async_compat::CompatExt;
 use bevy::{
     ecs::system::Command,
     prelude::{Commands, Resource},
@@ -14,6 +13,7 @@ use matchbox_signaling::{
     },
     Error, SignalingCallbacks, SignalingServer, SignalingServerBuilder, SignalingState,
 };
+use std::net::SocketAddr;
 
 /// A [`SignalingServer`] as a [`Resource`].
 ///
@@ -80,7 +80,7 @@ where
 impl From<SignalingServer> for MatchboxServer {
     fn from(server: SignalingServer) -> Self {
         let task_pool = IoTaskPool::get();
-        let task = task_pool.spawn(server.serve());
+        let task = task_pool.spawn(server.serve().compat());
         MatchboxServer(task)
     }
 }

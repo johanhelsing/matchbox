@@ -130,14 +130,12 @@ where
             .layer(Extension(self.shared_callbacks))
             .layer(Extension(self.callbacks))
             .layer(Extension(self.state));
-        let server = axum::Server::bind(&self.socket_addr).serve(
-            self.router
-                .into_make_service_with_connect_info::<SocketAddr>(),
-        );
-        let socket_addr = server.local_addr();
-        SignalingServer {
-            server,
-            socket_addr,
-        }
+
+        let info = self
+            .router
+            .into_make_service_with_connect_info::<SocketAddr>();
+
+        let socket_addr = self.socket_addr;
+        SignalingServer { info, socket_addr }
     }
 }

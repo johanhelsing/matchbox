@@ -5,8 +5,7 @@ use crate::{
         full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
     },
 };
-use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router, Server};
-use hyper::server::conn::AddrIncoming;
+use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router};
 use std::net::SocketAddr;
 
 /// Contains the interface end of a signaling server
@@ -15,8 +14,8 @@ pub struct SignalingServer {
     /// The socket address bound for this server
     pub(crate) socket_addr: SocketAddr,
 
-    /// The low-level axum server
-    pub(crate) server: Server<AddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
+    /// Low-level info for how to build an axum server
+    pub(crate) info: IntoMakeServiceWithConnectInfo<Router, SocketAddr>,
 }
 
 /// Common methods
@@ -43,7 +42,10 @@ impl SignalingServer {
     /// Serve the signaling server
     pub async fn serve(self) -> Result<(), crate::Error> {
         // TODO: Shouldn't this return Result<!, crate::Error>?
-        match self.server.await {
+        // todo: use try_serve?
+        let server = axum::Server::bind(&self.socket_addr).serve(self.info);
+
+        match server.await {
             Ok(()) => Ok(()),
             Err(e) => Err(crate::Error::from(e)),
         }

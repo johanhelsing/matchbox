@@ -179,7 +179,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     // https://github.com/johanhelsing/matchbox/issues/350
     fn start_signaling_without_panics() {
         let mut app = App::new();

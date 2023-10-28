@@ -159,3 +159,36 @@ impl MatchboxServer {
         SignalingServer::client_server_builder(socket_addr)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::matchbox_signaling::topologies::client_server::{ClientServer, ClientServerState};
+    use crate::prelude::*;
+    use bevy::prelude::*;
+    use std::net::Ipv4Addr;
+
+    fn start_signaling(mut commands: Commands) {
+        let server: MatchboxServer = SignalingServerBuilder::new(
+            (Ipv4Addr::UNSPECIFIED, 3536),
+            ClientServer,
+            ClientServerState::default(),
+        )
+        .into();
+
+        commands.insert_resource(MatchboxServer::from(server));
+    }
+
+    #[test]
+    #[ignore]
+    // https://github.com/johanhelsing/matchbox/issues/350
+    fn start_signaling_without_panics() {
+        let mut app = App::new();
+
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Startup, start_signaling);
+
+        app.update();
+
+        assert_eq!(0, 1);
+    }
+}

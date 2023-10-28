@@ -24,7 +24,7 @@ jobs:
         uses: Swatinem/rust-cache@v2.7.1
 
       - name: Run cargo test
-        run: cargo test --all-targets
+        run: cargo test --features signaling --all-targets
 
   # Should be upgraded to test when possible
   check-wasm:

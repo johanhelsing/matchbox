@@ -187,7 +187,5 @@ mod tests {
             .add_systems(Startup, start_signaling);
 
         app.update();
-
-        assert_eq!(0, 1);
     }
 }

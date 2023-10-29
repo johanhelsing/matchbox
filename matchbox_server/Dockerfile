@@ -7,8 +7,6 @@ FROM rust:1.73-slim-bullseye as builder
 
 WORKDIR /usr/src/matchbox_server/
 
-# cache dependency compilation in a low layer to speed up subsequent builds and
-# save disk space on builders
 COPY README.md /usr/src/README.md
 COPY matchbox_server/Cargo.toml /usr/src/matchbox_server/Cargo.toml
 COPY matchbox_protocol /usr/src/matchbox_protocol

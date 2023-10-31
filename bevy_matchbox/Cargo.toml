@@ -21,7 +21,7 @@ readme = "../README.md"
 
 [features]
 ggrs = ["matchbox_socket/ggrs"]
-signaling = ["matchbox_signaling"]
+signaling = ["dep:matchbox_signaling", "dep:async-compat"]
 
 [dependencies]
 bevy = { version = "0.11", default-features = false }
@@ -30,3 +30,4 @@ cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 matchbox_signaling = { version = "0.7", path = "../matchbox_signaling", optional = true }
+async-compat = { version = "0.2", optional = true }

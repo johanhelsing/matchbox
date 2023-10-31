@@ -115,9 +115,6 @@ where
     }
 
     /// Create a [`SignalingServer`].
-    ///
-    /// # Panics
-    /// This method will panic if the socket address requested cannot be bound.
     pub fn build(mut self) -> SignalingServer {
         // Insert topology
         let state_machine: SignalingStateMachine<Cb, S> =
@@ -130,14 +127,16 @@ where
             .layer(Extension(self.shared_callbacks))
             .layer(Extension(self.callbacks))
             .layer(Extension(self.state));
-        let server = axum::Server::bind(&self.socket_addr).serve(
-            self.router
-                .into_make_service_with_connect_info::<SocketAddr>(),
-        );
-        let socket_addr = server.local_addr();
+
+        let info = self
+            .router
+            .into_make_service_with_connect_info::<SocketAddr>();
+
+        let socket_addr = self.socket_addr;
         SignalingServer {
-            server,
-            socket_addr,
+            info,
+            requested_addr: socket_addr,
+            server: None,
         }
     }
 }

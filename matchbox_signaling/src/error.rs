@@ -10,4 +10,8 @@ pub enum Error {
     /// An error occurring from hyper
     #[error("Hyper error: {0}")]
     Hyper(#[from] hyper::Error),
+
+    /// Couldn't bind to socket
+    #[error("Bind error: {0}")]
+    Bind(hyper::Error),
 }

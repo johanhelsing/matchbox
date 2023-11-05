@@ -1,8 +1,10 @@
-use bevy::prelude::*;
-use bevy_ggrs::{AddRollbackCommandExtension, PlayerInputs, Rollback, Session};
+use bevy::{prelude::*, utils::HashMap};
+use bevy_ggrs::{
+    AddRollbackCommandExtension, GgrsConfig, LocalInputs, LocalPlayers, PlayerInputs, Rollback,
+    Session,
+};
 use bevy_matchbox::prelude::*;
 use bytemuck::{Pod, Zeroable};
-use ggrs::{Config, PlayerHandle};
 use std::hash::Hash;
 
 const BLUE: Color = Color::rgb(0.8, 0.6, 0.2);
@@ -24,17 +26,10 @@ const CUBE_SIZE: f32 = 0.2;
 
 /// You need to define a config struct to bundle all the generics of GGRS. You can safely ignore
 /// `State` and leave it as u8 for all GGRS functionality.
-/// TODO: Find a way to hide the state type.
-#[derive(Debug)]
-pub struct GGRSConfig;
-impl Config for GGRSConfig {
-    type Input = BoxInput;
-    type State = u8;
-    type Address = PeerId;
-}
+pub type BoxConfig = GgrsConfig<BoxInput, PeerId>;
 
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq, Pod, Zeroable)]
+#[derive(Copy, Clone, PartialEq, Eq, Pod, Zeroable, Debug)]
 pub struct BoxInput {
     pub inp: u8,
 }
@@ -45,7 +40,7 @@ pub struct Player {
 }
 
 // Components that should be saved/loaded need to implement the `Reflect` trait
-#[derive(Default, Reflect, Component)]
+#[derive(Default, Reflect, Component, Clone)]
 pub struct Velocity {
     pub x: f32,
     pub y: f32,
@@ -53,36 +48,46 @@ pub struct Velocity {
 }
 
 // You can also register resources.
-#[derive(Resource, Default, Reflect, Hash)]
+#[derive(Resource, Default, Reflect, Hash, Copy, Clone)]
 #[reflect(Resource, Hash)]
 pub struct FrameCount {
     pub frame: u32,
 }
 
-pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> BoxInput {
-    let mut input: u8 = 0;
+pub fn read_local_inputs(
+    mut commands: Commands,
+    keyboard_input: Res<Input<KeyCode>>,
+    local_players: Res<LocalPlayers>,
+) {
+    let mut local_inputs = HashMap::new();
 
-    if keyboard_input.pressed(KeyCode::W) {
-        input |= INPUT_UP;
-    }
-    if keyboard_input.pressed(KeyCode::A) {
-        input |= INPUT_LEFT;
-    }
-    if keyboard_input.pressed(KeyCode::S) {
-        input |= INPUT_DOWN;
-    }
-    if keyboard_input.pressed(KeyCode::D) {
-        input |= INPUT_RIGHT;
+    for handle in &local_players.0 {
+        let mut input: u8 = 0;
+
+        if keyboard_input.pressed(KeyCode::W) {
+            input |= INPUT_UP;
+        }
+        if keyboard_input.pressed(KeyCode::A) {
+            input |= INPUT_LEFT;
+        }
+        if keyboard_input.pressed(KeyCode::S) {
+            input |= INPUT_DOWN;
+        }
+        if keyboard_input.pressed(KeyCode::D) {
+            input |= INPUT_RIGHT;
+        }
+
+        local_inputs.insert(*handle, BoxInput { inp: input });
     }
 
-    BoxInput { inp: input }
+    commands.insert_resource(LocalInputs::<BoxConfig>(local_inputs));
 }
 
 pub fn setup_scene_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    session: Res<Session<GGRSConfig>>,
+    session: Res<Session<BoxConfig>>,
     mut camera_query: Query<&mut Transform, With<Camera>>,
 ) {
     let num_players = match &*session {
@@ -159,7 +164,7 @@ pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
 #[allow(dead_code)]
 pub fn move_cube_system(
     mut query: Query<(&mut Transform, &mut Velocity, &Player), With<Rollback>>,
-    inputs: Res<PlayerInputs<GGRSConfig>>,
+    inputs: Res<PlayerInputs<BoxConfig>>,
 ) {
     for (mut t, mut v, p) in query.iter_mut() {
         let input = inputs[p.handle].0.inp;

@@ -24,7 +24,7 @@ ggrs = ["matchbox_socket/ggrs"]
 signaling = ["dep:matchbox_signaling", "dep:async-compat"]
 
 [dependencies]
-bevy = { version = "0.11", default-features = false }
+bevy = { version = "0.12", default-features = false }
 matchbox_socket = { version = "0.7", path = "../matchbox_socket" }
 cfg-if = "1.0"
 

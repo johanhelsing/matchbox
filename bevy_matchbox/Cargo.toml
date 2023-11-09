@@ -21,7 +21,7 @@ readme = "../README.md"
 
 [features]
 ggrs = ["matchbox_socket/ggrs"]
-signaling = ["dep:matchbox_signaling", "dep:async-compat"]
+signaling = ["dep:matchbox_signaling", "dep:async-compat", "bevy/multi-threaded"]
 
 [dependencies]
 bevy = { version = "0.12", default-features = false }

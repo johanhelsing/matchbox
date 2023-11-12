@@ -30,4 +30,4 @@ jobs:
       - name: Lint
         run: |
           taplo check --default-schema-catalogs
-          taplo fmt --check
+          taplo fmt --check --diff

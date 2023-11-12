@@ -34,8 +34,8 @@ bevy = { version = "0.12", default-features = false, features = [
   # gh actions runners don't like wayland
   "x11",
 ] }
-ggrs = { version = "0.10" }
-bevy_ggrs = { version = "0.14" }
+ggrs = "0.10"
+bevy_ggrs = "0.14"
 bytemuck = { version = "1.7", features = ["derive"] }
 clap = { version = "4.3", features = ["derive"] }
 serde = "1.0"

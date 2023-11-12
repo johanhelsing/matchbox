@@ -24,7 +24,7 @@ ggrs = ["matchbox_socket/ggrs"]
 signaling = [
   "dep:matchbox_signaling",
   "dep:async-compat",
-  "bevy/multi-threaded"
+  "bevy/multi-threaded",
 ]
 
 [dependencies]

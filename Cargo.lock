@@ -784,8 +784,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_ggrs"
-version = "0.13.0"
-source = "git+https://github.com/gschup/bevy_ggrs#763bfe3c061777c21b7654a836e817b314ef4da1"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce19ce4d45ad9699d14dfba7f720ec287e3eb6af9f50c7cc8d842014579eea44"
 dependencies = [
  "bevy",
  "bytemuck",
@@ -2269,8 +2270,9 @@ dependencies = [
 
 [[package]]
 name = "ggrs"
-version = "0.9.4"
-source = "git+https://github.com/gschup/ggrs#d062eadaba25ac0b77c85d61ebca032e7c32bc05"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5eea709a0f7d1e6a54acf0c9d5c3e28272d90370c459b4fd05b9f17a283cbe5"
 dependencies = [
  "bincode",
  "bitfield-rle",
@@ -5132,7 +5134,7 @@ dependencies = [
  "js-sys",
  "log",
  "naga",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "profiling",
  "raw-window-handle",
  "smallvec",
@@ -5157,7 +5159,7 @@ dependencies = [
  "codespan-reporting",
  "log",
  "naga",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "profiling",
  "raw-window-handle",
  "rustc-hash",
@@ -5195,7 +5197,7 @@ dependencies = [
  "metal",
  "naga",
  "objc",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "profiling",
  "range-alloc",
  "raw-window-handle",

@@ -60,7 +60,7 @@ fn main() {
         )
         .add_systems(Update, lobby_system.run_if(in_state(AppState::Lobby)))
         .add_systems(OnExit(AppState::Lobby), lobby_cleanup)
-        .add_systems(OnEnter(AppState::InGame), setup_scene_system)
+        .add_systems(OnEnter(AppState::InGame), setup_system)
         .add_systems(Update, log_ggrs_events.run_if(in_state(AppState::InGame)))
         // these systems will be executed as part of the advance frame update
         .add_systems(GgrsSchedule, (move_cube_system, increase_frame_system))

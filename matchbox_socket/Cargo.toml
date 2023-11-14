@@ -73,7 +73,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
   "RtcSessionDescription",
   "RtcSessionDescriptionInit",
 ] }
-serde-wasm-bindgen = "0.5"
+serde-wasm-bindgen = "0.6"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-tungstenite = { version = "0.23", default-features = false, features = [

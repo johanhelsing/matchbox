@@ -451,9 +451,8 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
             .for_each(|mut c| c.close());
     }
 
-    /// Returns whether this socket is closed; this is considered closed as soon as any channel (not
-    /// taken) is closed.
-    pub fn is_closed(&self) -> bool {
+    /// Returns whether any socket channel is closed
+    pub fn any_closed(&self) -> bool {
         self.channels
             .iter()
             .filter_map(Option::as_ref)

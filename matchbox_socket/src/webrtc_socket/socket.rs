@@ -801,7 +801,7 @@ async fn run_socket(
 
 #[cfg(test)]
 mod test {
-    use matchbox_socket::{ChannelConfig, Error, WebRtcSocketBuilder};
+    use crate::{ChannelConfig, Error, WebRtcSocketBuilder};
 
     #[futures_test::test]
     async fn unreachable_server() {

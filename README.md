@@ -22,7 +22,8 @@ The Matchbox project contains:
 - [bevy_matchbox](https://github.com/johanhelsing/matchbox/tree/main/bevy_matchbox): A `matchbox_socket` integration for the [Bevy](https://bevyengine.org/) game engine
   | bevy  | bevy_matchbox |
   |-------|---------------|
-  | 0.11  | 0.7, main     |
+  | 0.12  | 0.8, main     |
+  | 0.11  | 0.7           |
   | 0.10  | 0.6           |
   | < 0.9 | Unsupported   |
 

@@ -6,7 +6,6 @@ use crate::{
     },
     Error,
 };
-use async_tungstenite::tungstenite::WebSocket;
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
 use futures_channel::mpsc::{SendError, TrySendError, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
@@ -162,7 +161,7 @@ impl WebRtcSocketBuilder {
     /// Sets the number of attempts to make at reconnecting to the signaling server,
     /// if `None` the socket will attempt to connect indefinitely.
     ///
-    /// The default is 2 reconnection attempts.
+    /// The default is 3 reconnection attempts.
     pub fn reconnect_attempts(mut self, attempts: Option<u16>) -> Self {
         self.config.attempts = attempts;
         self

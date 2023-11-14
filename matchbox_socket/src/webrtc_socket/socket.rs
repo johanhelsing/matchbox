@@ -669,7 +669,7 @@ impl WebRtcSocket<SingleChannel> {
         self.try_send(packet, peer).expect("Send failed");
     }
 
-    /// Returns whether any socket channel is closed
+    /// Returns whether the socket channel is closed
     pub fn is_closed(&self) -> bool {
         self.channel(0).is_closed()
     }

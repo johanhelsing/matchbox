@@ -25,7 +25,7 @@ json = ["dep:serde_json"]
 [dependencies]
 cfg-if = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-uuid = { version = "1.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["serde"] }
 derive_more = "0.99"
 
 # JSON feature

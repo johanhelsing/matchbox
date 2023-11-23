@@ -13,7 +13,6 @@ updates:
     schedule:
       interval: weekly
     groups:
-      non-major:
+      patch-updates:
         update-types:
-          - "minor"
           - "patch"

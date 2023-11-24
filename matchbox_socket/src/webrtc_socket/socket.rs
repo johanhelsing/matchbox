@@ -443,17 +443,15 @@ impl WebRtcSocket {
 }
 
 impl<C: ChannelPlurality> WebRtcSocket<C> {
-    /// Disconnect from the peer, severing all communication channels.
-    pub fn disconnect(&mut self, peer: PeerId) {
-        todo!("Needs attention from @johanhelsing or @garryod")
-    }
+    // Todo: Disconnect from the peer, severing all communication channels.
+    // pub fn disconnect(&mut self, peer: PeerId) {}
 
     /// Close this socket, disconnecting all channels.
-    pub fn close(mut self) {
+    pub fn close(&mut self) {
         self.channels
             .iter_mut()
-            .filter_map(Option::take)
-            .for_each(|mut c| c.close());
+            .filter_map(Option::as_mut)
+            .for_each(|c| c.close());
     }
 
     /// Handle peers connecting or disconnecting

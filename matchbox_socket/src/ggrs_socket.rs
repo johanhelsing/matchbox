@@ -4,8 +4,8 @@ use ggrs::{Message, PlayerType};
 use matchbox_protocol::PeerId;
 
 use crate::{
-    ChannelConfig, MessageLoopFuture, MultipleChannels, NoChannels, Packet, SingleChannel,
-    WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
+    ChannelConfig, ChannelPlurality, MessageLoopFuture, MultipleChannels, NoChannels, Packet,
+    SingleChannel, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
 
 impl ChannelConfig {
@@ -64,7 +64,7 @@ impl WebRtcSocket {
     }
 }
 
-impl WebRtcSocket {
+impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
     pub fn players(&mut self) -> Vec<PlayerType<PeerId>> {
         let Some(our_id) = self.id() else {

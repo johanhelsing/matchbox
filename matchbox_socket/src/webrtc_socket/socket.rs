@@ -569,7 +569,7 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     ///     .add_channel(ChannelConfig::reliable())
     ///     .add_channel(ChannelConfig::unreliable())
     ///     .build();
-    /// let reliable_channel_messages = socket.channel(0).receive();
+    /// let reliable_channel_messages = socket.channel_mut(0).receive();
     /// ```
     ///
     /// See also: [`WebRtcSocket::channel`], [`WebRtcSocket::get_channel`], [`WebRtcSocket::take_channel`]

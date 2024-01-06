@@ -4,8 +4,6 @@ pub(crate) mod error;
 pub(crate) mod handlers;
 pub(crate) mod server;
 
-pub use server::SignalingServer;
-
 /// State managed by the signaling server
 pub trait SignalingState: Clone + Send + Sync + 'static {}
 

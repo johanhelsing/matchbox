@@ -356,7 +356,8 @@ impl WebRtcChannel {
 
     /// Close this channel.
     ///
-    /// This prevents sending and receiving any messages in the future, but does not drain messages that are buffered.
+    /// This prevents sending and receiving any messages in the future, but does not drain messages
+    /// that are buffered.
     pub fn close(&mut self) {
         self.tx.close_channel();
         self.rx.close();
@@ -551,7 +552,8 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// let is_closed = socket.channel(0).is_closed();
     /// ```
     ///
-    /// See also: [`WebRtcSocket::channel_mut`], [`WebRtcSocket::get_channel`], [`WebRtcSocket::take_channel`]
+    /// See also: [`WebRtcSocket::channel_mut`], [`WebRtcSocket::get_channel`],
+    /// [`WebRtcSocket::take_channel`]
     ///
     /// # Panics
     ///
@@ -572,7 +574,8 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     /// let reliable_channel_messages = socket.channel_mut(0).receive();
     /// ```
     ///
-    /// See also: [`WebRtcSocket::channel`], [`WebRtcSocket::get_channel_mut`], [`WebRtcSocket::take_channel`]
+    /// See also: [`WebRtcSocket::channel`], [`WebRtcSocket::get_channel_mut`],
+    /// [`WebRtcSocket::take_channel`]
     ///
     /// # Panics
     ///
@@ -615,7 +618,7 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
     ///     .add_channel(ChannelConfig::reliable())
     ///     .add_channel(ChannelConfig::unreliable())
     ///     .build();
-    /// let reliable_channel_messages = socket.get_channel(0).unwrap().receive();
+    /// let reliable_channel_messages = socket.get_channel_mut(0).unwrap().receive();
     /// ```
     ///
     /// See also: [`WebRtcSocket::channel`], [`WebRtcSocket::take_channel`]

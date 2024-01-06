@@ -777,7 +777,7 @@ async fn run_socket(
         select! {
             msgloop = message_loop_done => {
                 match msgloop {
-                    Ok(()) => {
+                    Ok(()) | Err(SignalingError::StreamExhausted) => {
                         debug!("Message loop completed");
                         break Ok(())
                     },
@@ -792,6 +792,10 @@ async fn run_socket(
             sigloop = signaling_loop_done => {
                 match sigloop {
                     Ok(()) => debug!("Signaling loop completed"),
+                    Err(SignalingError::StreamExhausted) => {
+                        debug!("Signaling loop completed");
+                        break Ok(());
+                    },
                     Err(e) => {
                         // TODO: Reconnect X attempts if configured to reconnect.
                         error!("The signaling loop finished with an error: {e:?}");

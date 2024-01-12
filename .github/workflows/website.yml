@@ -1,0 +1,56 @@
+on:
+  push:
+    branches:
+      - main
+
+name: Website
+
+jobs:
+  build:
+    name: Build Examples
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+
+      #- name: Rust Cache
+      #  uses: Swatinem/rust-cache@v2.5.0
+
+      - name: Install bevy_wasm_pack
+        run: cargo install --git https://github.com/johanhelsing/bevy_wasm_pack
+
+      - name: Build bevy_ggrs example
+        run: bevy_wasm_pack dist bevy_ggrs_example --dir-name bevy_ggrs
+
+      - name: Copy index.html
+        run: cp website/index.html dist/index.html
+
+      - name: Copy assets
+        run: cp -r examples/bevy_ggrs/assets dist/assets
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v1.0.9
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy Pages
+    needs:
+      - build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy GitHub Pages site
+        id: deployment
+        uses: actions/deploy-pages@v2.0.2

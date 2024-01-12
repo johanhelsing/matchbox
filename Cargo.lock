@@ -2973,7 +2973,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_socket"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "async-compat",
  "async-trait",

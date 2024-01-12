@@ -12,3 +12,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      patch-updates:
+        update-types:
+          - "patch"

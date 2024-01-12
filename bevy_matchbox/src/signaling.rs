@@ -1,5 +1,4 @@
-use std::net::SocketAddr;
-
+use async_compat::CompatExt;
 use bevy::{
     ecs::system::Command,
     prelude::{Commands, Resource},
@@ -14,6 +13,7 @@ use matchbox_signaling::{
     },
     Error, SignalingCallbacks, SignalingServer, SignalingServerBuilder, SignalingState,
 };
+use std::net::SocketAddr;
 
 /// A [`SignalingServer`] as a [`Resource`].
 ///
@@ -80,7 +80,7 @@ where
 impl From<SignalingServer> for MatchboxServer {
     fn from(server: SignalingServer) -> Self {
         let task_pool = IoTaskPool::get();
-        let task = task_pool.spawn(server.serve());
+        let task = task_pool.spawn(server.serve().compat());
         MatchboxServer(task)
     }
 }
@@ -97,7 +97,7 @@ where
     Cb: SignalingCallbacks,
     S: SignalingState,
 {
-    fn write(self, world: &mut bevy::prelude::World) {
+    fn apply(self, world: &mut bevy::prelude::World) {
         world.insert_resource(MatchboxServer::from(self.0))
     }
 }
@@ -127,7 +127,7 @@ where
 struct StopServer;
 
 impl Command for StopServer {
-    fn write(self, world: &mut bevy::prelude::World) {
+    fn apply(self, world: &mut bevy::prelude::World) {
         world.remove_resource::<MatchboxServer>();
     }
 }
@@ -157,5 +157,35 @@ impl MatchboxServer {
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState> {
         SignalingServer::client_server_builder(socket_addr)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::matchbox_signaling::topologies::client_server::{ClientServer, ClientServerState};
+    use crate::prelude::*;
+    use bevy::prelude::*;
+    use std::net::Ipv4Addr;
+
+    fn start_signaling(mut commands: Commands) {
+        let server: MatchboxServer = SignalingServerBuilder::new(
+            (Ipv4Addr::UNSPECIFIED, 3536),
+            ClientServer,
+            ClientServerState::default(),
+        )
+        .into();
+
+        commands.insert_resource(MatchboxServer::from(server));
+    }
+
+    #[test]
+    // https://github.com/johanhelsing/matchbox/issues/350
+    fn start_signaling_without_panics() {
+        let mut app = App::new();
+
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Startup, start_signaling);
+
+        app.update();
     }
 }

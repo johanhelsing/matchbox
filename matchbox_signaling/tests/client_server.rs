@@ -29,8 +29,8 @@ mod tests {
 
     #[tokio::test]
     async fn ws_connect() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -40,8 +40,8 @@ mod tests {
 
     #[tokio::test]
     async fn uuid_assigned() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut host, _response) = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -55,8 +55,8 @@ mod tests {
 
     #[tokio::test]
     async fn new_client() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut host, _response) = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -77,8 +77,8 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_client() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut host, _response) = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -105,8 +105,8 @@ mod tests {
 
     #[tokio::test]
     async fn signal() {
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
-        let addr = server.local_addr();
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0)).build();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut host, _response) = tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -146,7 +146,7 @@ mod tests {
     async fn on_connection_req_callback() {
         let (connection_requested_tx, mut connection_requested_rx) = unbounded_channel();
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_connection_request({
                 let connection_requested_tx = connection_requested_tx.clone();
                 move |_| {
@@ -157,7 +157,7 @@ mod tests {
                 }
             })
             .build();
-        let addr = server.local_addr();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         // Connect
@@ -174,7 +174,7 @@ mod tests {
         let (upgrade_called_tx, mut upgrade_called_rx) = unbounded_channel();
         let (peer_connected_tx, mut peer_connected_rx) = unbounded_channel();
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_connection_request({
                 let upgrade_called_tx = upgrade_called_tx.clone();
                 move |_| {
@@ -188,7 +188,7 @@ mod tests {
                 move |_| peer_connected_tx.send(()).expect("send peer connected")
             })
             .build();
-        let addr = server.local_addr();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         // Connect
@@ -202,13 +202,13 @@ mod tests {
     async fn on_id_assignment_callback() {
         let (id_assigned_tx, mut id_assigned_rx) = unbounded_channel();
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_id_assignment({
                 let id_assigned_tx = id_assigned_tx.clone();
                 move |_| id_assigned_tx.send(()).expect("send id assigned")
             })
             .build();
-        let addr = server.local_addr();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         // Connect
@@ -223,13 +223,13 @@ mod tests {
     async fn on_host_connect_callback() {
         let (host_connected_tx, mut host_connected_rx) = unbounded_channel();
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_host_connected({
                 let host_connected_tx = host_connected_tx.clone();
                 move |_| host_connected_tx.send(()).unwrap()
             })
             .build();
-        let addr = server.local_addr();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         // Connect
@@ -244,7 +244,7 @@ mod tests {
     async fn on_host_disconnect_callback() {
         let (disconnected_tx, mut disconnected_rx) = unbounded_channel::<()>();
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_host_disconnected({
                 let disconnected_tx = disconnected_tx.clone();
                 move |_| {
@@ -252,7 +252,7 @@ mod tests {
                 }
             })
             .build();
-        let addr = server.local_addr();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         // Connect
@@ -270,13 +270,13 @@ mod tests {
     async fn on_client_connect_callback() {
         let (client_connected_tx, mut client_connected_rx) = unbounded_channel();
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_client_connected({
                 let client_connected_tx = client_connected_tx.clone();
                 move |_| client_connected_tx.send(()).expect("send client connected")
             })
             .build();
-        let addr = server.local_addr();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         // First Connect = Host
@@ -298,7 +298,7 @@ mod tests {
     async fn on_client_disconnect_callback() {
         let (client_disconnected_tx, mut client_disconnected_rx) = unbounded_channel();
 
-        let server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
+        let mut server = SignalingServer::client_server_builder((Ipv4Addr::LOCALHOST, 0))
             .on_client_disconnected({
                 let client_disconnected_tx = client_disconnected_tx.clone();
                 move |_| {
@@ -308,7 +308,7 @@ mod tests {
                 }
             })
             .build();
-        let addr = server.local_addr();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         // Connect Host

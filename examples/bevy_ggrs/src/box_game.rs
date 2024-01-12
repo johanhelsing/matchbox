@@ -1,8 +1,10 @@
-use bevy::prelude::*;
-use bevy_ggrs::{AddRollbackCommandExtension, PlayerInputs, Rollback, Session};
-use bevy_matchbox::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
+use bevy_ggrs::{
+    AddRollbackCommandExtension, GgrsConfig, LocalInputs, LocalPlayers, PlayerInputs, Rollback,
+    Session,
+};
+use bevy_matchbox::prelude::PeerId;
 use bytemuck::{Pod, Zeroable};
-use ggrs::{Config, PlayerHandle};
 use std::hash::Hash;
 
 const BLUE: Color = Color::rgb(0.8, 0.6, 0.2);
@@ -16,25 +18,18 @@ const INPUT_DOWN: u8 = 1 << 1;
 const INPUT_LEFT: u8 = 1 << 2;
 const INPUT_RIGHT: u8 = 1 << 3;
 
-const MOVEMENT_SPEED: f32 = 0.005;
-const MAX_SPEED: f32 = 0.05;
-const FRICTION: f32 = 0.9;
+const ACCELERATION: f32 = 18.0;
+const MAX_SPEED: f32 = 3.0;
+const FRICTION: f32 = 0.0018;
 const PLANE_SIZE: f32 = 5.0;
 const CUBE_SIZE: f32 = 0.2;
 
-/// You need to define a config struct to bundle all the generics of GGRS. You can safely ignore
-/// `State` and leave it as u8 for all GGRS functionality.
-/// TODO: Find a way to hide the state type.
-#[derive(Debug)]
-pub struct GGRSConfig;
-impl Config for GGRSConfig {
-    type Input = BoxInput;
-    type State = u8;
-    type Address = PeerId;
-}
+// You need to define a config struct to bundle all the generics of GGRS. bevy_ggrs provides a sensible default in `GgrsConfig`.
+// (optional) You can define a type here for brevity.
+pub type BoxConfig = GgrsConfig<BoxInput, PeerId>;
 
 #[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Pod, Zeroable)]
 pub struct BoxInput {
     pub inp: u8,
 }
@@ -44,8 +39,12 @@ pub struct Player {
     pub handle: usize,
 }
 
-// Components that should be saved/loaded need to implement the `Reflect` trait
-#[derive(Default, Reflect, Component)]
+// Components that should be saved/loaded need to support snapshotting. The built-in options are:
+// - Clone (Recommended)
+// - Copy
+// - Reflect
+// See `bevy_ggrs::Strategy` for custom alternatives
+#[derive(Default, Reflect, Component, Clone)]
 pub struct Velocity {
     pub x: f32,
     pub y: f32,
@@ -53,36 +52,47 @@ pub struct Velocity {
 }
 
 // You can also register resources.
-#[derive(Resource, Default, Reflect, Hash)]
-#[reflect(Resource, Hash)]
+#[derive(Resource, Default, Reflect, Hash, Clone, Copy)]
+#[reflect(Hash)]
 pub struct FrameCount {
     pub frame: u32,
 }
 
-pub fn input(_handle: In<PlayerHandle>, keyboard_input: Res<Input<KeyCode>>) -> BoxInput {
-    let mut input: u8 = 0;
+/// Collects player inputs during [`ReadInputs`](`bevy_ggrs::ReadInputs`) and creates a [`LocalInputs`] resource.
+pub fn read_local_inputs(
+    mut commands: Commands,
+    keyboard_input: Res<Input<KeyCode>>,
+    local_players: Res<LocalPlayers>,
+) {
+    let mut local_inputs = HashMap::new();
 
-    if keyboard_input.pressed(KeyCode::W) {
-        input |= INPUT_UP;
-    }
-    if keyboard_input.pressed(KeyCode::A) {
-        input |= INPUT_LEFT;
-    }
-    if keyboard_input.pressed(KeyCode::S) {
-        input |= INPUT_DOWN;
-    }
-    if keyboard_input.pressed(KeyCode::D) {
-        input |= INPUT_RIGHT;
+    for handle in &local_players.0 {
+        let mut input: u8 = 0;
+
+        if keyboard_input.pressed(KeyCode::W) {
+            input |= INPUT_UP;
+        }
+        if keyboard_input.pressed(KeyCode::A) {
+            input |= INPUT_LEFT;
+        }
+        if keyboard_input.pressed(KeyCode::S) {
+            input |= INPUT_DOWN;
+        }
+        if keyboard_input.pressed(KeyCode::D) {
+            input |= INPUT_RIGHT;
+        }
+
+        local_inputs.insert(*handle, BoxInput { inp: input });
     }
 
-    BoxInput { inp: input }
+    commands.insert_resource(LocalInputs::<BoxConfig>(local_inputs));
 }
 
-pub fn setup_scene_system(
+pub fn setup_scene(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    session: Res<Session<GGRSConfig>>,
+    session: Res<Session<BoxConfig>>,
     mut camera_query: Query<&mut Transform, With<Camera>>,
 ) {
     let num_players = match &*session {
@@ -91,7 +101,7 @@ pub fn setup_scene_system(
         Session::Spectator(s) => s.num_players(),
     };
 
-    // plane
+    // A ground plane
     commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane {
             size: PLANE_SIZE,
@@ -101,11 +111,6 @@ pub fn setup_scene_system(
         ..default()
     });
 
-    // player cube - just spawn whatever entity you want, then add a `Rollback` component with a
-    // unique id (for example through the `RollbackIdProvider` resource). Every entity that you
-    // want to be saved/loaded needs a `Rollback` component with a unique rollback id.
-    // When loading entities from the past, this extra id is necessary to connect entities over
-    // different game states
     let r = PLANE_SIZE / 4.;
 
     for handle in 0..num_players {
@@ -119,17 +124,23 @@ pub fn setup_scene_system(
         transform.translation.z = z;
         let color = PLAYER_COLORS[handle % PLAYER_COLORS.len()];
 
+        // Entities which will be rolled back can be created just like any other...
         commands
             .spawn((
+                // ...add visual information...
                 PbrBundle {
                     mesh: meshes.add(Mesh::from(shape::Cube { size: CUBE_SIZE })),
                     material: materials.add(color.into()),
                     transform,
                     ..default()
                 },
+                // ...flags...
                 Player { handle },
+                // ...and components which will be rolled-back...
                 Velocity::default(),
             ))
+            // ...just ensure you call `add_rollback()`
+            // This ensures a stable ID is available for the rollback system to refer to
             .add_rollback();
     }
 
@@ -145,9 +156,8 @@ pub fn setup_scene_system(
 }
 
 // Example system, manipulating a resource, will be added to the rollback schedule.
-// Increases the frame count by 1 every update step. If loading and saving resources works
-// correctly, you should see this resource rolling back, counting back up and finally increasing by
-// 1 every update step
+// Increases the frame count by 1 every update step. If loading and saving resources works correctly,
+// you should see this resource rolling back, counting back up and finally increasing by 1 every update step
 #[allow(dead_code)]
 pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
     frame_count.frame += 1;
@@ -159,32 +169,37 @@ pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
 #[allow(dead_code)]
 pub fn move_cube_system(
     mut query: Query<(&mut Transform, &mut Velocity, &Player), With<Rollback>>,
-    inputs: Res<PlayerInputs<GGRSConfig>>,
+    //                                                              ^------^ Added by `add_rollback` earlier
+    inputs: Res<PlayerInputs<BoxConfig>>,
+    // Thanks to RollbackTimePlugin, this is rollback safe
+    time: Res<Time>,
 ) {
+    let dt = time.delta().as_secs_f32();
+
     for (mut t, mut v, p) in query.iter_mut() {
         let input = inputs[p.handle].0.inp;
         // set velocity through key presses
         if input & INPUT_UP != 0 && input & INPUT_DOWN == 0 {
-            v.z -= MOVEMENT_SPEED;
+            v.z -= ACCELERATION * dt;
         }
         if input & INPUT_UP == 0 && input & INPUT_DOWN != 0 {
-            v.z += MOVEMENT_SPEED;
+            v.z += ACCELERATION * dt;
         }
         if input & INPUT_LEFT != 0 && input & INPUT_RIGHT == 0 {
-            v.x -= MOVEMENT_SPEED;
+            v.x -= ACCELERATION * dt;
         }
         if input & INPUT_LEFT == 0 && input & INPUT_RIGHT != 0 {
-            v.x += MOVEMENT_SPEED;
+            v.x += ACCELERATION * dt;
         }
 
         // slow down
         if input & INPUT_UP == 0 && input & INPUT_DOWN == 0 {
-            v.z *= FRICTION;
+            v.z *= FRICTION.powf(dt);
         }
         if input & INPUT_LEFT == 0 && input & INPUT_RIGHT == 0 {
-            v.x *= FRICTION;
+            v.x *= FRICTION.powf(dt);
         }
-        v.y *= FRICTION;
+        v.y *= FRICTION.powf(dt);
 
         // constrain velocity
         let mag = (v.x * v.x + v.y * v.y + v.z * v.z).sqrt();
@@ -196,9 +211,9 @@ pub fn move_cube_system(
         }
 
         // apply velocity
-        t.translation.x += v.x;
-        t.translation.y += v.y;
-        t.translation.z += v.z;
+        t.translation.x += v.x * dt;
+        t.translation.y += v.y * dt;
+        t.translation.z += v.z * dt;
 
         // constrain cube to plane
         t.translation.x = t.translation.x.max(-1. * (PLANE_SIZE - CUBE_SIZE) * 0.5);

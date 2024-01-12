@@ -1,9 +1,4 @@
-use std::pin::Pin;
-
-use super::{
-    error::{JsErrorExt, MessagingError},
-    HandshakeResult, PeerDataSender,
-};
+use super::{error::JsErrorExt, HandshakeResult, PacketSendError, PeerDataSender};
 use crate::webrtc_socket::{
     error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
     socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, RtcIceServerConfig,
@@ -18,7 +13,7 @@ use js_sys::{Function, Reflect};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
-use std::time::Duration;
+use std::{pin::Pin, time::Duration};
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -44,7 +39,7 @@ impl Signaller for WasmSignaller {
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {
                         if *attempts <= 1 {
-                            return Err(SignalingError::ConnectionFailed(Box::new(e)));
+                            return Err(SignalingError::NegotiationFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
                             warn!("connection to signaling server failed, {attempts} attempt(s) remain");
@@ -79,10 +74,10 @@ impl Signaller for WasmSignaller {
 }
 
 impl PeerDataSender for RtcDataChannel {
-    fn send(&mut self, packet: Packet) -> Result<(), MessagingError> {
+    fn send(&mut self, packet: Packet) -> Result<(), PacketSendError> {
         self.send_with_u8_array(&packet)
             .efix()
-            .map_err(MessagingError::from)
+            .map_err(|source| PacketSendError { source })
     }
 }
 

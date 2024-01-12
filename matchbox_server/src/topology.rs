@@ -174,8 +174,8 @@ mod tests {
 
     #[tokio::test]
     async fn ws_connect() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
@@ -185,8 +185,8 @@ mod tests {
 
     #[tokio::test]
     async fn uuid_assigned() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut client, _response) =
@@ -201,8 +201,8 @@ mod tests {
 
     #[tokio::test]
     async fn new_peer() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
@@ -226,8 +226,8 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_peer() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
@@ -257,8 +257,8 @@ mod tests {
 
     #[tokio::test]
     async fn signal() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
@@ -299,8 +299,8 @@ mod tests {
 
     #[tokio::test]
     async fn match_pairs() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
@@ -350,8 +350,8 @@ mod tests {
     }
     #[tokio::test]
     async fn match_pair_and_other_alone_room_without_next() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
@@ -392,8 +392,8 @@ mod tests {
 
     #[tokio::test]
     async fn match_different_id_same_next() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut client_a, _response) =
@@ -443,8 +443,8 @@ mod tests {
     }
     #[tokio::test]
     async fn match_same_id_different_next() {
-        let server = app();
-        let addr = server.local_addr();
+        let mut server = app();
+        let addr = server.bind().unwrap();
         tokio::spawn(server.serve());
 
         let (mut client_a, _response) =

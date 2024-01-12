@@ -1,6 +1,6 @@
 [package]
 name = "matchbox_socket"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "Painless WebRTC peer-to-peer full-mesh networking socket"
 edition = "2021"
@@ -18,7 +18,7 @@ repository = "https://github.com/johanhelsing/matchbox"
 ggrs = ["dep:bincode", "dep:ggrs"]
 
 [dependencies]
-matchbox_protocol = { version = "0.7", path = "../matchbox_protocol", default-features = false }
+matchbox_protocol = { version = "0.8", path = "../matchbox_protocol", default-features = false }
 futures-channel = { version = "0.3", default-features = false, features = [
   "sink",
 ] }
@@ -34,19 +34,18 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 log = { version = "0.4", default-features = false }
 thiserror = "1.0"
 cfg-if = "1.0"
-async-trait = { version = "0.1" }
+async-trait = "0.1"
 once_cell = { version = "1.17", default-features = false, features = [
   "race",
   "alloc",
 ] }
-crossbeam-channel = "0.5"
 derive_more = "0.99"
 
-ggrs = { version = "0.9", default-features = false, optional = true }
+ggrs = { version = "0.10", default-features = false, optional = true }
 bincode = { version = "1.3", default-features = false, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-ggrs = { version = "0.9", default-features = false, optional = true, features = [
+ggrs = { version = "0.10", default-features = false, optional = true, features = [
   "wasm-bindgen",
 ] }
 ws_stream_wasm = { version = "0.7", default-features = false }
@@ -74,7 +73,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
   "RtcSessionDescription",
   "RtcSessionDescriptionInit",
 ] }
-serde-wasm-bindgen = { version = "0.5" }
+serde-wasm-bindgen = "0.6"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-tungstenite = { version = "0.23", default-features = false, features = [
@@ -86,4 +85,4 @@ bytes = { version = "1.1", default-features = false }
 async-compat = { version = "0.2", default-features = false }
 
 [dev-dependencies]
-futures-test = { version = "0.3" }
+futures-test = "0.3"

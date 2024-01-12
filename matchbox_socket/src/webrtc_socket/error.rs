@@ -1,6 +1,5 @@
 use crate::webrtc_socket::messages::PeerEvent;
 use cfg_if::cfg_if;
-use futures_channel::mpsc::TrySendError;
 
 /// An error that can occur when getting a socket's channel through
 /// `get_channel`, `take_channel` or `try_update_peers`.
@@ -20,40 +19,32 @@ pub enum ChannelError {
     Closed,
 }
 
-/// An error that can occur with WebRTC signaling.
+/// An error that can occur with WebRTC messaging.
 #[derive(Debug, thiserror::Error)]
 pub enum SignalingError {
     // Common
-    #[error("failed to send event to signaling server: {0}")]
-    Undeliverable(#[from] TrySendError<PeerEvent>),
+    #[error("failed to send to signaling server: {0}")]
+    UndeliverableSignal(#[from] futures_channel::mpsc::TrySendError<PeerEvent>),
+
     #[error("The stream is exhausted")]
     StreamExhausted,
+
     #[error("Message received in unknown format")]
     UnknownFormat,
+
     #[error("failed to establish initial connection: {0}")]
-    ConnectionFailed(#[from] Box<SignalingError>),
+    NegotiationFailed(#[from] Box<SignalingError>),
 
     // Native
     #[cfg(not(target_arch = "wasm32"))]
     #[error("socket failure communicating with signaling server: {0}")]
-    Socket(#[from] async_tungstenite::tungstenite::Error),
+    WebSocket(#[from] async_tungstenite::tungstenite::Error),
 
     // WASM
     #[cfg(target_arch = "wasm32")]
     #[error("socket failure communicating with signaling server: {0}")]
-    Socket(#[from] ws_stream_wasm::WsErr),
+    WebSocket(#[from] ws_stream_wasm::WsErr),
 }
-
-/// An error that can occur with WebRTC messaging.
-#[cfg(not(target_arch = "wasm32"))]
-#[derive(Debug, thiserror::Error)]
-#[error("failed to send message to peer: {0}")]
-pub(crate) struct MessagingError(#[from] futures_channel::mpsc::TrySendError<crate::Packet>);
-
-#[cfg(target_arch = "wasm32")]
-#[derive(Debug, thiserror::Error)]
-#[error("failed to send message to peer: {0}")]
-pub(crate) struct MessagingError(#[from] JsError);
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

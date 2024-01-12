@@ -1,5 +1,5 @@
 use bevy::{log::LogPlugin, prelude::*};
-use bevy_ggrs::{GgrsPlugin, GgrsSchedule, Session};
+use bevy_ggrs::{GgrsApp, GgrsPlugin, GgrsSchedule, ReadInputs, Session};
 use bevy_matchbox::prelude::*;
 use ggrs::SessionBuilder;
 
@@ -25,22 +25,17 @@ fn main() {
     let args = Args::get();
     info!("{args:?}");
 
-    let mut app = App::new();
-
-    GgrsPlugin::<GGRSConfig>::new()
-        // define frequency of rollback game logic update
-        .with_update_frequency(FPS)
-        // define system that returns inputs given a player handle, so GGRS can send the inputs
-        // around
-        .with_input_system(input)
-        // register types of components AND resources you want to be rolled back
-        .register_rollback_component::<Transform>()
-        .register_rollback_component::<Velocity>()
-        .register_rollback_resource::<FrameCount>()
-        // make it happen in the bevy app
-        .build(&mut app);
-
-    app.insert_resource(ClearColor(SKY_COLOR))
+    App::new()
+        .add_plugins(GgrsPlugin::<BoxConfig>::default())
+        .set_rollback_schedule_fps(FPS)
+        .add_systems(ReadInputs, read_local_inputs)
+        // Rollback behavior can be customized using a variety of extension methods and plugins:
+        // The FrameCount resource implements Copy, we can use that to have minimal overhead rollback
+        .rollback_resource_with_copy::<FrameCount>()
+        // Transform and Velocity components only implement Clone, so instead we'll use that to snapshot and rollback with
+        .rollback_component_with_clone::<Transform>()
+        .rollback_component_with_clone::<Velocity>()
+        .insert_resource(ClearColor(SKY_COLOR))
         .add_plugins(
             DefaultPlugins
                 .set(LogPlugin {
@@ -65,7 +60,7 @@ fn main() {
         )
         .add_systems(Update, lobby_system.run_if(in_state(AppState::Lobby)))
         .add_systems(OnExit(AppState::Lobby), lobby_cleanup)
-        .add_systems(OnEnter(AppState::InGame), setup_scene_system)
+        .add_systems(OnEnter(AppState::InGame), setup_scene)
         .add_systems(Update, log_ggrs_events.run_if(in_state(AppState::InGame)))
         // these systems will be executed as part of the advance frame update
         .add_systems(GgrsSchedule, (move_cube_system, increase_frame_system))
@@ -167,9 +162,10 @@ fn lobby_system(
     let max_prediction = 12;
 
     // create a GGRS P2P session
-    let mut sess_build = SessionBuilder::<GGRSConfig>::new()
+    let mut sess_build = SessionBuilder::<BoxConfig>::new()
         .with_num_players(args.players)
         .with_max_prediction_window(max_prediction)
+        .unwrap()
         .with_input_delay(2)
         .with_fps(FPS)
         .expect("invalid fps");
@@ -193,7 +189,7 @@ fn lobby_system(
     app_state.set(AppState::InGame);
 }
 
-fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {
+fn log_ggrs_events(mut session: ResMut<Session<BoxConfig>>) {
     match session.as_mut() {
         Session::P2P(s) => {
             for event in s.events() {

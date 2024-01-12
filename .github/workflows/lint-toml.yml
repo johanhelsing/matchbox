@@ -1,5 +1,7 @@
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 name: Lint TOML
@@ -19,7 +21,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.0
+        uses: Swatinem/rust-cache@v2.7.1
 
       - name: Install Taplo
         uses: actions-rs/cargo@v1
@@ -30,4 +32,4 @@ jobs:
       - name: Lint
         run: |
           taplo check --default-schema-catalogs
-          taplo fmt --check
+          taplo fmt --check --diff

@@ -21,7 +21,7 @@ repository = "https://github.com/johanhelsing/matchbox"
 matchbox_protocol = { version = "0.8", path = "../matchbox_protocol", features = [
   "json",
 ] }
-axum = { version = "0.6", features = ["ws"] }
+axum = { version = "0.7", features = ["ws"] }
 hyper = { version = "0.14", features = ["server"] }
 tracing = { version = "0.1", features = ["log"] }
 tower-http = { version = "0.4", features = ["cors", "trace"] }

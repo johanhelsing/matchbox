@@ -21,7 +21,7 @@ jobs:
           override: true
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.1
+        uses: Swatinem/rust-cache@v2.7.3
 
       - name: Install Taplo
         uses: actions-rs/cargo@v1

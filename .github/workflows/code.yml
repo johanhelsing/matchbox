@@ -23,7 +23,7 @@ jobs:
           toolchain: stable
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.1
+        uses: Swatinem/rust-cache@v2.7.3
 
       - name: Run cargo test
         run: cargo test --features signaling --all-targets
@@ -43,7 +43,7 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.1
+        uses: Swatinem/rust-cache@v2.7.3
 
       - name: Run cargo check
         run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo check >
@@ -68,7 +68,7 @@ jobs:
           components: rustfmt
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.1
+        uses: Swatinem/rust-cache@v2.7.3
 
       - name: Run cargo clippy
         run: cargo fmt --all --check
@@ -91,7 +91,7 @@ jobs:
           components: clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.1
+        uses: Swatinem/rust-cache@v2.7.3
 
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings
@@ -111,7 +111,7 @@ jobs:
           components: clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.1
+        uses: Swatinem/rust-cache@v2.7.3
 
       - name: Run cargo clippy
         run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo clippy >

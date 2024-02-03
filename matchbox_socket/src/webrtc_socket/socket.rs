@@ -7,7 +7,9 @@ use crate::{
     Error,
 };
 use futures::{future::Fuse, select, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{SendError, TrySendError, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{
+    SendError, TryRecvError, TrySendError, UnboundedReceiver, UnboundedSender,
+};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
 use std::{collections::HashMap, marker::PhantomData, pin::Pin, time::Duration};
@@ -363,7 +365,21 @@ impl WebRtcChannel {
         self.rx.close();
     }
 
+    /// Tries to receive new message if there are any available. Returns immediately.
+    ///
+    /// Message is removed from the socket when called.
+    ///
+    /// This function returns:
+    /// * `Ok(Some((peer, message)))` when message is received
+    /// * `Ok(None)` when channel is closed and no messages left in the queue
+    /// * `Err(e)` when there are no messages available, but channel is not yet closed
+    pub fn try_receive(&mut self) -> Result<Option<(PeerId, Packet)>, TryRecvError> {
+        self.rx.try_next()
+    }
+
     /// Call this where you want to handle new received messages. Returns immediately.
+    ///
+    /// Returns all available messages since the last call of this function.
     ///
     /// Messages are removed from the socket when called.
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {
@@ -654,7 +670,21 @@ impl<C: ChannelPlurality> WebRtcSocket<C> {
 }
 
 impl WebRtcSocket<SingleChannel> {
-    /// Call this where you want to handle new received messages.
+    /// Tries to receive new message if there are any available. Returns immediately.
+    ///
+    /// Message is removed from the socket when called.
+    ///
+    /// This function returns:
+    /// * `Ok(Some((peer, message)))` when message is received
+    /// * `Ok(None)` when channel is closed and no messages left in the queue
+    /// * `Err(e)` when there are no messages available, but socket is not yet closed
+    pub fn try_receive(&mut self) -> Result<Option<(PeerId, Packet)>, TryRecvError> {
+        self.channel_mut(0).try_receive()
+    }
+
+    /// Call this where you want to handle new received messages. Returns immediately.
+    ///
+    /// Returns all available messages since the last call of this function.
     ///
     /// Messages are removed from the socket when called.
     pub fn receive(&mut self) -> Vec<(PeerId, Packet)> {

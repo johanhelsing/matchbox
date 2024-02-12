@@ -3,7 +3,7 @@
 # to build, run `docker build -f matchbox_server/Dockerfile` from root of the
 # repository
 
-FROM rust:1.75-slim-bullseye as builder
+FROM rust:1.76-slim-bullseye as builder
 
 WORKDIR /usr/src/matchbox_server/
 

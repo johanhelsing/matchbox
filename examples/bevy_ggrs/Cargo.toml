@@ -30,6 +30,7 @@ bevy = { version = "0.12", default-features = false, features = [
   "bevy_sprite",
   "png",
   "webgl2",
+  "tonemapping_luts",
   # gh actions runners don't like wayland
   "x11",
 ] }

@@ -19,4 +19,5 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
+          file: matchbox_server/Dockerfile
           tags: ${{ vars.DOCKERHUB_USERNAME }}/matchbox_server:${{github.ref_name}}

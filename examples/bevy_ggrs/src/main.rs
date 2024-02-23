@@ -1,7 +1,6 @@
 use bevy::{log::LogPlugin, prelude::*};
-use bevy_ggrs::{GgrsApp, GgrsPlugin, GgrsSchedule, ReadInputs, Session};
+use bevy_ggrs::{ggrs::SessionBuilder, GgrsApp, GgrsPlugin, GgrsSchedule, ReadInputs, Session};
 use bevy_matchbox::prelude::*;
-use ggrs::SessionBuilder;
 
 mod args;
 mod box_game;
@@ -36,24 +35,15 @@ fn main() {
         .rollback_component_with_clone::<Transform>()
         .rollback_component_with_clone::<Velocity>()
         .insert_resource(ClearColor(SKY_COLOR))
-        .add_plugins(
-            DefaultPlugins
-                .set(LogPlugin {
-                    filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
-                    level: bevy::log::Level::DEBUG,
-                })
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        fit_canvas_to_parent: true, // behave on wasm
-                        ..default()
-                    }),
-                    ..default()
-                }),
-        )
+        .add_plugins(DefaultPlugins.set(LogPlugin {
+            filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
+            level: bevy::log::Level::DEBUG,
+            ..default()
+        }))
         // Some of our systems need the query parameters
         .insert_resource(args)
         .init_resource::<FrameCount>()
-        .add_state::<AppState>()
+        .init_state::<AppState>()
         .add_systems(
             OnEnter(AppState::Lobby),
             (lobby_startup, start_matchbox_socket),
@@ -139,7 +129,12 @@ fn lobby_system(
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {
     // regularly call update_peers to update the list of connected peers
-    for (peer, new_state) in socket.update_peers() {
+    let Ok(peer_changes) = socket.try_update_peers() else {
+        warn!("socket dropped");
+        return;
+    };
+
+    for (peer, new_state) in peer_changes {
         // you can also handle the specific dis(connections) as they occur:
         match new_state {
             PeerState::Connected => info!("peer {peer} connected"),

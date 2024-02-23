@@ -19,21 +19,7 @@ ggrs = { version = "0.10", features = ["wasm-bindgen"] }
 
 [dependencies]
 bevy_matchbox = { path = "../../bevy_matchbox", features = ["ggrs"] }
-bevy = { version = "0.12", default-features = false, features = [
-  "bevy_winit",
-  "bevy_render",
-  "bevy_pbr",
-  "bevy_core_pipeline",
-  "bevy_ui",
-  "bevy_text",
-  "bevy_asset",
-  "bevy_sprite",
-  "png",
-  "webgl2",
-  "tonemapping_luts",
-  # gh actions runners don't like wayland
-  "x11",
-] }
+bevy = "0.12"
 ggrs = "0.10"
 bevy_ggrs = "0.14"
 bytemuck = { version = "1.7", features = ["derive"] }

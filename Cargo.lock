@@ -2760,9 +2760,9 @@ dependencies = [
 
 [[package]]
 name = "interceptor"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef15e84428e65a87e5a38d13de93286ba71121cdc165ee2eeabab1c7a05623c9"
+checksum = "5b12e186d2a4c21225df6beb8ae5d81817c928da12e7ce78d0953fc74d88b590"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5129,9 +5129,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79b790234fbad46fd2c5821d6f39f69992bbfbba0e5eca36f66fc4f47d0935e1"
+checksum = "1fbdf025f0fa62f4bf252b2fb0cff0a04d3eac2021c440096649e62f4e48553d"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -5289,9 +5289,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc-srtp"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69f1bf5ab6c60ec5e42cacb19ed5dd3d43688b956c1624be1ba19b1192b24904"
+checksum = "383b0f0f73ee6cce396bdbc4d54ec661861a59eae9fc988914c1a8d82c5ac272"
 dependencies = [
  "aead",
  "aes",

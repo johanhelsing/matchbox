@@ -836,14 +836,16 @@ dependencies = [
 
 [[package]]
 name = "bevy_ggrs"
-version = "0.14.0"
-source = "git+https://github.com/bushrat011899/bevy_ggrs?branch=Bevy0.13Update#472c419dedb457a6bf7f25f7c3fb80e0fb59c4b6"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00bd69b2f97fbecc2bcf892184baf72b40e120ae128053dc76b13bc678964430"
 dependencies = [
  "bevy",
  "bytemuck",
  "ggrs",
  "instant",
  "log",
+ "seahash",
 ]
 
 [[package]]
@@ -2499,8 +2501,9 @@ dependencies = [
 
 [[package]]
 name = "ggrs"
-version = "0.10.0"
-source = "git+https://github.com/gschup/ggrs#2303ee7f8e01887e8c749f6c7ec55129fe5fd328"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5ab0bdf8c0046f369eba7011233f614b9f1d8646f86fdb5c0acfe039ab15836"
 dependencies = [
  "bincode",
  "bitfield-rle",
@@ -4248,6 +4251,12 @@ dependencies = [
  "thiserror",
  "url",
 ]
+
+[[package]]
+name = "seahash"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "sec1"

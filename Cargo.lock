@@ -2391,9 +2391,9 @@ dependencies = [
 
 [[package]]
 name = "ggrs"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5eea709a0f7d1e6a54acf0c9d5c3e28272d90370c459b4fd05b9f17a283cbe5"
+checksum = "c5ab0bdf8c0046f369eba7011233f614b9f1d8646f86fdb5c0acfe039ab15836"
 dependencies = [
  "bincode",
  "bitfield-rle",
@@ -2760,9 +2760,9 @@ dependencies = [
 
 [[package]]
 name = "interceptor"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef15e84428e65a87e5a38d13de93286ba71121cdc165ee2eeabab1c7a05623c9"
+checksum = "5b12e186d2a4c21225df6beb8ae5d81817c928da12e7ce78d0953fc74d88b590"
 dependencies = [
  "async-trait",
  "bytes",
@@ -2911,9 +2911,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.20"
+version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
+checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 dependencies = [
  "value-bag",
 ]
@@ -4139,9 +4139,9 @@ dependencies = [
 
 [[package]]
 name = "serde-wasm-bindgen"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c1432112bce8b966497ac46519535189a3250a3812cd27a999678a69756f79f"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
 dependencies = [
  "js-sys",
  "serde",
@@ -5129,9 +5129,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79b790234fbad46fd2c5821d6f39f69992bbfbba0e5eca36f66fc4f47d0935e1"
+checksum = "1fbdf025f0fa62f4bf252b2fb0cff0a04d3eac2021c440096649e62f4e48553d"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -5289,9 +5289,9 @@ dependencies = [
 
 [[package]]
 name = "webrtc-srtp"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69f1bf5ab6c60ec5e42cacb19ed5dd3d43688b956c1624be1ba19b1192b24904"
+checksum = "383b0f0f73ee6cce396bdbc4d54ec661861a59eae9fc988914c1a8d82c5ac272"
 dependencies = [
  "aead",
  "aes",

@@ -1,6 +1,6 @@
 [package]
 name = "matchbox_signaling"
-version = "0.8.0"
+version = "0.9.0"
 authors = [
   "Johan Helsing <johanhelsing@gmail.com>",
   "Spencer C. Imbleau <spencer@imbleau.com>",
@@ -18,7 +18,7 @@ categories = [
 repository = "https://github.com/johanhelsing/matchbox"
 
 [dependencies]
-matchbox_protocol = { version = "0.8", path = "../matchbox_protocol", features = [
+matchbox_protocol = { version = "0.9", path = "../matchbox_protocol", features = [
   "json",
 ] }
 axum = { version = "0.6", features = ["ws"] }

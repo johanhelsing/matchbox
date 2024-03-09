@@ -36,4 +36,4 @@ thiserror = "1.0"
 tokio-stream = "0.1"
 
 [dev-dependencies]
-tokio-tungstenite = "0.20.0"
+tokio-tungstenite = "0.21.0"

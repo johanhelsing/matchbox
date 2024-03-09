@@ -4,6 +4,7 @@ version = "0.8.0"
 authors = [
   "Johan Helsing <johanhelsing@gmail.com>",
   "Garry O'Donnell <garry.euan.odonnell@ntlworld.com",
+  "Spencer C. Imbleau",
 ]
 edition = "2021"
 description = "A Bevy extension for Matchbox WebRtc networking"
@@ -28,7 +29,7 @@ signaling = [
 ]
 
 [dependencies]
-bevy = { version = "0.12", default-features = false }
+bevy = { version = "0.13", default-features = false }
 matchbox_socket = { version = "0.8", path = "../matchbox_socket" }
 cfg-if = "1.0"
 
@@ -37,7 +38,7 @@ matchbox_signaling = { version = "0.8", path = "../matchbox_signaling", optional
 async-compat = { version = "0.2", optional = true }
 
 [dev-dependencies]
-bevy = { version = "0.12", default-features = false, features = [
+bevy = { version = "0.13", default-features = false, features = [
   "bevy_winit",
   "bevy_render",
   "bevy_pbr",

@@ -13,5 +13,9 @@ pub enum Error {
 
     /// Couldn't bind to socket
     #[error("Bind error: {0}")]
-    Bind(hyper::Error),
+    Bind(std::io::Error),
+
+    /// Error on serve
+    #[error("Serve error: {0}")]
+    Serve(std::io::Error),
 }

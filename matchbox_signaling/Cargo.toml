@@ -21,10 +21,10 @@ repository = "https://github.com/johanhelsing/matchbox"
 matchbox_protocol = { version = "0.9", path = "../matchbox_protocol", features = [
   "json",
 ] }
-axum = { version = "0.6", features = ["ws"] }
-hyper = { version = "0.14", features = ["server"] }
+axum = { version = "0.7", features = ["ws"] }
+hyper = { version = "1.2", features = ["server"] }
 tracing = { version = "0.1", features = ["log"] }
-tower-http = { version = "0.4", features = ["cors", "trace"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
 tokio = { version = "1.32", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

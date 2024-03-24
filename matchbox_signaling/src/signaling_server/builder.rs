@@ -115,28 +115,23 @@ where
     }
 
     /// Create a [`SignalingServer`].
-    pub fn build(mut self) -> SignalingServer {
+    pub fn build(self) -> SignalingServer {
         // Insert topology
         let state_machine: SignalingStateMachine<Cb, S> =
             SignalingStateMachine::from_topology(self.topology);
-        self.router = self
+        let info = self
             .router
             .route("/", get(ws_handler::<Cb, S>))
             .route("/:path", get(ws_handler::<Cb, S>))
             .layer(Extension(state_machine))
             .layer(Extension(self.shared_callbacks))
             .layer(Extension(self.callbacks))
-            .layer(Extension(self.state));
-
-        let info = self
-            .router
+            .layer(Extension(self.state))
             .into_make_service_with_connect_info::<SocketAddr>();
-
-        let socket_addr = self.socket_addr;
         SignalingServer {
+            requested_addr: self.socket_addr,
             info,
-            requested_addr: socket_addr,
-            server: None,
+            listener: None,
         }
     }
 }

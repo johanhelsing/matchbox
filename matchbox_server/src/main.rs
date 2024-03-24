@@ -59,10 +59,7 @@ async fn main() {
         })
         .cors()
         .trace()
-        .mutate_router(|router| {
-            // Apply router transformations
-            router.route("/health", get(|| async { StatusCode::OK }))
-        })
+        .mutate_router(|router| router.route("/health", get(health_handler)))
         .build();
     server
         .serve()

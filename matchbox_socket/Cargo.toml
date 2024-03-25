@@ -57,7 +57,7 @@ futures-timer = { version = "3.0", default-features = false, features = [
   "wasm-bindgen",
 ] }
 js-sys = { version = "0.3", default-features = false }
-web-sys = { version = "0.3.22", default-features = false, features = [
+web-sys = { version = "0.3.69", default-features = false, features = [
   "MessageEvent",
   "RtcConfiguration",
   "RtcDataChannel",

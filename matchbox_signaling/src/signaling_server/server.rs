@@ -6,8 +6,8 @@ use crate::{
     },
 };
 use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router};
-use hyper::{server::conn::AddrIncoming, Server};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpListener};
+use tokio::net as tokio;
 
 /// Contains the interface end of a signaling server
 #[derive(Debug)]
@@ -18,9 +18,7 @@ pub struct SignalingServer {
     /// Low-level info for how to build an axum server
     pub(crate) info: IntoMakeServiceWithConnectInfo<Router, SocketAddr>,
 
-    /// Low-level info for how to build an axum server
-    pub(crate) server:
-        Option<Server<AddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>>,
+    pub(crate) listener: Option<TcpListener>,
 }
 
 /// Common methods
@@ -43,19 +41,17 @@ impl SignalingServer {
     ///
     /// The server needs to [`bind`] first
     pub fn local_addr(&self) -> Option<SocketAddr> {
-        self.server.as_ref().map(|s| s.local_addr())
+        self.listener.as_ref().map(|l| l.local_addr().unwrap())
     }
 
     /// Binds the server to a socket
     ///
     /// Optional: Will happen automatically on [`serve`]
     pub fn bind(&mut self) -> Result<SocketAddr, crate::Error> {
-        let server = axum::Server::try_bind(&self.requested_addr)
-            .map_err(crate::Error::Bind)?
-            .serve(self.info.clone());
-
-        let addr = server.local_addr();
-        self.server = Some(server);
+        let listener = TcpListener::bind(self.requested_addr).map_err(crate::Error::Bind)?;
+        listener.set_nonblocking(true).map_err(crate::Error::Bind)?;
+        let addr = listener.local_addr().unwrap();
+        self.listener = Some(listener);
         Ok(addr)
     }
 
@@ -63,14 +59,15 @@ impl SignalingServer {
     ///
     /// Will bind if not already bound
     pub async fn serve(mut self) -> Result<(), crate::Error> {
-        if self.server.is_none() {
-            self.bind()?;
-            assert!(self.server.is_some());
-        }
-
-        match self.server.expect("no server, this is a bug").await {
-            Ok(()) => Ok(()),
-            Err(e) => Err(crate::Error::from(e)),
-        }
+        match self.listener {
+            Some(_) => (),
+            None => _ = self.bind()?,
+        };
+        let listener =
+            tokio::TcpListener::from_std(self.listener.expect("No listener, this is a bug!"))
+                .map_err(crate::Error::Bind)?;
+        axum::serve(listener, self.info)
+            .await
+            .map_err(crate::Error::Serve)
     }
 }

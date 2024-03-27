@@ -66,7 +66,7 @@ where
 
     /// Modify the router with a mutable closure. This is where one may apply middleware or other
     /// layers to the Router.
-    pub fn mutate_router(mut self, mut alter: impl FnMut(Router) -> Router) -> Self {
+    pub fn mutate_router(mut self, alter: impl FnOnce(Router) -> Router) -> Self {
         self.router = alter(self.router);
         self
     }

@@ -1,4 +1,4 @@
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{prelude::*, render::mesh::PlaneMeshBuilder, utils::HashMap};
 use bevy_ggrs::{
     AddRollbackCommandExtension, GgrsConfig, LocalInputs, LocalPlayers, PlayerInputs, Rollback,
     Session,
@@ -61,7 +61,7 @@ pub struct FrameCount {
 /// Collects player inputs during [`ReadInputs`](`bevy_ggrs::ReadInputs`) and creates a [`LocalInputs`] resource.
 pub fn read_local_inputs(
     mut commands: Commands,
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     local_players: Res<LocalPlayers>,
 ) {
     let mut local_inputs = HashMap::new();
@@ -69,16 +69,16 @@ pub fn read_local_inputs(
     for handle in &local_players.0 {
         let mut input: u8 = 0;
 
-        if keyboard_input.pressed(KeyCode::W) {
+        if keyboard_input.pressed(KeyCode::KeyW) {
             input |= INPUT_UP;
         }
-        if keyboard_input.pressed(KeyCode::A) {
+        if keyboard_input.pressed(KeyCode::KeyA) {
             input |= INPUT_LEFT;
         }
-        if keyboard_input.pressed(KeyCode::S) {
+        if keyboard_input.pressed(KeyCode::KeyS) {
             input |= INPUT_DOWN;
         }
-        if keyboard_input.pressed(KeyCode::D) {
+        if keyboard_input.pressed(KeyCode::KeyD) {
             input |= INPUT_RIGHT;
         }
 
@@ -103,15 +103,16 @@ pub fn setup_scene(
 
     // A ground plane
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane {
-            size: PLANE_SIZE,
-            ..default()
+        mesh: meshes.add(Mesh::from(PlaneMeshBuilder {
+            plane: Plane3d::new(Vec3::Y),
+            half_size: Vec2::splat(PLANE_SIZE / 2.0),
         })),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+        material: materials.add(StandardMaterial::from(Color::rgb(0.3, 0.5, 0.3))),
         ..default()
     });
 
     let r = PLANE_SIZE / 4.;
+    let mesh = meshes.add(Mesh::from(Cuboid::from_size(Vec3::splat(CUBE_SIZE))));
 
     for handle in 0..num_players {
         let rot = handle as f32 / num_players as f32 * 2. * std::f32::consts::PI;
@@ -129,8 +130,8 @@ pub fn setup_scene(
             .spawn((
                 // ...add visual information...
                 PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Cube { size: CUBE_SIZE })),
-                    material: materials.add(color.into()),
+                    mesh: mesh.clone(),
+                    material: materials.add(StandardMaterial::from(color)),
                     transform,
                     ..default()
                 },

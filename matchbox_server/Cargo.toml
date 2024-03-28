@@ -1,6 +1,6 @@
 [package]
 name = "matchbox_server"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 edition = "2021"
 description = "A signaling server for WebRTC peer-to-peer full-mesh networking"
@@ -17,12 +17,12 @@ homepage = "https://github.com/johanhelsing/matchbox"
 readme = "../README.md"
 
 [dependencies]
-matchbox_signaling = { version = "0.8", path = "../matchbox_signaling" }
-matchbox_protocol = { version = "0.8", path = "../matchbox_protocol", features = [
+matchbox_signaling = { version = "0.9", path = "../matchbox_signaling" }
+matchbox_protocol = { version = "0.9", path = "../matchbox_protocol", features = [
   "json",
 ] }
 async-trait = "0.1"
-axum = { version = "0.6", features = ["ws"] }
+axum = { version = "0.7", features = ["ws"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.4", features = ["cors", "trace"] }
@@ -36,4 +36,4 @@ thiserror = "1.0"
 tokio-stream = "0.1"
 
 [dev-dependencies]
-tokio-tungstenite = "0.20.0"
+tokio-tungstenite = "0.21.0"

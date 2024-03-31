@@ -176,7 +176,7 @@ mod tests {
         )
         .into();
 
-        commands.insert_resource(MatchboxServer::from(server));
+        commands.insert_resource(server);
     }
 
     #[test]

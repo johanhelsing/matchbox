@@ -50,9 +50,7 @@ ggrs = { version = "0.10", default-features = false, optional = true, features =
 ] }
 ws_stream_wasm = { version = "0.7", default-features = false }
 wasm-bindgen-futures = { version = "0.4", default-features = false }
-wasm-bindgen = { version = "0.2", default-features = false, features = [
-  "serde-serialize",
-] }
+wasm-bindgen = { version = "0.2", default-features = false }
 futures-timer = { version = "3.0", default-features = false, features = [
   "wasm-bindgen",
 ] }

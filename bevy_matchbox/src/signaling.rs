@@ -64,6 +64,7 @@ use std::net::SocketAddr;
 /// }
 /// ```
 #[derive(Debug, Resource)]
+#[allow(dead_code)] // we take ownership of the task to not drop it
 pub struct MatchboxServer(Task<Result<(), Error>>);
 
 impl<Topology, Cb, S> From<SignalingServerBuilder<Topology, Cb, S>> for MatchboxServer

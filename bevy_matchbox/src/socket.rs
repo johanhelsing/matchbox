@@ -70,6 +70,7 @@ use std::{
 /// }
 /// ```
 #[derive(Resource, Component, Debug)]
+#[allow(dead_code)] // keep the task alive so it doesn't drop before the socket
 pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>, Box<dyn Debug + Send + Sync>);
 
 impl<C: BuildablePlurality> Deref for MatchboxSocket<C> {

@@ -13,13 +13,15 @@ web-sys = { version = "0.3", features = [
   "Document",
   "Location", # for getting args from query string
 ] }
-serde_qs = "0.12"
+serde_qs = "0.13"
 wasm-bindgen = "0.2"
-bevy_ggrs = { version = "0.15", features = ["wasm-bindgen"] }
+bevy_ggrs = { git = "https://github.com/Jondolf/bevy_ggrs", branch = "bevy-0.14", features = [
+  "wasm-bindgen",
+] }
 
 [dependencies]
 bevy_matchbox = { path = "../../bevy_matchbox", features = ["ggrs"] }
-bevy = { version = "0.13", default-features = false, features = [
+bevy = { version = "0.14", default-features = false, features = [
   "bevy_winit",
   "bevy_render",
   "bevy_pbr",
@@ -28,14 +30,15 @@ bevy = { version = "0.13", default-features = false, features = [
   "bevy_text",
   "bevy_asset",
   "bevy_sprite",
-  "multi-threaded",
+  "bevy_state",
+  "multi_threaded",
   "png",
   "webgl2",
   "tonemapping_luts",
   # gh actions runners don't like wayland
   "x11",
 ] }
-bevy_ggrs = "0.15"
+bevy_ggrs = { git = "https://github.com/Jondolf/bevy_ggrs", branch = "bevy-0.14" }
 bytemuck = { version = "1.7", features = ["derive"] }
 clap = { version = "4.3", features = ["derive"] }
 serde = "1.0"

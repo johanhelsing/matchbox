@@ -25,11 +25,11 @@ ggrs = ["matchbox_socket/ggrs"]
 signaling = [
   "dep:matchbox_signaling",
   "dep:async-compat",
-  "bevy/multi-threaded",
+  "bevy/multi_threaded",
 ]
 
 [dependencies]
-bevy = { version = "0.13", default-features = false }
+bevy = { version = "0.14", default-features = false }
 matchbox_socket = { version = "0.9", path = "../matchbox_socket" }
 cfg-if = "1.0"
 
@@ -38,7 +38,7 @@ matchbox_signaling = { version = "0.9", path = "../matchbox_signaling", optional
 async-compat = { version = "0.2", optional = true }
 
 [dev-dependencies]
-bevy = { version = "0.13", default-features = false, features = [
+bevy = { version = "0.14", default-features = false, features = [
   "bevy_winit",
   "bevy_render",
   "bevy_pbr",

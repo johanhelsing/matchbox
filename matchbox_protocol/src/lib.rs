@@ -34,10 +34,12 @@ cfg_if! {
     if #[cfg(feature = "json")] {
         pub type JsonPeerRequest = PeerRequest<serde_json::Value>;
         pub type JsonPeerEvent = PeerEvent<serde_json::Value>;
+        use std::fmt;
 
-        impl ToString for JsonPeerRequest {
-            fn to_string(&self) -> String {
-                serde_json::to_string(self).expect("error serializing message")
+
+        impl fmt::Display for JsonPeerRequest {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", serde_json::to_string(self).map_err(|_| fmt::Error)?)
             }
         }
         impl std::str::FromStr for JsonPeerRequest {
@@ -48,9 +50,9 @@ cfg_if! {
             }
         }
 
-        impl ToString for JsonPeerEvent {
-            fn to_string(&self) -> String {
-                serde_json::to_string(self).expect("error serializing message")
+        impl fmt::Display for JsonPeerEvent {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", serde_json::to_string(self).map_err(|_| fmt::Error)?)
             }
         }
         impl std::str::FromStr for JsonPeerEvent {

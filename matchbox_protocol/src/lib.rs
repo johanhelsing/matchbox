@@ -39,7 +39,7 @@ cfg_if! {
 
         impl fmt::Display for JsonPeerRequest {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}", serde_json::to_string(self).expect("error serializing message"))
+                write!(f, "{}", serde_json::to_string(self).map_err(|_| fmt::Error)?)
             }
         }
         impl std::str::FromStr for JsonPeerRequest {
@@ -52,7 +52,7 @@ cfg_if! {
 
         impl fmt::Display for JsonPeerEvent {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}", serde_json::to_string(self).expect("error serializing message"))
+                write!(f, "{}", serde_json::to_string(self).map_err(|_| fmt::Error)?)
             }
         }
         impl std::str::FromStr for JsonPeerEvent {

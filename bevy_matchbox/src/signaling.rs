@@ -1,6 +1,6 @@
 use async_compat::CompatExt;
 use bevy::{
-    ecs::system::Command,
+    ecs::world::Command,
     prelude::{Commands, Resource},
     tasks::{IoTaskPool, Task},
 };

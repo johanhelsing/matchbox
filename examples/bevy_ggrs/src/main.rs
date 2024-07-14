@@ -17,7 +17,7 @@ enum AppState {
     InGame,
 }
 
-const SKY_COLOR: Color = Color::rgb(0.69, 0.69, 0.69);
+const SKY_COLOR: Color = Color::srgb(0.69, 0.69, 0.69);
 
 fn main() {
     // read query string or command line arguments
@@ -89,7 +89,7 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 align_items: AlignItems::FlexEnd,
                 ..default()
             },
-            background_color: Color::rgb(0.43, 0.41, 0.38).into(),
+            background_color: Color::srgb(0.43, 0.41, 0.38).into(),
             ..default()
         })
         .with_children(|parent| {

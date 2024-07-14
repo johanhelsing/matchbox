@@ -15,9 +15,7 @@ web-sys = { version = "0.3", features = [
 ] }
 serde_qs = "0.13"
 wasm-bindgen = "0.2"
-bevy_ggrs = { git = "https://github.com/Jondolf/bevy_ggrs", branch = "bevy-0.14", features = [
-  "wasm-bindgen",
-] }
+bevy_ggrs = { version = "0.16", features = ["wasm-bindgen"] }
 
 [dependencies]
 bevy_matchbox = { path = "../../bevy_matchbox", features = ["ggrs"] }
@@ -38,7 +36,7 @@ bevy = { version = "0.14", default-features = false, features = [
   # gh actions runners don't like wayland
   "x11",
 ] }
-bevy_ggrs = { git = "https://github.com/Jondolf/bevy_ggrs", branch = "bevy-0.14" }
+bevy_ggrs = "0.16"
 bytemuck = { version = "1.7", features = ["derive"] }
 clap = { version = "4.3", features = ["derive"] }
 serde = "1.0"

@@ -9,7 +9,7 @@ use crate::{
 };
 use axum::{response::Response, routing::get, Extension, Router};
 use matchbox_protocol::PeerId;
-use std::net::SocketAddr;
+use std::{convert::identity, net::SocketAddr};
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
@@ -66,7 +66,7 @@ where
 
     /// Modify the router with a mutable closure. This is where one may apply middleware or other
     /// layers to the Router.
-    pub fn mutate_router(mut self, mut alter: impl FnMut(Router) -> Router) -> Self {
+    pub fn mutate_router(mut self, alter: impl FnOnce(Router) -> Router) -> Self {
         self.router = alter(self.router);
         self
     }
@@ -116,18 +116,24 @@ where
 
     /// Create a [`SignalingServer`].
     pub fn build(self) -> SignalingServer {
+        self.build_with(identity)
+    }
+
+    /// Create a [`SignalingServer`] with a closure that modifies the signaling router
+    pub fn build_with(self, alter: impl FnOnce(Router) -> Router) -> SignalingServer {
         // Insert topology
         let state_machine: SignalingStateMachine<Cb, S> =
             SignalingStateMachine::from_topology(self.topology);
-        let info = self
-            .router
-            .route("/", get(ws_handler::<Cb, S>))
-            .route("/:path", get(ws_handler::<Cb, S>))
-            .layer(Extension(state_machine))
-            .layer(Extension(self.shared_callbacks))
-            .layer(Extension(self.callbacks))
-            .layer(Extension(self.state))
-            .into_make_service_with_connect_info::<SocketAddr>();
+        let info = alter(
+            self.router
+                .route("/", get(ws_handler::<Cb, S>))
+                .route("/:path", get(ws_handler::<Cb, S>))
+                .layer(Extension(state_machine))
+                .layer(Extension(self.shared_callbacks))
+                .layer(Extension(self.callbacks))
+                .layer(Extension(self.state)),
+        )
+        .into_make_service_with_connect_info::<SocketAddr>();
         SignalingServer {
             requested_addr: self.socket_addr,
             info,

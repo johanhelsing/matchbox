@@ -1,4 +1,7 @@
 //! Runs both signaling with server/client topology and runs the host in the same process
+//!    Note: When building a signaling server ensure your cargo has been updated,
+//!    Enable the `signaling` feature in the `bevy_matchbox` dependency:
+//!    bevy_matchbox = { version = "0.n", features = ["signaling"] }
 //!
 //! Sends messages periodically to all connected clients.
 

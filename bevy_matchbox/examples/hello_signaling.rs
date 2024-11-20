@@ -1,5 +1,8 @@
 //! Runs a signaling server with server/client topology as a headless bevy
 //! application.
+//!    Note: When building a signaling server ensure your cargo has been updated,
+//!    Enable the `signaling` feature in the `bevy_matchbox` dependency:
+//!    bevy_matchbox = { version = "0.n", features = ["signaling"] }
 
 use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, utils::Duration};
 use bevy_matchbox::{matchbox_signaling::SignalingServer, prelude::*};

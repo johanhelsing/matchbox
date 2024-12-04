@@ -102,11 +102,10 @@ pub fn setup_scene(
     };
 
     // A ground plane
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(PLANE_SIZE / 2.0))),
-        material: materials.add(StandardMaterial::from(Color::srgb(0.3, 0.5, 0.3))),
-        ..default()
-    });
+    commands.spawn((
+        Mesh3d(meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(PLANE_SIZE / 2.0)))),
+        MeshMaterial3d(materials.add(StandardMaterial::from(Color::srgb(0.3, 0.5, 0.3)))),
+    ));
 
     let r = PLANE_SIZE / 4.;
     let mesh = meshes.add(Mesh::from(Cuboid::from_size(Vec3::splat(CUBE_SIZE))));
@@ -126,12 +125,9 @@ pub fn setup_scene(
         commands
             .spawn((
                 // ...add visual information...
-                PbrBundle {
-                    mesh: mesh.clone(),
-                    material: materials.add(StandardMaterial::from(color)),
-                    transform,
-                    ..default()
-                },
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(materials.add(StandardMaterial::from(color))),
+                transform,
                 // ...flags...
                 Player { handle },
                 // ...and components which will be rolled-back...
@@ -143,10 +139,7 @@ pub fn setup_scene(
     }
 
     // light
-    commands.spawn(PointLightBundle {
-        transform: Transform::from_xyz(-4.0, 8.0, 4.0),
-        ..default()
-    });
+    commands.spawn((PointLight::default(), Transform::from_xyz(-4.0, 8.0, 4.0)));
     // camera
     for mut transform in camera_query.iter_mut() {
         *transform = Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y);

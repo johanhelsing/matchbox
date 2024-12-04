@@ -78,12 +78,12 @@ struct LobbyText;
 struct LobbyUI;
 
 fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera3dBundle::default());
+    commands.spawn(Camera3d::default());
 
     // All this is just for spawning centered text.
     commands
-        .spawn(NodeBundle {
-            style: Style {
+        .spawn((
+            Node {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
                 position_type: PositionType::Absolute,
@@ -91,27 +91,24 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 align_items: AlignItems::FlexEnd,
                 ..default()
             },
-            background_color: Color::srgb(0.43, 0.41, 0.38).into(),
-            ..default()
-        })
+            BackgroundColor(Color::srgb(0.43, 0.41, 0.38)),
+        ))
         .with_children(|parent| {
             parent
-                .spawn(TextBundle {
-                    style: Style {
+                .spawn((
+                    Node {
                         align_self: AlignSelf::Center,
                         justify_content: JustifyContent::Center,
                         ..default()
                     },
-                    text: Text::from_section(
-                        "Entering lobby...",
-                        TextStyle {
-                            font: asset_server.load("fonts/quicksand-light.ttf"),
-                            font_size: 96.,
-                            color: Color::BLACK,
-                        },
-                    ),
-                    ..default()
-                })
+                    Text("Entering lobby...".to_string()),
+                    TextFont {
+                        font: asset_server.load("fonts/quicksand-light.ttf"),
+                        font_size: 96.,
+                        ..default()
+                    },
+                    TextColor(Color::BLACK),
+                ))
                 .insert(LobbyText);
         })
         .insert(LobbyUI);
@@ -128,7 +125,7 @@ fn lobby_system(
     args: Res<Args>,
     mut socket: ResMut<MatchboxSocket>,
     mut commands: Commands,
-    mut query: Query<&mut Text, With<LobbyText>>,
+    mut text: Single<&mut Text, With<LobbyText>>,
 ) {
     // regularly call update_peers to update the list of connected peers
     let Ok(peer_changes) = socket.try_update_peers() else {
@@ -146,7 +143,7 @@ fn lobby_system(
 
     let connected_peers = socket.connected_peers().count();
     let remaining = args.players - (connected_peers + 1);
-    query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);
+    text.0 = format!("Waiting for {remaining} more player(s)",);
     if remaining > 0 {
         return;
     }
@@ -162,7 +159,6 @@ fn lobby_system(
     let mut sess_build = SessionBuilder::<BoxConfig>::new()
         .with_num_players(args.players)
         .with_max_prediction_window(max_prediction)
-        .unwrap()
         .with_input_delay(2)
         .with_fps(FPS)
         .expect("invalid fps");

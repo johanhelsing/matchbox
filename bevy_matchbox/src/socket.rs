@@ -115,7 +115,7 @@ pub trait OpenSocketExt {
 
 impl OpenSocketExt for Commands<'_, '_> {
     fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder) {
-        self.add(OpenSocket(socket_builder))
+        self.queue(OpenSocket(socket_builder))
     }
 }
 
@@ -137,7 +137,7 @@ pub trait CloseSocketExt {
 
 impl CloseSocketExt for Commands<'_, '_> {
     fn close_socket(&mut self) {
-        self.add(CloseSocket)
+        self.queue(CloseSocket)
     }
 }
 

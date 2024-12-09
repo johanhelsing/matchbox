@@ -18,10 +18,7 @@ cfg_if! {
 pub mod prelude {
     pub use crate::{CloseSocketExt, MatchboxSocket, OpenSocketExt};
     use cfg_if::cfg_if;
-    pub use matchbox_socket::{
-        BuildablePlurality, ChannelConfig, MultipleChannels, PeerId, PeerState, SingleChannel,
-        WebRtcSocketBuilder,
-    };
+    pub use matchbox_socket::{ChannelConfig, PeerId, PeerState, WebRtcSocketBuilder};
 
     cfg_if! {
         if #[cfg(all(not(target_arch = "wasm32"), feature = "signaling"))] {

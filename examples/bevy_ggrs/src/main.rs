@@ -124,7 +124,7 @@ fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
 fn lobby_system(
     mut app_state: ResMut<NextState<AppState>>,
     args: Res<Args>,
-    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+    mut socket: ResMut<MatchboxSocket>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {

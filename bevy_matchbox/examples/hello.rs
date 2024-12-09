@@ -4,6 +4,8 @@
 use bevy::{prelude::*, time::common_conditions::on_timer, utils::Duration};
 use bevy_matchbox::prelude::*;
 
+const CHANNEL_ID: usize = 0;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -21,22 +23,24 @@ fn start_socket(mut commands: Commands) {
     commands.insert_resource(socket);
 }
 
-fn send_message(mut socket: ResMut<MatchboxSocket<SingleChannel>>) {
+fn send_message(mut socket: ResMut<MatchboxSocket>) {
     let peers: Vec<_> = socket.connected_peers().collect();
 
     for peer in peers {
         let message = "Hello";
         info!("Sending message: {message:?} to {peer}");
-        socket.send(message.as_bytes().into(), peer);
+        socket
+            .channel_mut(CHANNEL_ID)
+            .send(message.as_bytes().into(), peer);
     }
 }
 
-fn receive_messages(mut socket: ResMut<MatchboxSocket<SingleChannel>>) {
+fn receive_messages(mut socket: ResMut<MatchboxSocket>) {
     for (peer, state) in socket.update_peers() {
         info!("{peer}: {state:?}");
     }
 
-    for (_id, message) in socket.receive() {
+    for (_id, message) in socket.channel_mut(CHANNEL_ID).receive() {
         match std::str::from_utf8(&message) {
             Ok(message) => info!("Received message: {message:?}"),
             Err(e) => error!("Failed to convert message to string: {e}"),

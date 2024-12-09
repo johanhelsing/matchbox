@@ -4,6 +4,8 @@ use log::{info, warn};
 use matchbox_socket::{Error as SocketError, PeerId, PeerState, WebRtcSocket};
 use std::time::Duration;
 
+const CHANNEL_ID: usize = 0;
+
 #[cfg(target_arch = "wasm32")]
 fn main() {
     // Setup logging
@@ -65,7 +67,7 @@ async fn async_main() {
                 PeerState::Connected => {
                     info!("Peer joined: {peer}");
                     let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
-                    socket.send(packet, peer);
+                    socket.channel_mut(CHANNEL_ID).send(packet, peer);
                 }
                 PeerState::Disconnected => {
                     info!("Peer left: {peer}");
@@ -74,7 +76,7 @@ async fn async_main() {
         }
 
         // Accept any messages incoming
-        for (peer, packet) in socket.receive() {
+        for (peer, packet) in socket.channel_mut(CHANNEL_ID).receive() {
             let message = String::from_utf8_lossy(&packet);
             info!("Message from {peer}: {message:?}");
         }
@@ -85,7 +87,7 @@ async fn async_main() {
                 let peers: Vec<PeerId> = socket.connected_peers().collect();
                 for peer in peers {
                     let packet = "ping!".as_bytes().to_vec().into_boxed_slice();
-                    socket.send(packet, peer);
+                    socket.channel_mut(CHANNEL_ID).send(packet, peer);
                 }
                 timeout.reset(Duration::from_millis(10));
             }

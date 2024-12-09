@@ -4,12 +4,9 @@ use bevy::{
     tasks::IoTaskPool,
 };
 pub use matchbox_socket;
-use matchbox_socket::{
-    BuildablePlurality, MessageLoopFuture, SingleChannel, WebRtcSocket, WebRtcSocketBuilder,
-};
+use matchbox_socket::{MessageLoopFuture, WebRtcSocket, WebRtcSocketBuilder};
 use std::{
     fmt::Debug,
-    marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
@@ -28,7 +25,7 @@ use std::{
 ///
 /// fn close_socket_system(
 ///     mut commands: Commands,
-///     socket: Query<Entity, With<MatchboxSocket<SingleChannel>>>
+///     socket: Query<Entity, With<MatchboxSocket>>
 /// ) {
 ///     let socket = socket.single();
 ///     commands.entity(socket).despawn();
@@ -46,7 +43,7 @@ use std::{
 /// }
 ///
 /// fn close_socket_system(mut commands: Commands) {
-///     commands.close_socket::<SingleChannel>();
+///     commands.close_socket();
 /// }
 /// ```
 ///
@@ -58,7 +55,7 @@ use std::{
 /// fn open_socket_system(mut commands: Commands) {
 ///     let room_url = "wss://matchbox.example.com";
 ///
-///     let socket: MatchboxSocket<SingleChannel> = WebRtcSocketBuilder::new(room_url)
+///     let socket: MatchboxSocket = WebRtcSocketBuilder::new(room_url)
 ///         .add_channel(ChannelConfig::reliable())
 ///         .into();
 ///
@@ -66,35 +63,35 @@ use std::{
 /// }
 ///
 /// fn close_socket_system(mut commands: Commands) {
-///     commands.remove_resource::<MatchboxSocket<SingleChannel>>();
+///     commands.remove_resource::<MatchboxSocket>();
 /// }
 /// ```
 #[derive(Resource, Component, Debug)]
 #[allow(dead_code)] // keep the task alive so it doesn't drop before the socket
-pub struct MatchboxSocket<C: BuildablePlurality>(WebRtcSocket<C>, Box<dyn Debug + Send + Sync>);
+pub struct MatchboxSocket(WebRtcSocket, Box<dyn Debug + Send + Sync>);
 
-impl<C: BuildablePlurality> Deref for MatchboxSocket<C> {
-    type Target = WebRtcSocket<C>;
+impl Deref for MatchboxSocket {
+    type Target = WebRtcSocket;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<C: BuildablePlurality> DerefMut for MatchboxSocket<C> {
+impl DerefMut for MatchboxSocket {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<C: BuildablePlurality> From<WebRtcSocketBuilder<C>> for MatchboxSocket<C> {
-    fn from(builder: WebRtcSocketBuilder<C>) -> Self {
+impl From<WebRtcSocketBuilder> for MatchboxSocket {
+    fn from(builder: WebRtcSocketBuilder) -> Self {
         Self::from(builder.build())
     }
 }
 
-impl<C: BuildablePlurality> From<(WebRtcSocket<C>, MessageLoopFuture)> for MatchboxSocket<C> {
-    fn from((socket, message_loop_fut): (WebRtcSocket<C>, MessageLoopFuture)) -> Self {
+impl From<(WebRtcSocket, MessageLoopFuture)> for MatchboxSocket {
+    fn from((socket, message_loop_fut): (WebRtcSocket, MessageLoopFuture)) -> Self {
         let task_pool = IoTaskPool::get();
         let task = task_pool.spawn(message_loop_fut);
         MatchboxSocket(socket, Box::new(task))
@@ -102,32 +99,32 @@ impl<C: BuildablePlurality> From<(WebRtcSocket<C>, MessageLoopFuture)> for Match
 }
 
 /// A [`Command`] used to open a [`MatchboxSocket`] and allocate it as a resource.
-struct OpenSocket<C: BuildablePlurality>(WebRtcSocketBuilder<C>);
+struct OpenSocket(WebRtcSocketBuilder);
 
-impl<C: BuildablePlurality + 'static> Command for OpenSocket<C> {
+impl Command for OpenSocket {
     fn apply(self, world: &mut World) {
         world.insert_resource(MatchboxSocket::from(self.0));
     }
 }
 
 /// A [`Commands`] extension used to open a [`MatchboxSocket`] and allocate it as a resource.
-pub trait OpenSocketExt<C: BuildablePlurality> {
+pub trait OpenSocketExt {
     /// Opens a [`MatchboxSocket`] and allocates it as a resource.
-    fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder<C>);
+    fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder);
 }
 
-impl<C: BuildablePlurality + 'static> OpenSocketExt<C> for Commands<'_, '_> {
-    fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder<C>) {
+impl OpenSocketExt for Commands<'_, '_> {
+    fn open_socket(&mut self, socket_builder: WebRtcSocketBuilder) {
         self.add(OpenSocket(socket_builder))
     }
 }
 
 /// A [`Command`] used to close a [`WebRtcSocket`], deleting the [`MatchboxSocket`] resource.
-struct CloseSocket<C: BuildablePlurality>(PhantomData<C>);
+struct CloseSocket;
 
-impl<C: BuildablePlurality + 'static> Command for CloseSocket<C> {
+impl Command for CloseSocket {
     fn apply(self, world: &mut World) {
-        world.remove_resource::<MatchboxSocket<C>>();
+        world.remove_resource::<MatchboxSocket>();
     }
 }
 
@@ -135,16 +132,16 @@ impl<C: BuildablePlurality + 'static> Command for CloseSocket<C> {
 /// resource.
 pub trait CloseSocketExt {
     /// Delete the [`MatchboxSocket`] resource.
-    fn close_socket<C: BuildablePlurality + 'static>(&mut self);
+    fn close_socket(&mut self);
 }
 
 impl CloseSocketExt for Commands<'_, '_> {
-    fn close_socket<C: BuildablePlurality + 'static>(&mut self) {
-        self.add(CloseSocket::<C>(PhantomData))
+    fn close_socket(&mut self) {
+        self.add(CloseSocket)
     }
 }
 
-impl MatchboxSocket<SingleChannel> {
+impl MatchboxSocket {
     /// Create a new socket with a single unreliable channel
     ///
     /// ```rust
@@ -157,7 +154,7 @@ impl MatchboxSocket<SingleChannel> {
     ///     commands.spawn(socket);
     /// }
     /// ```
-    pub fn new_unreliable(room_url: impl Into<String>) -> MatchboxSocket<SingleChannel> {
+    pub fn new_unreliable(room_url: impl Into<String>) -> MatchboxSocket {
         Self::from(WebRtcSocket::new_unreliable(room_url))
     }
 
@@ -173,7 +170,7 @@ impl MatchboxSocket<SingleChannel> {
     ///     commands.spawn(socket);
     /// }
     /// ```
-    pub fn new_reliable(room_url: impl Into<String>) -> MatchboxSocket<SingleChannel> {
+    pub fn new_reliable(room_url: impl Into<String>) -> MatchboxSocket {
         Self::from(WebRtcSocket::new_reliable(room_url))
     }
 
@@ -190,7 +187,7 @@ impl MatchboxSocket<SingleChannel> {
     /// }
     /// ```
     #[cfg(feature = "ggrs")]
-    pub fn new_ggrs(room_url: impl Into<String>) -> MatchboxSocket<SingleChannel> {
+    pub fn new_ggrs(room_url: impl Into<String>) -> MatchboxSocket {
         Self::from(WebRtcSocket::new_ggrs(room_url))
     }
 }

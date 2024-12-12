@@ -1,10 +1,13 @@
 //! Runs both signaling with server/client topology and runs the host in the same process
 //!
 //! Sends messages periodically to all connected clients.
-//! 
-//! Note: When building a signaling server ensure your project cargo.toml file has been updated with 
-//! the appropriate dependencies. When building a signaling server, enable the `signaling` feature:
-//! ```toml bevy_matchbox = { version = "0.n", features = ["signaling"] }```
+//!
+//! Note: When building a signaling server make sure you depend on
+//! `bevy_matchbox` with the `signaling` feature enabled.
+//!
+//! ```toml
+//! bevy_matchbox = { version = "0.x", features = ["signaling"] }
+//! ```
 
 use bevy::{
     app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer,

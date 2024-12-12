@@ -120,9 +120,9 @@ impl Messenger for WasmMessenger {
             .unwrap()
             .as_string()
             .expect("");
-        let mut rtc_session_desc_init_dict = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
-        let offer_description = rtc_session_desc_init_dict.sdp(&offer_sdp);
-        JsFuture::from(conn.set_local_description(offer_description))
+        let rtc_session_desc_init_dict = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+        rtc_session_desc_init_dict.set_sdp(&offer_sdp);
+        JsFuture::from(conn.set_local_description(&rtc_session_desc_init_dict))
             .await
             .efix()
             .unwrap();
@@ -160,8 +160,8 @@ impl Messenger for WasmMessenger {
         };
 
         // Set remote description
-        let mut remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
-        remote_description.sdp(&sdp);
+        let remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+        remote_description.set_sdp(&sdp);
         debug!("setting remote description");
         JsFuture::from(conn.set_remote_description(&remote_description))
             .await
@@ -234,9 +234,9 @@ impl Messenger for WasmMessenger {
 
         // Set remote description
         {
-            let mut remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+            let remote_description = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
             let sdp = offer;
-            remote_description.sdp(&sdp);
+            remote_description.set_sdp(&sdp);
             JsFuture::from(conn.set_remote_description(&remote_description))
                 .await
                 .expect("failed to set remote description");
@@ -249,7 +249,7 @@ impl Messenger for WasmMessenger {
 
         debug!("created answer");
 
-        let mut session_desc_init = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+        let session_desc_init = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
 
         let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
             .efix()
@@ -257,9 +257,9 @@ impl Messenger for WasmMessenger {
             .as_string()
             .expect("");
 
-        let answer_description = session_desc_init.sdp(&answer_sdp);
+        session_desc_init.set_sdp(&answer_sdp);
 
-        JsFuture::from(conn.set_local_description(answer_description))
+        JsFuture::from(conn.set_local_description(&session_desc_init))
             .await
             .efix()
             .unwrap();
@@ -398,14 +398,14 @@ fn create_rtc_peer_connection(ice_server_config: &RtcIceServerConfig) -> RtcPeer
         credential: String,
     }
 
-    let mut peer_config = RtcConfiguration::new();
+    let peer_config = RtcConfiguration::new();
     let ice_server_config = IceServerConfig {
         urls: ice_server_config.urls.clone(),
         username: ice_server_config.username.clone().unwrap_or_default(),
         credential: ice_server_config.credential.clone().unwrap_or_default(),
     };
     let ice_server_config_list = [ice_server_config];
-    peer_config.ice_servers(&serde_wasm_bindgen::to_value(&ice_server_config_list).unwrap());
+    peer_config.set_ice_servers(&serde_wasm_bindgen::to_value(&ice_server_config_list).unwrap());
     let connection = RtcPeerConnection::new_with_configuration(&peer_config).unwrap();
 
     let connection_1 = connection.clone();
@@ -484,8 +484,8 @@ fn create_data_channel(
     channel_config: &ChannelConfig,
     channel_id: usize,
 ) -> RtcDataChannel {
-    let mut data_channel_config = data_channel_config(channel_config);
-    data_channel_config.id(channel_id as u16);
+    let data_channel_config = data_channel_config(channel_config);
+    data_channel_config.set_id(channel_id as u16);
 
     let channel = connection.create_data_channel_with_data_channel_dict(
         &format!("matchbox_socket_{channel_id}"),
@@ -557,13 +557,13 @@ fn leaking_channel_event_handler<T: FromWasmAbi + 'static>(
 }
 
 fn data_channel_config(channel_config: &ChannelConfig) -> RtcDataChannelInit {
-    let mut data_channel_config = RtcDataChannelInit::new();
+    let data_channel_config = RtcDataChannelInit::new();
 
-    data_channel_config.ordered(channel_config.ordered);
-    data_channel_config.negotiated(true);
+    data_channel_config.set_ordered(channel_config.ordered);
+    data_channel_config.set_negotiated(true);
 
     if let Some(n) = channel_config.max_retransmits {
-        data_channel_config.max_retransmits(n);
+        data_channel_config.set_max_retransmits(n);
     }
 
     data_channel_config

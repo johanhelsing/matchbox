@@ -20,7 +20,7 @@ use bytes::Bytes;
 use futures::{
     future::{Fuse, FusedFuture},
     stream::FuturesUnordered,
-    Future, FutureExt, SinkExt, StreamExt,
+    Future, FutureExt, StreamExt,
 };
 use futures_channel::mpsc::{Receiver, Sender, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;

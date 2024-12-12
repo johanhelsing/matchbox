@@ -64,7 +64,7 @@ cfg_if! {
         }
 
         #[derive(Debug, Display)]
-        #[display(fmt = "{_0:?}")]
+        #[display("{_0:?}")]
         pub struct JsError(JsValue);
 
         impl std::error::Error for JsError {}

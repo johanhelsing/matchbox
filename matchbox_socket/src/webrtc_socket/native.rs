@@ -33,7 +33,6 @@ use webrtc::{
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
     ice_transport::{
         ice_candidate::{RTCIceCandidate, RTCIceCandidateInit},
-        ice_credential_type::RTCIceCredentialType,
         ice_server::RTCIceServer,
     },
     peer_connection::{
@@ -436,24 +435,6 @@ async fn create_rtc_peer_connection(
             urls: ice_server_config.urls.clone(),
             username: ice_server_config.username.clone().unwrap_or_default(),
             credential: ice_server_config.credential.clone().unwrap_or_default(),
-            // NOTE: the RTCIceServer.credentialType field is
-            // deprecated/non-standard, and should not be used.
-            // See: https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer/credentialType
-            //
-            // MDN recommends setting only "credential", but webrtc-rs, on the
-            // other hand, will error if credential is present and
-            // `credential_type` is `Unspecified` So while our pubic API mirrors
-            // the web spec/MDN with non-standard fields removed (no
-            // credential_type), here we set the type to `Password` if and only
-            // if there is a `credential`, so webrtc-rs cooperates.
-            //
-            // In the future if webrtc-rs follows the spec more closely, this
-            // workaround can be removed.
-            credential_type: if ice_server_config.credential.is_some() {
-                RTCIceCredentialType::Password
-            } else {
-                RTCIceCredentialType::Unspecified
-            },
         }],
         ..Default::default()
     };

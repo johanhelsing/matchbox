@@ -114,7 +114,7 @@ pub trait StartServerExt<
     fn start_server(&mut self, builder: SignalingServerBuilder<Topology, Cb, S>);
 }
 
-impl<'w, 's, Topology, Cb, S> StartServerExt<Topology, Cb, S> for Commands<'w, 's>
+impl<Topology, Cb, S> StartServerExt<Topology, Cb, S> for Commands<'_, '_>
 where
     Topology: SignalingTopology<Cb, S> + Send + 'static,
     Cb: SignalingCallbacks,
@@ -139,7 +139,7 @@ pub trait StopServerExt {
     fn stop_server(&mut self);
 }
 
-impl<'w, 's> StopServerExt for Commands<'w, 's> {
+impl StopServerExt for Commands<'_, '_> {
     fn stop_server(&mut self) {
         self.add(StopServer)
     }

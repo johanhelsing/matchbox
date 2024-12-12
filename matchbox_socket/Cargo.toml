@@ -32,7 +32,7 @@ futures-util = { version = "0.3", default-features = false, features = [
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 log = { version = "0.4", default-features = false }
-thiserror = "1.0"
+thiserror = "2.0"
 cfg-if = "1.0"
 async-trait = "0.1"
 once_cell = { version = "1.17", default-features = false, features = [

@@ -173,21 +173,4 @@ impl MatchboxSocket {
     pub fn new_reliable(room_url: impl Into<String>) -> MatchboxSocket {
         Self::from(WebRtcSocket::new_reliable(room_url))
     }
-
-    /// Create a new socket with a single ggrs-compatible channel
-    ///
-    /// ```rust
-    /// use bevy_matchbox::prelude::*;
-    /// use bevy::prelude::*;
-    ///
-    /// fn open_channel_system(mut commands: Commands) {
-    ///     let room_url = "wss://matchbox.example.com";
-    ///     let socket = MatchboxSocket::new_ggrs(room_url);
-    ///     commands.spawn(socket);
-    /// }
-    /// ```
-    #[cfg(feature = "ggrs")]
-    pub fn new_ggrs(room_url: impl Into<String>) -> MatchboxSocket {
-        Self::from(WebRtcSocket::new_ggrs(room_url))
-    }
 }

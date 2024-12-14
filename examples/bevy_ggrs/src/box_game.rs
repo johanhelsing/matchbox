@@ -24,8 +24,8 @@ const FRICTION: f32 = 0.0018;
 const PLANE_SIZE: f32 = 5.0;
 const CUBE_SIZE: f32 = 0.2;
 
-// You need to define a config struct to bundle all the generics of GGRS. bevy_ggrs provides a sensible default in `GgrsConfig`.
-// (optional) You can define a type here for brevity.
+// You need to define a config struct to bundle all the generics of GGRS. bevy_ggrs provides a
+// sensible default in `GgrsConfig`. (optional) You can define a type here for brevity.
 pub type BoxConfig = GgrsConfig<BoxInput, PeerId>;
 
 #[repr(C)]
@@ -58,7 +58,8 @@ pub struct FrameCount {
     pub frame: u32,
 }
 
-/// Collects player inputs during [`ReadInputs`](`bevy_ggrs::ReadInputs`) and creates a [`LocalInputs`] resource.
+/// Collects player inputs during [`ReadInputs`](`bevy_ggrs::ReadInputs`) and creates a
+/// [`LocalInputs`] resource.
 pub fn read_local_inputs(
     mut commands: Commands,
     keyboard_input: Res<ButtonInput<KeyCode>>,
@@ -154,8 +155,9 @@ pub fn setup_scene(
 }
 
 // Example system, manipulating a resource, will be added to the rollback schedule.
-// Increases the frame count by 1 every update step. If loading and saving resources works correctly,
-// you should see this resource rolling back, counting back up and finally increasing by 1 every update step
+// Increases the frame count by 1 every update step. If loading and saving resources works
+// correctly, you should see this resource rolling back, counting back up and finally increasing by
+// 1 every update step
 #[allow(dead_code)]
 pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
     frame_count.frame += 1;
@@ -167,7 +169,8 @@ pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
 #[allow(dead_code)]
 pub fn move_cube_system(
     mut query: Query<(&mut Transform, &mut Velocity, &Player), With<Rollback>>,
-    //                                                              ^------^ Added by `add_rollback` earlier
+    //                                                              ^------^ Added by
+    // `add_rollback` earlier
     inputs: Res<PlayerInputs<BoxConfig>>,
     // Thanks to RollbackTimePlugin, this is rollback safe
     time: Res<Time>,

@@ -13,5 +13,3 @@ pub use webrtc_socket::{
     error::ChannelError, ChannelConfig, MessageLoopFuture, Packet, PeerState, RtcIceServerConfig,
     WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
-#[cfg(feature = "ggrs")]
-pub use ggrs_socket::GGRS_CHANNEL_ID;

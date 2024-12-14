@@ -30,7 +30,7 @@ pub struct RtcIceServerConfig {
 
 /// Configuration options for a data channel
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel>
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ChannelConfig {
     /// Whether messages sent on the channel are guaranteed to arrive in order
     /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/ordered>
@@ -42,7 +42,7 @@ pub struct ChannelConfig {
 
 impl ChannelConfig {
     /// Messages sent via an unreliable channel may arrive in any order or not at all, but arrive as
-    /// quickly as possible
+    /// quickly as possible.
     pub fn unreliable() -> Self {
         ChannelConfig {
             ordered: false,
@@ -50,8 +50,8 @@ impl ChannelConfig {
         }
     }
 
-    /// Messages sent via a reliable channel are guaranteed to arrive in order and will be resent
-    /// until they arrive
+    /// Messages sent via a reliable channel are guaranteed to arrive (and guaranteed to arrive in
+    /// order the order they were sent) and will be retransmitted until they arrive.
     pub fn reliable() -> Self {
         ChannelConfig {
             ordered: true,
@@ -184,15 +184,22 @@ impl WebRtcSocketBuilder {
 
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
 
-        let (messages_from_peers_tx, messages_from_peers_rx) =
-            new_senders_and_receivers(&self.config.channels);
-        let (peer_messages_out_tx, peer_messages_out_rx) =
-            new_senders_and_receivers(&self.config.channels);
-        let channels = messages_from_peers_rx
-            .into_iter()
-            .zip(peer_messages_out_tx)
-            .map(|(rx, tx)| Some(WebRtcChannel { rx, tx }))
-            .collect();
+        let mut peer_messages_out_rx = Vec::with_capacity(self.config.channels.len());
+        let mut messages_from_peers_tx = Vec::with_capacity(self.config.channels.len());
+        let mut channels = Vec::with_capacity(self.config.channels.len());
+        for channel_config in self.config.channels.iter() {
+            let (messages_from_peers_tx_curr, messages_from_peers_rx_curr) =
+                futures_channel::mpsc::unbounded();
+            let (peer_messages_out_tx_curr, peer_messages_out_rx_curr) =
+                futures_channel::mpsc::unbounded();
+            peer_messages_out_rx.push(peer_messages_out_rx_curr);
+            messages_from_peers_tx.push(messages_from_peers_tx_curr);
+            channels.push(Some(WebRtcChannel {
+                config: *channel_config,
+                rx: messages_from_peers_rx_curr,
+                tx: peer_messages_out_tx_curr,
+            }));
+        }
 
         let (id_tx, id_rx) = futures_channel::oneshot::channel();
 
@@ -250,11 +257,17 @@ pub enum PeerState {
 /// [`WebRtcSocket`].
 #[derive(Debug)]
 pub struct WebRtcChannel {
+    config: ChannelConfig,
     tx: UnboundedSender<(PeerId, Packet)>,
     rx: UnboundedReceiver<(PeerId, Packet)>,
 }
 
 impl WebRtcChannel {
+    /// Returns the [`ChannelConfig`] used to create this channel.
+    pub fn config(&self) -> &ChannelConfig {
+        &self.config
+    }
+
     /// Returns whether it's still possible to send messages.
     pub fn is_closed(&self) -> bool {
         self.tx.is_closed()

@@ -1,48 +1,7 @@
 use ggrs::{Message, PlayerType};
 use matchbox_protocol::PeerId;
 
-use crate::{
-    ChannelConfig, MessageLoopFuture, Packet, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
-};
-
-pub const GGRS_CHANNEL_ID: usize = 0;
-
-impl ChannelConfig {
-    /// Creates a [`ChannelConfig`] suitable for use with GGRS.
-    pub fn ggrs() -> Self {
-        Self::unreliable()
-    }
-}
-
-impl WebRtcSocketBuilder {
-    /// Adds a new channel suitable for use with GGRS to the [`WebRtcSocket`] configuration.
-    ///
-    /// This must be called as the first channel.
-    pub fn add_ggrs_channel(mut self) -> WebRtcSocketBuilder {
-        assert_eq!(
-            self.config.channels.len(),
-            GGRS_CHANNEL_ID,
-            "ggrs channel is expected to be the first channel added"
-        );
-        self.config.channels.push(ChannelConfig::ggrs());
-        self
-    }
-}
-
-impl WebRtcSocket {
-    /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] for a
-    /// socket with a single channel configured correctly for usage with GGRS.
-    ///
-    /// The returned [`MessageLoopFuture`] should be awaited in order for messages to
-    /// be sent and received.
-    ///
-    /// Please use the [`WebRtcSocketBuilder`] to create non-trivial sockets.
-    pub fn new_ggrs(room_url: impl Into<String>) -> (WebRtcSocket, MessageLoopFuture) {
-        WebRtcSocketBuilder::new(room_url)
-            .add_channel(ChannelConfig::ggrs())
-            .build()
-    }
-}
+use crate::{Packet, WebRtcChannel, WebRtcSocket};
 
 impl WebRtcSocket {
     /// Returns a Vec of connected peers as [`ggrs::PlayerType`]
@@ -80,22 +39,22 @@ fn deserialize_packet(message: (PeerId, Packet)) -> (PeerId, Message) {
     (message.0, bincode::deserialize(&message.1).unwrap())
 }
 
-impl ggrs::NonBlockingSocket<PeerId> for WebRtcSocket {
-    fn send_to(&mut self, msg: &Message, addr: &PeerId) {
-        self.channel_mut(GGRS_CHANNEL_ID)
-            .send(build_packet(msg), *addr);
-    }
-    fn receive_all_messages(&mut self) -> Vec<(PeerId, Message)> {
-        self.channel_mut(GGRS_CHANNEL_ID)
-            .receive()
-            .into_iter()
-            .map(deserialize_packet)
-            .collect()
-    }
-}
-
 impl ggrs::NonBlockingSocket<PeerId> for WebRtcChannel {
     fn send_to(&mut self, msg: &Message, addr: &PeerId) {
+        if self.config().max_retransmits != Some(0) || self.config().ordered {
+            // Using a reliable or ordered channel with ggrs is wasteful in that ggrs implements its
+            // own reliability layer (including unconfirmed inputs in frames) and can
+            // handle out of order messages just fine on its own.
+            // It's likely that in poor network conditions this will cause GGRS to unnecessarily
+            // delay confirming or rolling back simulation frames, which will impact performance
+            // (or, worst case, cause GGRS to temporarily stop advancing frames).
+            // So we better warn the user about this.
+            log::warn!(
+                "Sending GGRS traffic over reliable or ordered channel ({:?}), which may reduce performance.\
+                You should use an unreliable and unordered channel instead.",
+                self.config()
+            );
+        }
         self.send(build_packet(msg), *addr);
     }
 

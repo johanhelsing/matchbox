@@ -163,8 +163,10 @@ impl MatchboxServer {
 
 #[cfg(test)]
 mod tests {
-    use crate::matchbox_signaling::topologies::client_server::{ClientServer, ClientServerState};
-    use crate::prelude::*;
+    use crate::{
+        matchbox_signaling::topologies::client_server::{ClientServer, ClientServerState},
+        prelude::*,
+    };
     use bevy::prelude::*;
     use std::net::Ipv4Addr;
 

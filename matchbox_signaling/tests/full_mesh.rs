@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use axum::Router;
     use futures::{SinkExt, StreamExt};
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signaling::SignalingServer;
@@ -46,6 +47,23 @@ mod tests {
 
         let (mut client, _response) =
             tokio_tungstenite::connect_async(format!("ws://{addr}/room_a"))
+                .await
+                .unwrap();
+
+        let id_assigned_event = recv_peer_event(&mut client).await;
+
+        assert!(matches!(id_assigned_event, JsonPeerEvent::IdAssigned(..)));
+    }
+
+    #[tokio::test]
+    async fn nested_server() {
+        let mut server = SignalingServer::full_mesh_builder((Ipv4Addr::LOCALHOST, 0))
+            .build_with(|router| Router::new().nest("/nested/", router));
+        let addr = server.bind().unwrap();
+        tokio::spawn(server.serve());
+
+        let (mut client, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{addr}/nested/room_a"))
                 .await
                 .unwrap();
 

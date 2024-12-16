@@ -1,11 +1,8 @@
 use super::{HandshakeResult, PacketSendError, PeerDataSender};
 use crate::{
     webrtc_socket::{
-        error::SignalingError,
-        messages::PeerSignal,
-        signal_peer::SignalPeer,
-        socket::create_data_channels_ready_fut,
-        ChannelConfig, Messenger, Packet, Signaller,
+        error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
+        socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, Signaller,
     },
     RtcIceServerConfig,
 };

@@ -3306,6 +3306,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "thiserror 2.0.6",
+ "tokio-util",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -5014,6 +5015,7 @@ checksum = "d7fcaa8d55a2bdd6b83ace262b016eca0d79ee02818c5c1bcdf0305114081078"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "pin-project-lite",
  "tokio",

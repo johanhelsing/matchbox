@@ -29,9 +29,11 @@ fn main() {
         .set_rollback_schedule_fps(FPS)
         .add_systems(ReadInputs, read_local_inputs)
         // Rollback behavior can be customized using a variety of extension methods and plugins:
-        // The FrameCount resource implements Copy, we can use that to have minimal overhead rollback
+        // The FrameCount resource implements Copy, we can use that to have minimal overhead
+        // rollback
         .rollback_resource_with_copy::<FrameCount>()
-        // Transform and Velocity components only implement Clone, so instead we'll use that to snapshot and rollback with
+        // Transform and Velocity components only implement Clone, so instead we'll use that to
+        // snapshot and rollback with
         .rollback_component_with_clone::<Transform>()
         .rollback_component_with_clone::<Velocity>()
         .insert_resource(ClearColor(SKY_COLOR))
@@ -66,7 +68,7 @@ fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     let room_url = format!("{}/{}", &args.matchbox, room_id);
     info!("connecting to matchbox server: {room_url:?}");
 
-    commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
+    commands.insert_resource(MatchboxSocket::new_unreliable(room_url));
 }
 
 // Marker components for UI
@@ -124,7 +126,7 @@ fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
 fn lobby_system(
     mut app_state: ResMut<NextState<AppState>>,
     args: Res<Args>,
-    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+    mut socket: ResMut<MatchboxSocket>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {

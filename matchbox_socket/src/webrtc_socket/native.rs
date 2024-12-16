@@ -1,11 +1,8 @@
 use super::{HandshakeResult, PacketSendError, PeerDataSender};
 use crate::{
     webrtc_socket::{
-        error::SignalingError,
-        messages::PeerSignal,
-        signal_peer::SignalPeer,
-        socket::{create_data_channels_ready_fut, new_senders_and_receivers},
-        ChannelConfig, Messenger, Packet, Signaller,
+        error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
+        socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, Signaller,
     },
     RtcIceServerConfig,
 };
@@ -312,6 +309,14 @@ impl Messenger for NativeMessenger {
         .compat() // Required to run tokio futures with other async executors
         .await
     }
+}
+
+fn new_senders_and_receivers<T>(
+    channel_configs: &[ChannelConfig],
+) -> (Vec<UnboundedSender<T>>, Vec<UnboundedReceiver<T>>) {
+    (0..channel_configs.len())
+        .map(|_| futures_channel::mpsc::unbounded())
+        .unzip()
 }
 
 async fn complete_handshake(

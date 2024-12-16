@@ -687,16 +687,22 @@ impl WebRtcSocket {
             .ok_or(ChannelError::Taken)
     }
 
-    /// Converts the [`WebRtcChannel`] into a [`RawPeerChannel`].
-    pub fn take_raw(
-        &mut self,
-    ) -> Result<RawPeerChannel<impl AsyncRead, impl AsyncWrite>, ChannelError> {
-        let remote = self
+    /// Takes the [`WebRtcChannel`] of a given [`PeerId`].
+    pub fn take_channel_by_id(&mut self, id: PeerId) -> Result<WebRtcChannel, ChannelError> {
+        let pos = self
             .connected_peers()
-            .next()
+            .position(|peer_id| peer_id == id)
             .ok_or(ChannelError::NotFound)?;
 
-        let channel = self.take_channel(0)?;
+        self.take_channel(pos)
+    }
+
+    /// Converts the [`WebRtcChannel`] of a given [`PeerId`] into a [`RawPeerChannel`].
+    pub fn take_raw_by_id(
+        &mut self,
+        remote: PeerId,
+    ) -> Result<RawPeerChannel<impl AsyncRead, impl AsyncWrite>, ChannelError> {
+        let channel = self.take_channel_by_id(remote)?;
         let id = self.id();
 
         let (reader, writer) = compat_read_write(remote, channel.rx, channel.tx);

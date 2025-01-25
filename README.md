@@ -1,5 +1,7 @@
 # [![Matchbox](https://raw.githubusercontent.com/johanhelsing/matchbox/main/images/matchbox_logo.png)](https://github.com/johanhelsing/matchbox)
 
+Updating README to signify that this is going to be a different version of Matchbox used exclusively for Flock development. Upon completion, all changes will be synced and updated. 
+
 [![crates.io](https://img.shields.io/crates/v/matchbox_socket.svg)](https://crates.io/crates/matchbox_socket)
 ![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)
 [![crates.io](https://img.shields.io/crates/d/matchbox_socket.svg)](https://crates.io/crates/matchbox_socket)

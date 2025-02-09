@@ -33,6 +33,7 @@ pub(crate) struct ServerState {
     clients_in_queue: StateObj<HashMap<PeerId, RequestedRoom>>,
     clients: StateObj<HashMap<PeerId, Peer>>,
     rooms: StateObj<HashMap<RequestedRoom, HashSet<PeerId>>>,
+    matched_by_next: StateObj<HashSet<Vec<PeerId>>>,
 }
 impl SignalingState for ServerState {}
 
@@ -81,6 +82,11 @@ impl ServerState {
             }
             Some(num_players) => {
                 if peers.len() == num_players - 1 {
+                    let mut matched_by_next = self.matched_by_next.lock().unwrap();
+                    let mut updated_peers = peers.clone();
+                    updated_peers.insert(peer_id);
+                    matched_by_next.insert(updated_peers.into_iter().collect());
+
                     peers.clear(); // room is complete
                 } else {
                     peers.insert(peer_id);
@@ -89,6 +95,27 @@ impl ServerState {
         };
 
         prev_peers
+    }
+
+    pub fn remove_matched_peer(&mut self, peer: PeerId) -> Vec<PeerId> {
+        let mut matched_by_next = self.matched_by_next.lock().unwrap();
+        let mut peers = vec![];
+        matched_by_next.retain(|group| {
+            if group.contains(&peer) {
+                peers = group.clone();
+                return false;
+            }
+
+            true
+        });
+
+        peers.retain(|p| p != &peer);
+
+        if !peers.is_empty() {
+            matched_by_next.insert(peers.clone());
+        }
+
+        peers
     }
 
     /// Get a peer

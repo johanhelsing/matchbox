@@ -9,6 +9,8 @@ use std::sync::Arc;
 pub mod client_server;
 /// An implementation of a full mesh topology
 pub mod full_mesh;
+// An implementation of a hybrid topology
+pub mod hybrid;
 
 #[derive(Clone)]
 pub(crate) struct SignalingStateMachine<Cb, S>(

@@ -3,6 +3,7 @@ use crate::{
     topologies::{
         client_server::{ClientServer, ClientServerCallbacks, ClientServerState},
         full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
+        hybrid::{Hybrid, HybridCallbacks, HybridState}
     },
 };
 use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router};
@@ -35,6 +36,13 @@ impl SignalingServer {
         socket_addr: impl Into<SocketAddr>,
     ) -> SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerState> {
         SignalingServerBuilder::new(socket_addr, ClientServer, ClientServerState::default())
+    }
+
+    // Creates a new builder for a [`SignalingServer`] with hybrid topology
+    pub fn hybrid_builder(
+        socket_addr: impl Into<SocketAddr>,
+    ) -> SignalingServerBuilder<Hybrid, HybridCallbacks, HybridState> {
+        SignalingServerBuilder::new(socket_addr, Hybrid, HybridState::default())
     }
 
     /// Returns the local address this server is bound to

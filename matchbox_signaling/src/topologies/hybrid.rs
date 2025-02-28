@@ -178,30 +178,6 @@ impl HybridState {
             .next()
             .map(|(id, ch)| (id.clone(), ch.clone()))
     }
-    
-
-
-    // pub async fn add_peer(&self, peer_id: PeerId, channel: SignalingChannel) -> bool {
-    //     let mut clients = self.clients.lock();
-    //     let mut count = self.peer_count.lock();
-
-    //     // Increment count of clients (peer or super peer, doesn't matter)
-    //     *count += 1;
-    //     clients.insert(peer_id.clone(), channel.clone());
-
-    //     // Promote every 5th peer to a super peer
-    //     // Temporary solution for testing
-    //     // Will need a more permanent solution mixing count with testing networking
-    //     if *count % 5 == 0 {
-    //         let mut super_peers = self.super_peers.lock();
-    //         super_peers.insert(peer_id.clone(), channel.clone());
-    //         return true; // Peer is a super peer
-    //     }
-
-    //     return false;
-    // }
-
-
 
     pub fn remove_peer(&self, peer_id: &PeerId) -> bool {
         let mut clients = self.clients.lock();

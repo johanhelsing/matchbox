@@ -3,24 +3,24 @@ name = "matchbox_super_client"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-matchbox_signaling = { version = "0.11", path = "../matchbox_signaling" }
-matchbox_protocol = { version = "0.11", path = "../matchbox_protocol", features = [
-  "json",
-] }
-async-trait = "0.1"
-axum = { version = "0.7", features = ["ws"] }
-tracing = { version = "0.1", features = ["log"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tower-http = { version = "0.6", features = ["cors", "trace"] }
-tokio = { version = "1.32", features = ["macros", "rt-multi-thread"] }
+[dependencies]                                
+wasm-bindgen = {version = "0.2", features = ["serde-serialize"]}     
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-futures = { version = "0.3", default-features = false, features = ["alloc"] }
-uuid = { version = "1.4", features = ["serde", "v4"] }
-clap = { version = "4.3", features = ["derive", "env"] }
-thiserror = "2.0"
-tokio-stream = "0.1"
+wasm-bindgen-futures = "0.4.29"
+futures = "0.3"                       
+futures-timer = { version = "3", features = ["wasm-bindgen"] }
+matchbox_socket = { path = "../matchbox_socket" }
+log = { version = "0.4", default-features = false }
+console_error_panic_hook = "0.1.7"
+console_log = "1.0"
+
+[dependencies.uuid]
+version = "1.15.1"
+# Lets you generate random UUIDs
+features = [
+    "v4",
+]
 
 [dev-dependencies]
-tokio-tungstenite = "0.24"
+wasm-bindgen-test = "0.2"

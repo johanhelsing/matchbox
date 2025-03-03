@@ -114,6 +114,5 @@ mod tests {
 
         assert_eq!(new_peer_event, JsonPeerEvent::NewPeer(child_b_uuid));
          */
-
     }
 }

@@ -1,0 +1,26 @@
+[package]
+name = "matchbox_super_client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]                                
+wasm-bindgen = {version = "0.2", features = ["serde-serialize"]}     
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+wasm-bindgen-futures = "0.4.29"
+futures = "0.3"                       
+futures-timer = { version = "3", features = ["wasm-bindgen"] }
+matchbox_socket = { path = "../matchbox_socket" }
+log = { version = "0.4", default-features = false }
+console_error_panic_hook = "0.1.7"
+console_log = "1.0"
+
+[dependencies.uuid]
+version = "1.15.1"
+# Lets you generate random UUIDs
+features = [
+    "v4",
+]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2"

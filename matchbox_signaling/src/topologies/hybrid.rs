@@ -79,10 +79,9 @@ impl SignalingTopology<HybridCallbacks, HybridState> for Hybrid{
         } else {
             state.add_child_peer(peer_id, sender.clone());
             if let Some(parent) = state.find_super_peer() {
-                let event = Message::Text(JsonPeerEvent::NewPeer(peer_id).to_string());
-                match state.try_send_to_super_peer(parent, event) {
+                match state.connect_child(peer_id, parent) {
                     Ok(_) => {
-                        state.connect_child(peer_id, parent);
+                        info!("Connected {peer_id} to {parent}");
                         callbacks.on_peer_connected.emit(peer_id);
                     }
                     Err(e) => {
@@ -138,7 +137,7 @@ impl SignalingTopology<HybridCallbacks, HybridState> for Hybrid{
                         .to_string(),
                     );
                     if let Err(e) = {
-                        if super_peer {
+                        if state.is_super_peer(&receiver) {
                             state.try_send_to_super_peer(receiver, event)
                         } else {
                             state.try_send_to_child_peer(receiver, event)
@@ -280,7 +279,7 @@ impl HybridState {
     }
 
     /// Connect child to super peer
-    pub fn connect_child(&mut self, child_peer: PeerId, super_peer: PeerId) {
+    pub fn connect_child(&mut self, child_peer: PeerId, super_peer: PeerId) -> Result<(), SignalingError> {
         if let Some(sp) = self.super_peers.lock().unwrap().get(&super_peer) {
             
             sp.children.lock()
@@ -291,7 +290,11 @@ impl HybridState {
 
         if let Some(cp) = self.child_peers.lock().unwrap().get_mut(&child_peer) {
             cp.parent_id = Some(super_peer);
-        }            
+        } 
+        
+        let event = Message::Text(JsonPeerEvent::NewPeer(child_peer).to_string());
+        
+        self.try_send_to_super_peer(super_peer, event)    
     }   
 
     /// Remove child peer
@@ -325,7 +328,7 @@ impl HybridState {
             super_peers.keys().for_each(
             |peer_id| match self.try_send_to_super_peer(*peer_id, event.clone()) {
                 Ok(()) => info!("Sent peer remove to: {peer_id}"),                                      
-                    Err(e) => error!("Failure sending peer remove: {e:?}"),
+                Err(e) => error!("Failure sending peer remove: {e:?}"),
                 },
             );
 
@@ -338,15 +341,19 @@ impl HybridState {
                 },
             );
 
-            if let Some(recruit_id) = children.iter().next(){ 
+            if let Some(recruit_id) = children.iter().min(){ 
 
                 let recruit = { self.child_peers.lock().as_mut().unwrap().remove(recruit_id) };
 
                 if let Some(recruit) = recruit {
                     self.add_super_peer(*recruit_id, recruit.signaling_channel);
+                    info!("added {recruit_id} as super peer");
                     children.iter().for_each(
                         |child_id| if child_id != recruit_id { 
-                            self.connect_child(*child_id, *recruit_id); 
+                            match self.connect_child(*child_id, *recruit_id) {
+                                Ok(()) => info!("redistributed {child_id} to {recruit_id}"),
+                                Err(e) => error!("Failure redistributing {child_id} to {recruit_id}: {e:?}")
+                            } 
                         }
                     )
                 }

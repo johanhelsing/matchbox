@@ -11,7 +11,18 @@ const CHANNEL_ID: usize = 0;
 #[cfg(target_arch = "wasm32")]
 fn main() {
     // Setup logging
+
     console_error_panic_hook::set_once();
+    // use std::str::FromStr;
+    // use tracing_subscriber::prelude::*;
+    // tracing_subscriber::registry()
+    //     .with(
+    //         tracing_subscriber::EnvFilter::from_str("info,custom_signaller=info,matchbox_socket=warn".into()).unwrap()
+    //     )
+    //     .with(tracing_subscriber::fmt::layer().without_time())
+        
+    //     .init();
+
     console_log::init_with_level(log::Level::Info).unwrap();
 
     wasm_bindgen_futures::spawn_local(async_main(None));

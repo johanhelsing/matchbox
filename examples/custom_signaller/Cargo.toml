@@ -17,6 +17,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 async-broadcast = "0.7.2"
 web-time = "1.1.0"
+getrandom = { version = "0.3", features = ["wasm_js"] }
+js-sys = "0.3.77"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -24,7 +26,9 @@ console_error_panic_hook = "0.1.7"
 console_log = "1.0"
 futures = { version = "0.3", default-features = false }
 wasm-bindgen-futures = "0.4.29"
-
+tokio = { version = "1.32", default-features = false, features = ["time", "sync"] }
+uuid = { version = "1.16", features = ["v4", "rng-getrandom"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 futures = "0.3"

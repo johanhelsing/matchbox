@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, time::{Duration, UNIX_EPOCH}};
+use std::{collections::BTreeMap, time::{Duration}};
 
 use anyhow::Context;
 use futures::FutureExt;
@@ -8,16 +8,20 @@ use iroh_gossip::{
     proto::TopicId,
     net::GOSSIP_ALPN
 };
-use log::{error, info, warn};
+use log::{error, info, warn, debug};
 use matchbox_socket::{
     async_trait::async_trait, error::SignalingError, PeerEvent, PeerId, PeerRequest, PeerSignal,
     Signaller, SignallerBuilder,
 };
 use n0_future::StreamExt;
 use serde::{Deserialize, Serialize};
-use tokio::time::Instant;
+use web_time::Instant;
 
-use crate::direct_message::{send_direct_message, DirectMessageProtocol, DIRECT_MESSAGE_ALPN};
+use crate::{direct_message::{send_direct_message, DirectMessageProtocol, DIRECT_MESSAGE_ALPN}, get_timestamp};
+
+
+
+const GOSSIP_TOPIC_ID: TopicId = TopicId::from_bytes(*b"__matchbox_example_iroh_gossip__");
 
 #[derive(Debug, Clone)]
 pub struct IrohGossipSignallerBuilder {
@@ -78,8 +82,8 @@ impl IrohGossipSignallerBuilder {
     }
 }
 
-const GOSSIP_TOPIC_ID: TopicId = TopicId::from_bytes(*b"__matchbox_example_iroh_gossip__");
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl SignallerBuilder for IrohGossipSignallerBuilder {
     async fn new_signaller(
         &self,
@@ -127,29 +131,14 @@ impl IrohGossipSignallerBuilder {
         info!("Joining gossip topic...");
         gossip_topic.joined().await?;
         info!("Connected to gossip topic.");
-        let (gossip_send, mut gossip_recv) = gossip_topic.split();
+        let (gossip_send, gossip_recv) = gossip_topic.split();
 
         let (req_send, req_recv) = tokio::sync::mpsc::channel(2048);
         let (event_send, event_recv) = tokio::sync::mpsc::channel(2048);
-        let (gossip_send_proxy, gossip_recv_proxy) = tokio::sync::mpsc::channel(2048);
-
-        let _task2= n0_future::task::AbortOnDropHandle::new(n0_future::task::spawn(async move {
-            info!("Spawning gossip receiver proxy task");
-            while let Some(gossip_msg) = gossip_recv.next().await {
-                info!("Gossip Proxy Recv Message!");
-                if let Ok(gossip_msg) = gossip_msg {
-                    gossip_send_proxy.send(gossip_msg).await?;
-                } else {
-                    warn!("Gossip receiver proxy error: {:#?}", gossip_msg);
-                }
-            }
-            warn!("Gossip receiver proxy exhausted");
-            anyhow::bail!("Gossip receiver proxy exhausted");
-        }));
 
         let _task = self
             .clone()
-            .spawn_task(gossip_recv_proxy, gossip_send, req_recv, event_send, self.direct_message_recv.activate_cloned())
+            .spawn_task(gossip_recv, gossip_send, req_recv, event_send, self.direct_message_recv.activate_cloned())
             .then(|r| async move {
                 match r {
                     Ok(_) => Ok(()),
@@ -164,14 +153,13 @@ impl IrohGossipSignallerBuilder {
             recv: event_recv,
             send: req_send,
             _task,
-            _task2,
         })
     }
 
     async fn spawn_task(
         self,
         // gossip msg from other nodes
-        mut gossip_recv: tokio::sync::mpsc::Receiver<iroh_gossip::net::Event>,
+        mut gossip_recv: GossipReceiver,
         // gossip msg into other nodes
         gossip_send: GossipSender,
         // sent requests from client
@@ -199,11 +187,10 @@ impl IrohGossipSignallerBuilder {
 
         loop {
             tokio::select! {
-
-                gossip_msg = gossip_recv.recv().fuse() => {
-                    info!("Received gossip message.");
+                gossip_msg = gossip_recv.next().fuse() => {
+                    debug!("Received gossip message.");
                     // receive gossip messages and send NewPeer events
-                    let Some(gossip_msg) = gossip_msg else {
+                    let Some(Ok(gossip_msg)) = gossip_msg else {
                         anyhow::bail!("Gossip receiver stream problem: {:#?}", gossip_msg);
                     };
                     match gossip_msg {
@@ -263,7 +250,7 @@ impl IrohGossipSignallerBuilder {
                     // check message is from who it said it is
                     if let PeerEvent::Signal {sender, ..} = &event {
                         if matchbox_to_iroh.get(sender).map(|(node_id, _)| node_id) == Some(&from_iroh_id) {
-                            info!("
+                            debug!("
                             Received direct message:
                                 From Matchbox ID: {sender}
                                 From Iroh ID: {from_iroh_id}
@@ -277,7 +264,7 @@ impl IrohGossipSignallerBuilder {
                         warn!("Received message from {from_iroh_id} with wrong event type: {event:#?}");
                     }
                 }
-                _ = (tokio::time::sleep(REFRESH_INTERVAL)) => {
+                _ = (n0_future::time::sleep(REFRESH_INTERVAL)) => {
                     self.send_gossip_message(&gossip_send).await?;
                     // check for stale connections and send PeerLeft events
                     let now = Instant::now();
@@ -301,8 +288,8 @@ impl IrohGossipSignallerBuilder {
         &self,
         gossip_send: &GossipSender,
     ) -> anyhow::Result<()> {
-        info!("Sending gossip message");
-        let timestamp = web_time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        debug!("Sending gossip message");
+        let timestamp = get_timestamp();
         let message = GossipMessage { matchbox_id: self.matchbox_id, iroh_id: self.iroh_id, timestamp };
         let message = serde_json::to_vec(&message)?;
         gossip_send.broadcast(message.into()).await?;
@@ -323,7 +310,7 @@ impl IrohGossipSignallerBuilder {
             .get(&receiver)
             .map(|(node_id, _)| *node_id)
             .with_context(|| format!("No known connection to peer {receiver}"))?;
-        info!("
+        debug!("
         Sending direct message to:
             Matchbox ID: {receiver} 
             Iroh     ID: {target_node_id}
@@ -339,20 +326,20 @@ impl IrohGossipSignallerBuilder {
 struct GossipMessage {
     matchbox_id: PeerId,
     iroh_id: PublicKey,
-    timestamp: u64,
+    timestamp: u128,
 }
 
 struct IrohGossipSignaller {
     recv: tokio::sync::mpsc::Receiver<PeerEvent>,
     send: tokio::sync::mpsc::Sender<PeerRequest>,
     _task: n0_future::task::AbortOnDropHandle<Result<(), anyhow::Error>>,
-    _task2: n0_future::task::AbortOnDropHandle<Result<(), anyhow::Error>>,
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl Signaller for IrohGossipSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
-        info!("\n\nSignaller: Sending request: {request:#?}\n\n");
+        debug!("\n\nSignaller: Sending request: {request:#?}\n\n");
         self.send.send(request).await.map_err(to_user_error)?;
         Ok(())
     }
@@ -361,7 +348,7 @@ impl Signaller for IrohGossipSignaller {
             info!("\n\nSignaller: Stream exhausted\n\n");
             return Err(SignalingError::StreamExhausted);
         };
-        info!("\n\n Signaller: Received message: {message:#?}\n\n");
+        debug!("\n\n Signaller: Received message: {message:#?}\n\n");
         Ok(message)
     }
 }

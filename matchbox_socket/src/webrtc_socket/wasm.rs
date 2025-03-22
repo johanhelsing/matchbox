@@ -30,11 +30,11 @@ pub(crate) struct WasmSignaller {
 #[derive(Debug, Default)]
 pub(crate) struct WasmSignallerBuilder;
 
-#[async_trait]
+#[async_trait(?Send)]
 impl SignallerBuilder for WasmSignallerBuilder {
     async fn new_signaller(&self, mut attempts: Option<u16>, room_url: String) -> Result<Box<dyn Signaller>, SignalingError> {
         let websocket_stream = 'signaling: loop {
-            match WsMeta::connect(room_url, None)
+            match WsMeta::connect(&room_url, None)
                 .await
                 .map_err(SignalingError::from)
             {
@@ -61,7 +61,7 @@ impl SignallerBuilder for WasmSignallerBuilder {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Signaller for WasmSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
         let request = serde_json::to_string(&request).expect("serializing request");
@@ -78,7 +78,7 @@ impl Signaller for WasmSignaller {
             None => Err(SignalingError::StreamExhausted),
         }?;
         let message = serde_json::from_str(&message).unwrap_or_else(|err| {
-            error!("failed to parse peer event: {err}.\nEvent: {message}");
+            panic!("failed to parse peer event: {err}.\nEvent: {message}");
         });
         Ok(message)
     }

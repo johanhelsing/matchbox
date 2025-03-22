@@ -44,7 +44,7 @@ cargo install wasm-server-runner
 ### Serve
 
 ```sh
-cargo run --target wasm32-unknown-unknown
+RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo run --target wasm32-unknown-unknown
 ```
 
 ### Run

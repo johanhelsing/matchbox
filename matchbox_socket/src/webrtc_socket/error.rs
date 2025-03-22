@@ -44,6 +44,10 @@ pub enum SignalingError {
     #[cfg(target_arch = "wasm32")]
     #[error("socket failure communicating with signaling server: {0}")]
     WebSocket(#[from] ws_stream_wasm::WsErr),
+
+    // User Implementation Error that may be returned from using custom [`SignallerBuilder`] and [`Signaller`] implementations
+    #[error("User implementation error: {0}")]
+    UserImplementationError(String),
 }
 
 cfg_if! {

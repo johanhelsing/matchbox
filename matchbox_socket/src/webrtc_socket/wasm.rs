@@ -1,4 +1,4 @@
-use super::{error::JsErrorExt, HandshakeResult, PacketSendError, PeerDataSender};
+use super::{error::JsErrorExt, messages::{PeerEvent, PeerRequest}, HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder};
 use crate::webrtc_socket::{
     error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
     socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, RtcIceServerConfig,
@@ -27,9 +27,12 @@ pub(crate) struct WasmSignaller {
     websocket_stream: futures::stream::Fuse<WsStream>,
 }
 
-#[async_trait(?Send)]
-impl Signaller for WasmSignaller {
-    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignalingError> {
+#[derive(Debug, Default)]
+pub(crate) struct WasmSignallerBuilder;
+
+#[async_trait]
+impl SignallerBuilder for WasmSignallerBuilder {
+    async fn new_signaller(&self, mut attempts: Option<u16>, room_url: String) -> Result<Box<dyn Signaller>, SignalingError> {
         let websocket_stream = 'signaling: loop {
             match WsMeta::connect(room_url, None)
                 .await
@@ -54,22 +57,30 @@ impl Signaller for WasmSignaller {
                 }
             };
         };
-        Ok(Self { websocket_stream })
+        Ok(Box::new(WasmSignaller { websocket_stream }))
     }
+}
 
-    async fn send(&mut self, request: String) -> Result<(), SignalingError> {
+#[async_trait]
+impl Signaller for WasmSignaller {
+    async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
+        let request = serde_json::to_string(&request).expect("serializing request");
         self.websocket_stream
             .send(WsMessage::Text(request))
             .await
             .map_err(SignalingError::from)
     }
 
-    async fn next_message(&mut self) -> Result<String, SignalingError> {
-        match self.websocket_stream.next().await {
+    async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
+        let message = match self.websocket_stream.next().await {
             Some(WsMessage::Text(message)) => Ok(message),
             Some(_) => Err(SignalingError::UnknownFormat),
             None => Err(SignalingError::StreamExhausted),
-        }
+        }?;
+        let message = serde_json::from_str(&message).unwrap_or_else(|err| {
+            error!("failed to parse peer event: {err}.\nEvent: {message}");
+        });
+        Ok(message)
     }
 }
 

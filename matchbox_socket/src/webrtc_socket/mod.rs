@@ -1,4 +1,4 @@
-pub(crate) mod error;
+pub mod error;
 mod messages;
 mod signal_peer;
 mod socket;
@@ -18,59 +18,70 @@ pub(crate) use socket::MessageLoopChannels;
 pub use socket::{
     ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
-use std::{collections::HashMap, pin::Pin, time::Duration};
+use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+pub use messages::PeerRequest;
+pub use messages::PeerEvent;
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm;
         type UseMessenger = wasm::WasmMessenger;
-        type UseSignaller = wasm::WasmSignaller;
+        type UseSignallerBuilder = wasm::WasmSignallerBuilder;
         /// A future which runs the message loop for the socket and completes
         /// when the socket closes or disconnects
         pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
     } else {
         mod native;
         type UseMessenger = native::NativeMessenger;
-        type UseSignaller = native::NativeSignaller;
+        type UseSignallerBuilder = native::NativeSignallerBuilder;
         /// A future which runs the message loop for the socket and completes
         /// when the socket closes or disconnects
         pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-trait Signaller: Sized {
-    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignalingError>;
-
-    async fn send(&mut self, request: String) -> Result<(), SignalingError>;
-
-    async fn next_message(&mut self) -> Result<String, SignalingError>;
+/// A builder for a signalling implementation.
+#[async_trait]
+pub trait SignallerBuilder : std::fmt::Debug + Sync + Send + 'static {
+    /// Create a new signaller.
+    async fn new_signaller(&self, attempts: Option<u16>, room_url: String) -> Result<Box<dyn Signaller>, SignalingError>;
 }
 
-async fn signaling_loop<S: Signaller>(
+/// A signalling implementation.
+#[async_trait]
+pub trait Signaller: Sync + Send + 'static {
+    /// Send a message to the signaller.
+    async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError>;
+
+    /// Get the next message from the signaller.
+    async fn next_message(&mut self) -> Result<PeerEvent, SignalingError>;
+}
+
+async fn signaling_loop(
+    builder: Arc<dyn SignallerBuilder>,
     attempts: Option<u16>,
     room_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
 ) -> Result<(), SignalingError> {
-    let mut signaller = S::new(attempts, &room_url).await?;
+    let mut signaller = builder.new_signaller(attempts, room_url).await?;
 
     loop {
         select! {
             request = requests_receiver.next().fuse() => {
-                let request = serde_json::to_string(&request).expect("serializing request");
-                debug!("-> {request}");
+                // let request = serde_json::to_string(&request).expect("serializing request");
+                debug!("-> {request:?}");
+                let Some(request) = request else {break Err(SignalingError::StreamExhausted)};
                 signaller.send(request).await.map_err(SignalingError::from)?;
             }
 
             message = signaller.next_message().fuse() => {
                 match message {
                     Ok(message) => {
-                        debug!("Received {message}");
-                        let event: PeerEvent = serde_json::from_str(&message)
-                            .unwrap_or_else(|err| panic!("couldn't parse peer event: {err}.\nEvent: {message}"));
-                        events_sender.unbounded_send(event).map_err(SignalingError::from)?;
+                        debug!("Received {message:?}");
+                        // let event: PeerEvent = serde_json::from_str(&message)
+                        //     .unwrap_or_else(|err| panic!("couldn't parse peer event: {err}.\nEvent: {message}"));
+                        events_sender.unbounded_send(message).map_err(SignalingError::from)?;
                     }
                     Err(SignalingError::UnknownFormat) => {
                         warn!("ignoring unexpected non-text message from signaling server")

@@ -1,8 +1,7 @@
-mod iroh_gossip_signaller;
 
 use futures::{select, FutureExt};
 use futures_timer::Delay;
-use iroh_gossip_signaller::IrohGossipSignallerBuilder;
+use custom_signaller::IrohGossipSignallerBuilder;
 use log::info;
 use matchbox_socket::{PeerState, WebRtcSocket};
 use std::{sync::Arc, time::Duration};
@@ -13,7 +12,7 @@ const CHANNEL_ID: usize = 0;
 fn main() {
     // Setup logging
     console_error_panic_hook::set_once();
-    console_log::init_with_level(log::Level::Debug).unwrap();
+    console_log::init_with_level(log::Level::Info).unwrap();
 
     wasm_bindgen_futures::spawn_local(async_main(None));
 }
@@ -26,7 +25,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "simple_example=info,matchbox_socket=info".into()),
+                .unwrap_or_else(|_| "error,custom_signaller=info,matchbox_socket=warn".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -38,7 +37,10 @@ async fn async_main(node_id: Option<String>) {
     info!("Connecting to matchbox");
     let room_url = node_id.unwrap_or("".to_string());
     let signaller_builder = Arc::new(IrohGossipSignallerBuilder::new().await.unwrap());
-    let (mut socket, loop_fut) = WebRtcSocket::builder(room_url).signaller_builder(signaller_builder).build();
+    let (mut socket, loop_fut) = WebRtcSocket::builder(room_url)
+        .signaller_builder(signaller_builder.clone())
+        .add_reliable_channel()
+        .build();
 
     let loop_fut = loop_fut.fuse();
     futures::pin_mut!(loop_fut);
@@ -79,4 +81,5 @@ async fn async_main(node_id: Option<String>) {
             }
         }
     }
+    signaller_builder.shutdown().await.unwrap();
 }

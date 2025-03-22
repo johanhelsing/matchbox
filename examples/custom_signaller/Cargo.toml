@@ -5,19 +5,26 @@ edition = "2021"
 
 [dependencies]
 matchbox_socket = { path = "../../matchbox_socket" }
+
 futures-timer = { version = "3", features = ["wasm-bindgen"] }
 log = { version = "0.4", default-features = false }
 iroh = { version = "0.34.0", default-features = false }
 iroh-gossip = { version = "0.34.0", default-features = false, features = ["net"] }
-uuid = "1"
-anyhow = "1"
+n0-future = {version = "0.1.2", features = []}
+uuid = "1.16"
+anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+async-broadcast = "0.7.2"
+web-time = "1.1.0"
+
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "1.0"
 futures = { version = "0.3", default-features = false }
 wasm-bindgen-futures = "0.4.29"
+
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 futures = "0.3"

@@ -1,44 +1,103 @@
-use futures::StreamExt;
-use iroh::{protocol::Router, Endpoint, PublicKey};
-use iroh_gossip::{net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, GossipTopic}, proto::TopicId, ALPN};
-use log::{info,warn,error};
-use matchbox_socket::{async_trait::async_trait, error::SignalingError, PeerEvent, PeerId, PeerRequest, Signaller, SignallerBuilder};
-use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, time::{Duration, UNIX_EPOCH}};
 
-#[derive(Debug)]
+use anyhow::Context;
+use futures::FutureExt;
+use iroh::{protocol::Router, Endpoint, PublicKey};
+use iroh_gossip::{
+    net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, Message},
+    proto::TopicId,
+    net::GOSSIP_ALPN
+};
+use log::{error, info, warn};
+use matchbox_socket::{
+    async_trait::async_trait, error::SignalingError, PeerEvent, PeerId, PeerRequest, PeerSignal,
+    Signaller, SignallerBuilder,
+};
+use n0_future::StreamExt;
+use serde::{Deserialize, Serialize};
+use tokio::time::Instant;
+
+use crate::direct_message::{send_direct_message, DirectMessageProtocol, DIRECT_MESSAGE_ALPN};
+
+#[derive(Debug, Clone)]
 pub struct IrohGossipSignallerBuilder {
     router: Router,
     gossip: Gossip,
     endpoint: Endpoint,
     matchbox_id: PeerId,
     iroh_id: PublicKey,
+    direct_message_recv: async_broadcast::InactiveReceiver<(PublicKey, PeerEvent)>,
 }
 
 impl IrohGossipSignallerBuilder {
+    pub async fn shutdown(&self) -> anyhow::Result<()> {
+        info!("Shutting down IrohGossipSignallerBuilder");
+        self.router.shutdown().await?;
+        Ok(())
+    }
+
     pub async fn new() -> anyhow::Result<Self> {
-        let endpoint = Endpoint::builder().discovery_n0().bind().await?;
+        info!("Creating new IrohGossipSignallerBuilder");
+        let endpoint = Endpoint::builder().discovery_n0().alpns(vec![DIRECT_MESSAGE_ALPN.to_vec(), GOSSIP_ALPN.to_vec()]).bind().await?;
         let iroh_id = endpoint.node_id();
         let matchbox_id = PeerId(uuid::Uuid::new_v4());
+        warn!(r#"
+        ----------------------------------------------------------------
+        NODE IDENTIFIERS:
+
+        Iroh ID: {iroh_id}
+        Matchbox ID: {matchbox_id}
+
+        Run with:
+
+
+            cargo run  -- "{iroh_id}"
+
+
+        ----------------------------------------------------------------
+        "#);
         let gossip = Gossip::builder().spawn(endpoint.clone()).await?;
+        let (mut direct_message_send, mut direct_message_recv) = async_broadcast::broadcast(2048);
+        direct_message_send.set_overflow(true);
+        direct_message_recv.set_overflow(true);
+        let direct_message_recv = direct_message_recv.deactivate();
+        
         let router = Router::builder(endpoint.clone())
-            .accept(ALPN, gossip.clone())
+            .accept(GOSSIP_ALPN, gossip.clone())
+            .accept(DIRECT_MESSAGE_ALPN, DirectMessageProtocol(direct_message_send))
             .spawn()
             .await?;
-        Ok(Self { router, gossip, endpoint, matchbox_id, iroh_id })
+        Ok(Self {
+            router,
+            gossip,
+            endpoint,
+            matchbox_id,
+            iroh_id,
+            direct_message_recv,
+        })
     }
 }
 
 const GOSSIP_TOPIC_ID: TopicId = TopicId::from_bytes(*b"__matchbox_example_iroh_gossip__");
 #[async_trait]
 impl SignallerBuilder for IrohGossipSignallerBuilder {
-    async fn new_signaller(&self, _attempts: Option<u16>, room_url: String) -> Result<Box<dyn Signaller>, SignalingError> {
+    async fn new_signaller(
+        &self,
+        _attempts: Option<u16>,
+        room_url: String,
+    ) -> Result<Box<dyn Signaller>, SignalingError> {
+        let room_pubkey: Option<PublicKey> = if room_url.is_empty() {
+            None
+        } else {
+            Some(room_url.parse().map_err(to_user_error)?)
+        };
         for i in 0.._attempts.unwrap_or(3) {
-            match self.try_new_signaller(_attempts, room_url.clone()).await {
+            match self.try_new_signaller(room_pubkey).await {
                 Ok(signaller) => {
                     return Ok(Box::new(signaller));
                 }
                 Err(e) => {
-                    warn!("Failed to connect to gossip: {e}");
+                    warn!("Failed to connect to gossip: {e:#?}");
                     if i == _attempts.unwrap_or(1) - 1 {
                         return Err(to_user_error(e));
                     }
@@ -49,91 +108,260 @@ impl SignallerBuilder for IrohGossipSignallerBuilder {
     }
 }
 
-fn to_user_error<E: ToString>(e: E) -> SignalingError {
-    SignalingError::UserImplementationError(e.to_string())
+fn to_user_error<E: std::fmt::Debug>(e: E) -> SignalingError {
+    SignalingError::UserImplementationError(format!("{e:#?}"))
 }
 
 impl IrohGossipSignallerBuilder {
-    async fn try_new_signaller(&self, _attempts: Option<u16>, room_url: String) -> anyhow::Result<IrohGossipSignaller> {
+    async fn try_new_signaller(
+        &self,
+        room_pubkey: Option<PublicKey>,
+    ) -> anyhow::Result<IrohGossipSignaller> {
         info!("Creating new signaller");
-        let bootstrap = if room_url.is_empty() { vec![] } else { vec![room_url.parse()?] };
+        let bootstrap = room_pubkey.iter().cloned().collect();
+        info!(
+            "Subscribing to gossip topic {:?} with bootstrap: {:?}",
+            GOSSIP_TOPIC_ID, bootstrap
+        );
         let mut gossip_topic = self.gossip.subscribe(GOSSIP_TOPIC_ID, bootstrap)?;
-        if !room_url.is_empty() {
-            info!("Joining gossip topic");
-            gossip_topic.joined().await?;
+        info!("Joining gossip topic...");
+        gossip_topic.joined().await?;
+        info!("Connected to gossip topic.");
+        let (gossip_send, mut gossip_recv) = gossip_topic.split();
+
+        let (req_send, req_recv) = tokio::sync::mpsc::channel(2048);
+        let (event_send, event_recv) = tokio::sync::mpsc::channel(2048);
+        let (gossip_send_proxy, gossip_recv_proxy) = tokio::sync::mpsc::channel(2048);
+
+        let _task2= n0_future::task::AbortOnDropHandle::new(n0_future::task::spawn(async move {
+            info!("Spawning gossip receiver proxy task");
+            while let Some(gossip_msg) = gossip_recv.next().await {
+                info!("Gossip Proxy Recv Message!");
+                if let Ok(gossip_msg) = gossip_msg {
+                    gossip_send_proxy.send(gossip_msg).await?;
+                } else {
+                    warn!("Gossip receiver proxy error: {:#?}", gossip_msg);
+                }
+            }
+            warn!("Gossip receiver proxy exhausted");
+            anyhow::bail!("Gossip receiver proxy exhausted");
+        }));
+
+        let _task = self
+            .clone()
+            .spawn_task(gossip_recv_proxy, gossip_send, req_recv, event_send, self.direct_message_recv.activate_cloned())
+            .then(|r| async move {
+                match r {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        error!("Error in gossip task: {e:#?}. \n Gossip task exit.");
+                        Err(e)
+                    }
+                }
+            });
+        let _task = n0_future::task::AbortOnDropHandle::new(n0_future::task::spawn(_task));
+        Ok(IrohGossipSignaller {
+            recv: event_recv,
+            send: req_send,
+            _task,
+            _task2,
+        })
+    }
+
+    async fn spawn_task(
+        self,
+        // gossip msg from other nodes
+        mut gossip_recv: tokio::sync::mpsc::Receiver<iroh_gossip::net::Event>,
+        // gossip msg into other nodes
+        gossip_send: GossipSender,
+        // sent requests from client
+        mut req_recv: tokio::sync::mpsc::Receiver<PeerRequest>,
+        // send events to client
+        event_send: tokio::sync::mpsc::Sender<PeerEvent>,
+        // get direct messages from other clients
+        mut direct_message_recv: async_broadcast::Receiver<(PublicKey, PeerEvent)>,
+    ) -> anyhow::Result<()> {
+        const REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+        const STALE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(15);
+        info!("Spawning signal task");
+
+        // send AssignedId into client
+        event_send
+            .send(PeerEvent::IdAssigned(self.matchbox_id))
+            .await?;
+
+        // send gossip message to ensure other nodes have our iroh id
+        self.send_gossip_message(&gossip_send).await?;
+
+        // map ids to each other, including timestamps
+        let mut matchbox_to_iroh = BTreeMap::<PeerId, (PublicKey, Instant)>::new();
+        let mut iroh_to_matchbox = BTreeMap::<PublicKey, (PeerId, Instant)>::new();
+
+        loop {
+            tokio::select! {
+
+                gossip_msg = gossip_recv.recv().fuse() => {
+                    info!("Received gossip message.");
+                    // receive gossip messages and send NewPeer events
+                    let Some(gossip_msg) = gossip_msg else {
+                        anyhow::bail!("Gossip receiver stream problem: {:#?}", gossip_msg);
+                    };
+                    match gossip_msg {
+                        Event::Lagged => {
+                            // Iroh will close the receiver after this event, so we can exit here.
+                            anyhow::bail!("Gossip receiver lagged");
+                        }
+                        Event::Gossip(GossipEvent::Received(Message { content: gossip_msg, ..})) => {
+                            let GossipMessage{iroh_id, matchbox_id, ..} = serde_json::from_slice(&gossip_msg)?;
+                            let now = Instant::now();
+                            let is_new = !matchbox_to_iroh.contains_key(&matchbox_id);
+                            matchbox_to_iroh.insert(matchbox_id, (iroh_id, now));
+                            iroh_to_matchbox.insert(iroh_id, (matchbox_id, now));
+                            if is_new {
+                                info!("New peer connection: matchbox ID {matchbox_id} = Iroh ID {iroh_id}");
+
+                                if matchbox_id < self.matchbox_id {
+                                    info!("Sending NewPeer event for smaller id");
+                                    event_send.send(PeerEvent::NewPeer(matchbox_id)).await?;
+                                } else {
+                                    info!("Not sending NewPeer event for larger id");
+                                }
+                                // on new peer, send gossip message to ensure new peer has our iroh id
+                                self.send_gossip_message(&gossip_send).await?;
+                            }
+                        }
+                        _ => {
+                            // ignore other gossip events, they're not relevant here
+                        }
+                    }
+                },
+                req_msg = req_recv.recv().fuse() => {
+                    // on client request, either send keep alive to gossip, or send direct message with the signal to peer
+                    let Some(req_msg) = req_msg else {
+                        anyhow::bail!("Request receiver stream problem: {:#?}", req_msg);
+                    };
+                    match req_msg {
+                        PeerRequest::KeepAlive => {
+                            // send keep alive to gossip, containing all of our IDs
+                            self.send_gossip_message(&gossip_send).await?;
+                        }
+                        PeerRequest::Signal { receiver, data } => {
+                            // send direct message to MatchboxSignalProtocol
+                            match self.send_direct_message(receiver, data, &matchbox_to_iroh).await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("Error sending direct message: {e:#?}");
+                                }
+                            }
+                        }
+                    }
+                },
+                direct_msg = direct_message_recv.next().fuse() => {
+                    let Some((from_iroh_id, event)) = direct_msg else {
+                        anyhow::bail!("Direct message receiver stream problem: {:#?}", direct_msg);
+                    };
+                    // check message is from who it said it is
+                    if let PeerEvent::Signal {sender, ..} = &event {
+                        if matchbox_to_iroh.get(sender).map(|(node_id, _)| node_id) == Some(&from_iroh_id) {
+                            info!("
+                            Received direct message:
+                                From Matchbox ID: {sender}
+                                From Iroh ID: {from_iroh_id}
+                                Event: {event:#?}
+                            ");
+                            event_send.send(event.clone()).await?;
+                        } else {
+                            warn!("Received message from {from_iroh_id} with wrong sender: {sender}");
+                        }
+                    } else {
+                        warn!("Received message from {from_iroh_id} with wrong event type: {event:#?}");
+                    }
+                }
+                _ = (tokio::time::sleep(REFRESH_INTERVAL)) => {
+                    self.send_gossip_message(&gossip_send).await?;
+                    // check for stale connections and send PeerLeft events
+                    let now = Instant::now();
+                    let dead_peers = matchbox_to_iroh
+                        .iter()
+                        .filter(|(_, (_, timestamp))| now.duration_since(*timestamp) >= STALE_CONNECTION_TIMEOUT)
+                        .map(|(peer_id, (node_id, _))| (*peer_id, *node_id))
+                        .collect::<Vec<_>>();
+                    for (peer_id, node_id) in dead_peers {
+                        info!("Removing dead peer connection: {peer_id} -> {node_id}");
+                        matchbox_to_iroh.remove(&peer_id);
+                        iroh_to_matchbox.remove(&node_id);
+                        event_send.send(PeerEvent::PeerLeft(peer_id)).await?;
+                    }
+                }
+            }
         }
-        let (sender, receiver) = gossip_topic.split();
-        Ok(IrohGossipSignaller { sender, receiver, matchbox_id: self.matchbox_id.clone(), iroh_id: self.iroh_id.clone() })
+    }
+
+    async fn send_gossip_message(
+        &self,
+        gossip_send: &GossipSender,
+    ) -> anyhow::Result<()> {
+        info!("Sending gossip message");
+        let timestamp = web_time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let message = GossipMessage { matchbox_id: self.matchbox_id, iroh_id: self.iroh_id, timestamp };
+        let message = serde_json::to_vec(&message)?;
+        gossip_send.broadcast(message.into()).await?;
+        Ok(())
+    }
+
+    async fn send_direct_message(
+        &self,
+        receiver: PeerId,
+        data: PeerSignal,
+        matchbox_to_iroh: &BTreeMap<PeerId, (PublicKey, Instant)>,
+    ) -> anyhow::Result<()> {
+        let event = PeerEvent::Signal {
+            sender: self.matchbox_id,
+            data,
+        };
+        let target_node_id = matchbox_to_iroh
+            .get(&receiver)
+            .map(|(node_id, _)| *node_id)
+            .with_context(|| format!("No known connection to peer {receiver}"))?;
+        info!("
+        Sending direct message to:
+            Matchbox ID: {receiver} 
+            Iroh     ID: {target_node_id}
+            Event: {event:#?}
+        ");
+
+        send_direct_message(&self.endpoint, target_node_id, event).await?;
+        Ok(())
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct GossipMessage {
-    from_matchbox_id: PeerId,
-    from_iroh_id: PublicKey,
-    message: PeerRequest,
-}
-
-
-struct IrohGossipSignaller {
     matchbox_id: PeerId,
     iroh_id: PublicKey,
-    sender: GossipSender,
-    receiver: GossipReceiver,
+    timestamp: u64,
+}
 
+struct IrohGossipSignaller {
+    recv: tokio::sync::mpsc::Receiver<PeerEvent>,
+    send: tokio::sync::mpsc::Sender<PeerRequest>,
+    _task: n0_future::task::AbortOnDropHandle<Result<(), anyhow::Error>>,
+    _task2: n0_future::task::AbortOnDropHandle<Result<(), anyhow::Error>>,
 }
 
 #[async_trait]
 impl Signaller for IrohGossipSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
-        let request = match request {
-            PeerRequest::KeepAlive => return Ok(()),
-            PeerRequest::Signal { receiver, data } => {
-                self.send_matchbox_signal(receiver, data).await?;
-                return Ok(());
-            }
-        };
-        let message = GossipMessage {
-            from_matchbox_id: self.matchbox_id.clone(),
-            from_iroh_id: self.iroh_id.clone(),
-            message: request,
-        };
-        let message = serde_json::to_vec(&message).map_err(to_user_error)?;
-        self.sender.broadcast(message.into()).await.map_err(to_user_error)?;
+        info!("\n\nSignaller: Sending request: {request:#?}\n\n");
+        self.send.send(request).await.map_err(to_user_error)?;
         Ok(())
-
     }
     async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
-        while let Some(message) = self.receiver.next().await {
-            match message.map_err(to_user_error)? {
-                Event::Gossip(GossipEvent::Received(message)) => {
-                    let msg: GossipMessage = serde_json::from_slice(&message.content).map_err(to_user_error)?;
-                    if let Some(event) = self.convert_message(msg).await {
-                        return Ok(event);
-                    }
-                },
-                _m => {
-                    info!("Ignoring gossip event: {:?}", _m);
-                }
-            }
-        }
-        Err(SignalingError::StreamExhausted)
-    }
-}
-
-impl IrohGossipSignaller {
-    async fn convert_message(&self, message: GossipMessage) -> Option<PeerEvent> {
-        match message.message {
-            PeerRequest::Signal { receiver, data } => {
-                if receiver == self.matchbox_id {
-                    Some(PeerEvent::Signal { sender: message.from_matchbox_id, data })
-                } else {
-                    None
-                }
-            }
-            PeerRequest::KeepAlive => {
-                None
-            }
-        }
+        let Some(message) = self.recv.recv().await else {
+            info!("\n\nSignaller: Stream exhausted\n\n");
+            return Err(SignalingError::StreamExhausted);
+        };
+        info!("\n\n Signaller: Received message: {message:#?}\n\n");
+        Ok(message)
     }
 }

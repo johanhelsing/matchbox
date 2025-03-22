@@ -17,8 +17,8 @@ pub enum PeerRequest<S> {
 }
 
 /// Events go from signaling server to peer
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum PeerEvent<S> {
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub enum PeerEvent<S: Clone> {
     /// Sent by the server to the connecting peer, immediately after connection
     /// before any other events
     IdAssigned(PeerId),

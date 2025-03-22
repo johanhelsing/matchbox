@@ -1,3 +1,5 @@
+//! Error definitions for socket operations.
+
 pub use crate::webrtc_socket::error::SignalingError;
 
 /// Errors that can happen when using Matchbox sockets.

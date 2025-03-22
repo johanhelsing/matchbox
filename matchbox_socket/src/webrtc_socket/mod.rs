@@ -13,14 +13,12 @@ use futures_timer::Delay;
 use futures_util::select;
 use log::{debug, error, warn};
 use matchbox_protocol::PeerId;
-use messages::*;
+pub use messages::*;
 pub(crate) use socket::MessageLoopChannels;
 pub use socket::{
     ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
-pub use messages::PeerRequest;
-pub use messages::PeerEvent;
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

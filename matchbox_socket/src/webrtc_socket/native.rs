@@ -76,6 +76,7 @@ impl SignallerBuilder for NativeSignallerBuilder {
 #[async_trait]
 impl Signaller for NativeSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
+        info!("\n\nsending request: \n {request:#?} \n\n");
         let request = serde_json::to_string(&request).expect("serializing request");
         self.websocket_stream
             .send(Message::Text(request))
@@ -93,6 +94,7 @@ impl Signaller for NativeSignaller {
         let message = serde_json::from_str(&message).unwrap_or_else(|err| {
             panic!("couldn't parse peer event: {err}.\nEvent: {message}");
         });
+        info!("\n\nreceived message: \n {message:#?} \n\n");
         Ok(message)
     }
 }

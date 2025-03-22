@@ -4,15 +4,25 @@ Shows how to use `matchbox_socket` in a simple example.
 
 ## Instructions
 
-- Run the matchbox-provided [`matchbox_server`](../../matchbox_server/) ([help](../../matchbox_server/README.md)), or run your own on `ws://localhost:3536/`.
+- No need for matchbox server; signaling will be done through Iroh P2P Network
 - Run the demo
   - [on Native](#run-on-native)
   - [on WASM](#run-on-wasm)
 
 ## Run on Native
 
+
+First node:
 ```sh
 cargo run
+```
+
+Then read from terminal the Iroh ID to pass to subsequent nodes:
+
+Second node:
+
+```sh
+cargo run -- "000DEADBEEF....FFF"
 ```
 
 ## Run on WASM
@@ -40,4 +50,4 @@ cargo run --target wasm32-unknown-unknown
 ### Run
 
 - Use a web browser and navigate to <http://127.0.0.1:1334>
-- Open the console to see execution logs
+- Open the console to see the Iroh ID, this can be used from native node

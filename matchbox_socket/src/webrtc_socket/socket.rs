@@ -1,4 +1,7 @@
-use super::{error::{ChannelError, SignalingError}, SignallerBuilder};
+use super::{
+    error::{ChannelError, SignalingError},
+    SignallerBuilder,
+};
 use crate::{
     webrtc_socket::{
         message_loop, signaling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
@@ -218,7 +221,9 @@ impl WebRtcSocketBuilder {
         }
 
         let (id_tx, id_rx) = futures_channel::oneshot::channel();
-        let signaller_builder = self.signaller_builder.unwrap_or_else(|| Arc::new(UseSignallerBuilder::default()));
+        let signaller_builder = self
+            .signaller_builder
+            .unwrap_or_else(|| Arc::new(UseSignallerBuilder::default()));
 
         let socket_fut = run_socket(
             signaller_builder,

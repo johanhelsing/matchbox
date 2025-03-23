@@ -41,9 +41,13 @@ cfg_if! {
 /// A builder for a signalling implementation.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-pub trait SignallerBuilder : std::fmt::Debug + Sync + Send + 'static {
+pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
     /// Create a new signaller.
-    async fn new_signaller(&self, attempts: Option<u16>, room_url: String) -> Result<Box<dyn Signaller>, SignalingError>;
+    async fn new_signaller(
+        &self,
+        attempts: Option<u16>,
+        room_url: String,
+    ) -> Result<Box<dyn Signaller>, SignalingError>;
 }
 
 /// A signalling implementation.

@@ -1,4 +1,7 @@
-use super::{messages::{PeerEvent, PeerRequest}, HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder};
+use super::{
+    messages::{PeerEvent, PeerRequest},
+    HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder,
+};
 use crate::{
     webrtc_socket::{
         error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
@@ -47,7 +50,11 @@ pub(crate) struct NativeSignallerBuilder;
 
 #[async_trait]
 impl SignallerBuilder for NativeSignallerBuilder {
-    async fn new_signaller(&self, mut attempts: Option<u16>, room_url: String) -> Result<Box<dyn Signaller>, SignalingError> {
+    async fn new_signaller(
+        &self,
+        mut attempts: Option<u16>,
+        room_url: String,
+    ) -> Result<Box<dyn Signaller>, SignalingError> {
         let websocket_stream = 'signaling: loop {
             match connect_async(&room_url).await.map_err(SignalingError::from) {
                 Ok((wss, _)) => break wss,

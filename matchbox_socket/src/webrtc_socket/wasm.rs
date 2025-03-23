@@ -1,4 +1,8 @@
-use super::{error::JsErrorExt, messages::{PeerEvent, PeerRequest}, HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder};
+use super::{
+    error::JsErrorExt,
+    messages::{PeerEvent, PeerRequest},
+    HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder,
+};
 use crate::webrtc_socket::{
     error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
     socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, RtcIceServerConfig,
@@ -32,7 +36,11 @@ pub(crate) struct WasmSignallerBuilder;
 
 #[async_trait(?Send)]
 impl SignallerBuilder for WasmSignallerBuilder {
-    async fn new_signaller(&self, mut attempts: Option<u16>, room_url: String) -> Result<Box<dyn Signaller>, SignalingError> {
+    async fn new_signaller(
+        &self,
+        mut attempts: Option<u16>,
+        room_url: String,
+    ) -> Result<Box<dyn Signaller>, SignalingError> {
         let websocket_stream = 'signaling: loop {
             match WsMeta::connect(&room_url, None)
                 .await

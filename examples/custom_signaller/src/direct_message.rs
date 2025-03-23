@@ -1,6 +1,5 @@
 use iroh::{endpoint::Connection, protocol::ProtocolHandler, Endpoint, PublicKey};
 use matchbox_socket::PeerEvent;
-use n0_future::task;
 
 use crate::get_timestamp;
 

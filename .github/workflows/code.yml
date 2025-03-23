@@ -46,13 +46,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run cargo check
-        run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo check >
+        run: RUSTFLAGS='--cfg=web_sys_unstable_apis --cfg=getrandom_backend="wasm_js"' cargo check >
           --all-targets
           --target wasm32-unknown-unknown
           -p matchbox_socket
           -p bevy_matchbox
           -p bevy_ggrs_example
           -p simple_example
+          -p custom_signaller
 
   format:
     name: Format
@@ -114,13 +115,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run cargo clippy
-        run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo clippy >
+        run: RUSTFLAGS='--cfg=web_sys_unstable_apis --cfg=getrandom_backend="wasm_js"' cargo clippy >
             --all-targets
             --target wasm32-unknown-unknown
             -p matchbox_socket
             -p bevy_matchbox
             -p bevy_ggrs_example
             -p simple_example
+            -p custom_signaller
             --
             -D warnings
 

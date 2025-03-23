@@ -1,7 +1,6 @@
-
+use custom_signaller::IrohGossipSignallerBuilder;
 use futures::{select, FutureExt};
 use futures_timer::Delay;
-use custom_signaller::IrohGossipSignallerBuilder;
 use log::info;
 use matchbox_socket::{PeerState, WebRtcSocket};
 use std::{sync::Arc, time::Duration};
@@ -17,10 +16,10 @@ fn main() {
     // use tracing_subscriber::prelude::*;
     // tracing_subscriber::registry()
     //     .with(
-    //         tracing_subscriber::EnvFilter::from_str("info,custom_signaller=info,matchbox_socket=warn".into()).unwrap()
-    //     )
+    //         tracing_subscriber::EnvFilter::from_str("info,custom_signaller=info,
+    // matchbox_socket=warn".into()).unwrap()     )
     //     .with(tracing_subscriber::fmt::layer().without_time())
-        
+
     //     .init();
 
     console_log::init_with_level(log::Level::Info).unwrap();

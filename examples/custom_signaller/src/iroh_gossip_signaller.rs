@@ -1,14 +1,13 @@
-use std::{collections::BTreeMap, time::{Duration}};
+use std::{collections::BTreeMap, time::Duration};
 
 use anyhow::Context;
 use futures::FutureExt;
 use iroh::{protocol::Router, Endpoint, PublicKey};
 use iroh_gossip::{
-    net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, Message},
+    net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, Message, GOSSIP_ALPN},
     proto::TopicId,
-    net::GOSSIP_ALPN
 };
-use log::{error, info, warn, debug};
+use log::{debug, error, info, warn};
 use matchbox_socket::{
     async_trait::async_trait, error::SignalingError, PeerEvent, PeerId, PeerRequest, PeerSignal,
     Signaller, SignallerBuilder,
@@ -17,9 +16,10 @@ use n0_future::StreamExt;
 use serde::{Deserialize, Serialize};
 use web_time::Instant;
 
-use crate::{direct_message::{send_direct_message, DirectMessageProtocol, DIRECT_MESSAGE_ALPN}, get_timestamp};
-
-
+use crate::{
+    direct_message::{send_direct_message, DirectMessageProtocol, DIRECT_MESSAGE_ALPN},
+    get_timestamp,
+};
 
 const GOSSIP_TOPIC_ID: TopicId = TopicId::from_bytes(*b"__matchbox_example_iroh_gossip__");
 
@@ -42,10 +42,15 @@ impl IrohGossipSignallerBuilder {
 
     pub async fn new() -> anyhow::Result<Self> {
         info!("Creating new IrohGossipSignallerBuilder");
-        let endpoint = Endpoint::builder().discovery_n0().alpns(vec![DIRECT_MESSAGE_ALPN.to_vec(), GOSSIP_ALPN.to_vec()]).bind().await?;
+        let endpoint = Endpoint::builder()
+            .discovery_n0()
+            .alpns(vec![DIRECT_MESSAGE_ALPN.to_vec(), GOSSIP_ALPN.to_vec()])
+            .bind()
+            .await?;
         let iroh_id = endpoint.node_id();
         let matchbox_id = PeerId(uuid::Uuid::new_v4());
-        warn!(r#"
+        warn!(
+            r#"
         ----------------------------------------------------------------
         NODE IDENTIFIERS:
 
@@ -59,16 +64,20 @@ impl IrohGossipSignallerBuilder {
 
 
         ----------------------------------------------------------------
-        "#);
+        "#
+        );
         let gossip = Gossip::builder().spawn(endpoint.clone()).await?;
         let (mut direct_message_send, mut direct_message_recv) = async_broadcast::broadcast(2048);
         direct_message_send.set_overflow(true);
         direct_message_recv.set_overflow(true);
         let direct_message_recv = direct_message_recv.deactivate();
-        
+
         let router = Router::builder(endpoint.clone())
             .accept(GOSSIP_ALPN, gossip.clone())
-            .accept(DIRECT_MESSAGE_ALPN, DirectMessageProtocol(direct_message_send))
+            .accept(
+                DIRECT_MESSAGE_ALPN,
+                DirectMessageProtocol(direct_message_send),
+            )
             .spawn()
             .await?;
         Ok(Self {
@@ -138,7 +147,13 @@ impl IrohGossipSignallerBuilder {
 
         let _task = self
             .clone()
-            .spawn_task(gossip_recv, gossip_send, req_recv, event_send, self.direct_message_recv.activate_cloned())
+            .spawn_task(
+                gossip_recv,
+                gossip_send,
+                req_recv,
+                event_send,
+                self.direct_message_recv.activate_cloned(),
+            )
             .then(|r| async move {
                 match r {
                     Ok(_) => Ok(()),
@@ -284,13 +299,14 @@ impl IrohGossipSignallerBuilder {
         }
     }
 
-    async fn send_gossip_message(
-        &self,
-        gossip_send: &GossipSender,
-    ) -> anyhow::Result<()> {
+    async fn send_gossip_message(&self, gossip_send: &GossipSender) -> anyhow::Result<()> {
         debug!("Sending gossip message");
         let timestamp = get_timestamp();
-        let message = GossipMessage { matchbox_id: self.matchbox_id, iroh_id: self.iroh_id, timestamp };
+        let message = GossipMessage {
+            matchbox_id: self.matchbox_id,
+            iroh_id: self.iroh_id,
+            timestamp,
+        };
         let message = serde_json::to_vec(&message)?;
         gossip_send.broadcast(message.into()).await?;
         Ok(())
@@ -310,12 +326,14 @@ impl IrohGossipSignallerBuilder {
             .get(&receiver)
             .map(|(node_id, _)| *node_id)
             .with_context(|| format!("No known connection to peer {receiver}"))?;
-        debug!("
+        debug!(
+            "
         Sending direct message to:
             Matchbox ID: {receiver} 
             Iroh     ID: {target_node_id}
             Event: {event:#?}
-        ");
+        "
+        );
 
         send_direct_message(&self.endpoint, target_node_id, event).await?;
         Ok(())

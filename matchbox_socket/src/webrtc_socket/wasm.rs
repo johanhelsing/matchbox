@@ -77,9 +77,8 @@ impl Signaller for WasmSignaller {
             Some(_) => Err(SignalingError::UnknownFormat),
             None => Err(SignalingError::StreamExhausted),
         }?;
-        let message = serde_json::from_str(&message).unwrap_or_else(|err| {
-            panic!("failed to parse peer event: {err}.\nEvent: {message}");
-        });
+        let message = serde_json::from_str(&message)
+            .map_err(|e| SignalingError::UserImplementationError(e.to_string()))?;
         Ok(message)
     }
 }

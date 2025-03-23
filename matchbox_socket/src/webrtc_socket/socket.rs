@@ -234,7 +234,7 @@ impl WebRtcSocketBuilder {
                 SignalingError::UndeliverableSignal(e) => Error::Disconnected(e.into()),
                 SignalingError::NegotiationFailed(e) => Error::ConnectionFailed(*e),
                 SignalingError::WebSocket(e) => Error::Disconnected(e.into()),
-                SignalingError::UserImplementationError(_) => Error::ConnectionFailed(e.into()),
+                SignalingError::UserImplementationError(_) => Error::ConnectionFailed(e),
                 SignalingError::UnknownFormat | SignalingError::StreamExhausted => {
                     unimplemented!("these errors should never be propagated here")
                 }

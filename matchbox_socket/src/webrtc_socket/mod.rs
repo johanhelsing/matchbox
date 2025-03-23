@@ -69,18 +69,15 @@ async fn signaling_loop(
     loop {
         select! {
             request = requests_receiver.next().fuse() => {
-                // let request = serde_json::to_string(&request).expect("serializing request");
                 debug!("-> {request:?}");
                 let Some(request) = request else {break Err(SignalingError::StreamExhausted)};
-                signaller.send(request).await.map_err(SignalingError::from)?;
+                signaller.send(request).await?;
             }
 
             message = signaller.next_message().fuse() => {
                 match message {
                     Ok(message) => {
                         debug!("Received {message:?}");
-                        // let event: PeerEvent = serde_json::from_str(&message)
-                        //     .unwrap_or_else(|err| panic!("couldn't parse peer event: {err}.\nEvent: {message}"));
                         events_sender.unbounded_send(message).map_err(SignalingError::from)?;
                     }
                     Err(SignalingError::UnknownFormat) => {

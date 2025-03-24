@@ -282,6 +282,12 @@ impl WebRtcChannel {
         (self.tx, self.rx)
     }
 
+    /// Clone a sender for this channel.
+    /// Useful for sending messages to the same channel from multiple threads/async tasks.
+    pub fn sender_clone(&self) -> UnboundedSender<(PeerId, Packet)> {
+        self.tx.clone()
+    }
+
     /// Returns the [`ChannelConfig`] used to create this channel.
     pub fn config(&self) -> &ChannelConfig {
         &self.config

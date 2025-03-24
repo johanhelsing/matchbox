@@ -14,7 +14,6 @@ impl DirectMessageProtocol {
         let _remote_node_id = connection.remote_node_id()?;
         let mut recv = connection.accept_uni().await?;
         let data = recv.read_to_end(1024 * 63).await?;
-        let _ = recv.stop(iroh::endpoint::VarInt::from(0_u8));
         connection.close(0u8.into(), b"done");
         let data: DirectMessage = serde_json::from_slice(&data)?;
         let data = match &data.0 {
@@ -45,6 +44,6 @@ pub async fn send_direct_message(
     send_stream.write_all(&payload).await?;
     send_stream.finish()?;
     connection.closed().await;
-    connection.close(0u8.into(), b"done");
+    // connection.close(0u8.into(), b"done");
     Ok(())
 }

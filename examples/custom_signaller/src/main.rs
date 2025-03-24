@@ -117,7 +117,7 @@ async fn async_main(node_id: Option<String>) {
                 let ts = message.split(" ").nth(1).unwrap().parse::<u128>().unwrap();
                 let now = custom_signaller::get_timestamp();
                 let diff = now - ts;
-                info!("\n\n\t peer ping: {}ms\n\n", diff / 1000);
+                info!("\n\n\t peer {peer} ping: {}ms\n\n", diff / 1000);
             } else {
                 info!("Message from {peer}: \n\n {message:?} \n");
             }

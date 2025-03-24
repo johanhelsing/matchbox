@@ -40,6 +40,10 @@ impl IrohGossipSignallerBuilder {
         Ok(())
     }
 
+    pub fn get_matchbox_id(&self) -> PeerId {
+        self.matchbox_id
+    }
+
     pub async fn new() -> anyhow::Result<Self> {
         info!("Creating new IrohGossipSignallerBuilder");
         let endpoint = Endpoint::builder()

@@ -19,7 +19,7 @@ pub enum ChannelError {
     Closed,
 }
 
-/// An error that can occur with WebRTC messaging.
+/// An error that can occur with WebRTC messaging. See [Signaller].
 #[derive(Debug, thiserror::Error)]
 pub enum SignalingError {
     /// Common

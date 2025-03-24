@@ -38,11 +38,11 @@ cfg_if! {
     }
 }
 
-/// A builder for a signalling implementation.
+/// A builder for a [Signaller].
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
-    /// Create a new signaller.
+    /// Create a new [Signaller]. The Room is an implementation specific identifier for joining a room.
     async fn new_signaller(
         &self,
         attempts: Option<u16>,
@@ -51,13 +51,31 @@ pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
 }
 
 /// A signalling implementation.
+/// 
+/// The Signaller is responsible for passing around
+/// [WebRTC signals](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Signaling_and_video_calling#the_signaling_server)
+///  between room peers, encoded as [PeerEvent::Signal] which holds a [PeerSignal].
+/// 
+/// It is also responsible for notifying each peer of the following special events:
+/// 
+/// - [PeerEvent::IdAssigned] -- first event in stream, received once at connection time.
+/// - [PeerEvent::NewPeer] -- received when a new peer has joined the room, AND when this node must send an offer to them.
+/// - [PeerEvent::PeerLeft] -- received when a peer leaves the room.
+/// 
+/// To achieve a full mesh configuration, the signaller must do the following for **each pair** of peers in a room:
+/// 
+/// 1. It decides which peer is the "Offerer" and which is the "Answerer".
+/// 2. It sends [PeerEvent::NewPeer] to the "Offerer" only.
+/// 3. It passes [PeerEvent::Signal] events back and forth between them, until one of them disconnects.
+/// 4. It sends [PeerEvent::PeerLeft] with the ID of the disconnected peer to the remaining peer.
+/// 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait Signaller: Sync + Send + 'static {
-    /// Send a message to the signaller.
+    /// Request the signaller to pass a message to another peer.
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError>;
 
-    /// Get the next message from the signaller.
+    /// Get the next event from the signaller.
     async fn next_message(&mut self) -> Result<PeerEvent, SignalingError>;
 }
 

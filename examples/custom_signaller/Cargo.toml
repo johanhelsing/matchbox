@@ -20,7 +20,7 @@ async-broadcast = "0.7.2"
 web-time = "1.1.0"
 js-sys = "0.3.77"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-tracing = {version = "0.1"}
+tracing = { version = "0.1" }
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -35,7 +35,7 @@ tokio = { version = "1.32", default-features = false, features = [
 getrandom = { version = "0.3", features = ["wasm_js"] }
 tracing-wasm = "0.2.1"
 wasm-bindgen = "0.2"
-web-sys = {version = "0.3", features = ["Window", "Location"]}
+web-sys = { version = "0.3", features = ["Window", "Location"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 futures = "0.3"

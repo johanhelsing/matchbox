@@ -3523,6 +3523,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchbox_server_hybrid"
+version = "0.1.0"
+
+[[package]]
 name = "matchbox_signaling"
 version = "0.11.0"
 dependencies = [

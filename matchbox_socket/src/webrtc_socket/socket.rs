@@ -271,6 +271,17 @@ pub struct WebRtcChannel {
 }
 
 impl WebRtcChannel {
+    /// Split the channel into a reader and writer.
+    /// Useful for concurrently sending and receiving messages using async code.
+    pub fn split(
+        self,
+    ) -> (
+        UnboundedSender<(PeerId, Packet)>,
+        UnboundedReceiver<(PeerId, Packet)>,
+    ) {
+        (self.tx, self.rx)
+    }
+
     /// Returns the [`ChannelConfig`] used to create this channel.
     pub fn config(&self) -> &ChannelConfig {
         &self.config

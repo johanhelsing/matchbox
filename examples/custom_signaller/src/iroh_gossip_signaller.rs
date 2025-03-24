@@ -7,13 +7,13 @@ use iroh_gossip::{
     net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, Message, GOSSIP_ALPN},
     proto::TopicId,
 };
-use log::{debug, error, info, warn};
 use matchbox_socket::{
     async_trait::async_trait, error::SignalingError, PeerEvent, PeerId, PeerRequest, PeerSignal,
     Signaller, SignallerBuilder,
 };
 use n0_future::StreamExt;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, error, info, warn};
 use web_time::Instant;
 
 use crate::{
@@ -51,19 +51,23 @@ impl IrohGossipSignallerBuilder {
         let matchbox_id = PeerId(uuid::Uuid::new_v4());
         warn!(
             r#"
-        ----------------------------------------------------------------
-        NODE IDENTIFIERS:
-
-        Iroh ID: {iroh_id}
-        Matchbox ID: {matchbox_id}
-
-        Run with:
-
-
-            cargo run  -- "{iroh_id}"
-
-
-        ----------------------------------------------------------------
+|----------------------------------------------------------------
+|
+|        NODE IDENTIFIERS:
+|
+|        Iroh ID: {iroh_id}
+|        Matchbox ID: {matchbox_id}
+|
+|        Join room with:
+|
+|            cargo run  -- "{iroh_id}"
+|
+|        Or visit:
+|
+|            http://127.0.0.1:1334/#{iroh_id}
+|
+|
+|----------------------------------------------------------------
         "#
         );
         let gossip = Gossip::builder().spawn(endpoint.clone()).await?;
@@ -200,6 +204,8 @@ impl IrohGossipSignallerBuilder {
         let mut matchbox_to_iroh = BTreeMap::<PeerId, (PublicKey, Instant)>::new();
         let mut iroh_to_matchbox = BTreeMap::<PublicKey, (PeerId, Instant)>::new();
 
+        let mut refresh_interval = n0_future::time::interval(REFRESH_INTERVAL);
+
         loop {
             tokio::select! {
                 gossip_msg = gossip_recv.next().fuse() => {
@@ -279,7 +285,7 @@ impl IrohGossipSignallerBuilder {
                         warn!("Received message from {from_iroh_id} with wrong event type: {event:#?}");
                     }
                 }
-                _ = (n0_future::time::sleep(REFRESH_INTERVAL)) => {
+                _ = refresh_interval.tick().fuse() => {
                     self.send_gossip_message(&gossip_send).await?;
                     // check for stale connections and send PeerLeft events
                     let now = Instant::now();

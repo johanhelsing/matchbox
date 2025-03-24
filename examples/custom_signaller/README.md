@@ -50,4 +50,5 @@ RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo run --target wasm32-unknown-
 ### Run
 
 - Use a web browser and navigate to <http://127.0.0.1:1334>
-- Open the console to see the Iroh ID, this can be used from native node
+- Open the console to see the Iroh ID and room join URL
+- In a second browser tab, open the room join URL. It should look like this: <http://127.0.0.1:1334#000DEADBEEF....FFF>

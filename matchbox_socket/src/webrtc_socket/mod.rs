@@ -38,12 +38,12 @@ cfg_if! {
     }
 }
 
-/// A builder for a [Signaller].
+/// A builder that constructs a new [Signaller] from a room URL.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
-    /// Create a new [Signaller]. The Room is an implementation specific identifier for joining a
-    /// room.
+    /// Create a new [Signaller]. The Room URL is an implementation specific identifier for joining
+    /// a room.
     async fn new_signaller(
         &self,
         attempts: Option<u16>,

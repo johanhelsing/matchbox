@@ -4,3 +4,23 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+matchbox_signaling = { version = "0.11", path = "../matchbox_signaling" }
+matchbox_protocol = { version = "0.11", path = "../matchbox_protocol", features = [
+  "json",
+] }
+async-trait = "0.1"
+axum = { version = "0.7", features = ["ws"] }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tokio = { version = "1.32", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
+uuid = { version = "1.4", features = ["serde", "v4"] }
+clap = { version = "4.3", features = ["derive", "env"] }
+thiserror = "2.0"
+tokio-stream = "0.1"
+
+[dev-dependencies]
+tokio-tungstenite = "0.24"

@@ -1,9 +1,12 @@
-use futures::{FutureExt, SinkExt, StreamExt, channel::mpsc::UnboundedSender, select};
-use futures_timer::Delay;
+use futures::{FutureExt, SinkExt, StreamExt};
 use matchbox_socket::{Packet, PeerId, PeerState, WebRtcSocket};
 use n0_future::task::{AbortOnDropHandle, spawn};
-use std::{collections::BTreeMap, time::Duration};
-use tracing::info;
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use tokio::sync::{
+    RwLock,
+    mpsc::{Receiver, Sender, channel},
+};
+use tracing::{info, warn};
 
 const CHANNEL_ID: usize = 0;
 
@@ -45,96 +48,99 @@ async fn async_main() {
     let loop_fut = loop_fut.fuse();
     futures::pin_mut!(loop_fut);
 
-    let timeout = Delay::new(Duration::from_millis(100));
-    futures::pin_mut!(timeout);
+    let (tx0, rx0) = socket.take_channel(CHANNEL_ID).unwrap().split();
 
-    let (tx, rx) = socket.take_channel(CHANNEL_ID).unwrap().split();
-    let (mut broadcast_tx, mut broadcast_rx) = async_broadcast::broadcast::<(PeerId, Packet)>(1024);
-    broadcast_tx.set_overflow(true);
-    broadcast_rx.set_overflow(true);
-    let broadcast_rx = broadcast_rx.deactivate();
-    let _broadcast_task = spawn(async move {
-        futures::pin_mut!(rx);
-        while let Some((peer, packet)) = rx.next().await {
-            broadcast_tx.broadcast((peer, packet)).await.unwrap();
+    let tasks: Arc<
+        RwLock<
+            BTreeMap<
+                PeerId,
+                (
+                    (AbortOnDropHandle<()>, AbortOnDropHandle<()>),
+                    Sender<Box<[u8]>>,
+                ),
+            >,
+        >,
+    > = Arc::new(RwLock::new(BTreeMap::new()));
+    let tasks_ = tasks.clone();
+    let _task_rx_route = spawn(async move {
+        futures::pin_mut!(rx0);
+        while let Some((peer, packet)) = rx0.next().await {
+            let tx = {
+                let r = tasks_.read().await;
+                let Some((_, tx)) = r.get(&peer) else {
+                    warn!("Received packet from unknown peer: {peer}");
+                    continue;
+                };
+                tx.clone()
+            };
+            tx.send(packet).await.unwrap();
         }
     });
 
-    let mut tasks = BTreeMap::new();
-
-    loop {
+    let tasks_ = tasks.clone();
+    let _dispatch_task = AbortOnDropHandle::new(spawn(async move {
         // Handle any new peers
-        for (peer, state) in socket.update_peers() {
+        while let Some((peer, state)) = socket.next().await {
+            let mut tx0 = tx0.clone();
             match state {
                 PeerState::Connected => {
                     info!("Peer joined: {peer}");
-                    let tx = tx.clone();
-                    let rx = broadcast_rx.activate_cloned();
-                    tasks.insert(
-                        peer,
-                        AbortOnDropHandle::new(n0_future::task::spawn(socket_task(peer, tx, rx))),
-                    );
+                    let (rx_sender, rx) = channel(1);
+                    let (tx, mut tx_recv) = channel(1);
+                    let _task_tx_combine = AbortOnDropHandle::new(spawn(async move {
+                        while let Some(packet) = tx_recv.recv().await {
+                            tx0.send((peer, packet)).await.unwrap();
+                        }
+                    }));
+                    let task = AbortOnDropHandle::new(spawn(socket_task(peer, tx, rx)));
+                    {
+                        tasks_
+                            .write()
+                            .await
+                            .insert(peer, ((task, _task_tx_combine), rx_sender));
+                    }
                 }
                 PeerState::Disconnected => {
                     info!("Peer left: {peer}");
-                    tasks.remove(&peer);
+                    {
+                        tasks_.write().await.remove(&peer);
+                    }
                 }
             }
         }
+    }));
 
-        select! {
-            // Restart this loop every 100ms
-            _ = (&mut timeout).fuse() => {
-                timeout.reset(Duration::from_millis(100));
-            }
-
-            // Or break if the message loop ends (disconnected, closed, etc.)
-            _ = &mut loop_fut => {
-                break;
-            }
-        }
-    }
-    tasks.clear();
+    let _ = loop_fut.await;
+    tasks.write().await.clear();
 }
 
-async fn socket_task(
-    peer: PeerId,
-    tx: UnboundedSender<(PeerId, Packet)>,
-    mut rx: async_broadcast::Receiver<(PeerId, Packet)>,
-) {
-    let mut writer = tx.clone();
+async fn socket_task(peer: PeerId, tx: Sender<Packet>, mut rx: Receiver<Packet>) {
+    let writer = tx.clone();
     let _ping_task = spawn(async move {
-        for _i in 0..10 {
-            n0_future::time::sleep(Duration::from_secs_f32(1.5)).await;
+        for _i in 0..20 {
+            n0_future::time::sleep(Duration::from_secs_f32(0.25)).await;
             if _i == 0 {
-                writer
-                    .send((peer, b"hello friend!".to_vec().into()))
-                    .await
-                    .unwrap();
+                writer.send(b"hello friend!".to_vec().into()).await.unwrap();
             }
             writer
-                .send((
-                    peer,
+                .send(
                     format!("ping {}", get_timestamp())
                         .as_bytes()
                         .to_vec()
                         .into(),
-                ))
+                )
                 .await
                 .unwrap();
         }
     });
-    let mut writer = tx.clone();
+    let writer = tx.clone();
     let _pong_task = spawn(async move {
-        while let Ok((packet_peer, packet)) = rx.recv().await {
-            if packet_peer != peer {
-                continue;
-            }
+        while let Some(packet) = rx.recv().await {
             let message = String::from_utf8_lossy(&packet);
             if message.starts_with("ping") {
                 let ts = message.split(" ").nth(1).unwrap().parse::<u128>().unwrap();
                 let packet = format!("pong {}", ts).as_bytes().to_vec();
-                writer.send((peer, packet.into())).await.unwrap();
+                writer.send(packet.into()).await.unwrap();
             } else if message.starts_with("pong") {
                 let ts = message.split(" ").nth(1).unwrap().parse::<u128>().unwrap();
                 let now = get_timestamp();

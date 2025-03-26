@@ -495,6 +495,18 @@ impl WebRtcSocket {
     }
 }
 
+impl Stream for WebRtcSocket {
+    type Item = (PeerId, PeerState);
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        let mut peer_state_rx = Pin::new(&mut self.get_mut().peer_state_rx);
+        peer_state_rx.as_mut().poll_next(cx)
+    }
+}
+
 impl WebRtcSocket {
     // Todo: Disconnect from the peer, severing all communication channels.
     // pub fn disconnect(&mut self, peer: PeerId) {}

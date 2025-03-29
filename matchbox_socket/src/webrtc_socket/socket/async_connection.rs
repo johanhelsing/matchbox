@@ -1,17 +1,16 @@
-use crate::webrtc_socket::MatchboxDataChannel;
+use crate::webrtc_socket::{MatchboxDataChannel, PacketSendError};
 use crate::Packet;
 use futures::{Sink, Stream, StreamExt};
-use futures_channel::mpsc::{SendError, UnboundedReceiver};
+use futures_channel::mpsc::UnboundedReceiver;
 use matchbox_protocol::PeerId;
 use std::{pin::Pin, task::Poll};
 
 /// WebRTC connection
 ///
-/// `drop` to disconnect.
+/// `drop` to stop accepting new peers.
 pub struct Connection {
     id: PeerId,
     events: UnboundedReceiver<PeerConnectionEvent>,
-    // TODO: some private field used to own actual socket and disconnect
 }
 
 impl Connection {
@@ -73,35 +72,35 @@ pub enum SimpleWebRtcClosedReason {
 /// TODO: consider implementing ready threshold.
 pub struct DataChannelSink {
     channel: Box<dyn MatchboxDataChannel>,
-    buffer_low: UnboundedReceiver<()>,
 }
 
 impl Sink<Packet> for DataChannelSink {
-    type Error = SendError;
+    // TODO: consider translating this error type to something platform independent.
+    type Error = PacketSendError;
 
     fn poll_ready(
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        todo!()
+        Poll::Ready(Ok(()))
     }
 
-    fn start_send(self: Pin<&mut Self>, item: Packet) -> Result<(), Self::Error> {
-        todo!()
+    fn start_send(mut self: Pin<&mut Self>, item: Packet) -> Result<(), Self::Error> {
+        self.channel.send(item)
     }
 
     fn poll_flush(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        todo!()
+        self.channel.poll_buffer_low(cx)
     }
 
     fn poll_close(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        todo!()
+        self.channel.poll_close(cx)
     }
 }
 

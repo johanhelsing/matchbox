@@ -1,3 +1,19 @@
+//! A simple async API for communicating with match_box peers.
+//!
+//! This API is designed to be as simple as possible while exposing nearly all the possibly functionality.
+//! Once thing it chooses to not expose is access to a Peer before its channel connections are established.
+//!
+//! More opinionated APIs could be built on this which to provide a more restricted but simpler user experience.
+//!
+//! For example, an API wanting to simplify connection state could choose to close all channels if disconnected from the signaling server,
+//! and/or consider a peer disconnected if any of its channels are closed.
+//!
+//! Another simplified API could expose all incoming data over a single channel of `(PeerId, Connected | Disconnected | (ChannelIndex, Packet | BufferEmpty)))`
+//! And send via something like `send(PeerId, ChannelIndex, Packet) -> Result`
+//!
+//! TODO: provide an implementation of such an API on-top of this one.
+//! TODO: reimplement existing match_box socket synchronous API on-top of this, but with options to "take"/expose these underlying objects.
+
 use crate::webrtc_socket::{MatchboxDataChannel, PacketSendError};
 use crate::Packet;
 use futures::{Sink, Stream, StreamExt};

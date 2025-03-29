@@ -20,6 +20,8 @@ use tokio_util::{
     io::{CopyToBytes, SinkWriter},
 };
 
+mod async_connection;
+
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
 #[derive(Debug, Clone)]
@@ -179,18 +181,26 @@ impl WebRtcSocketBuilder {
         self
     }
 
+    fn validate(&self) {
+        assert!(
+            !self.config.channels.is_empty(),
+            "Must have added at least one channel"
+        );
+    }
+
+    /// Start connecting to the Signaler with this [SocketConfig].
+    pub fn build_async(self) -> impl Future<Output = async_connection::Connection> {
+        self.validate();
+        async { todo!() }
+    }
+
     /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] according to the
     /// configuration supplied.
     ///
     /// The returned [`MessageLoopFuture`] should be awaited in order for messages to be sent and
     /// received.
     pub fn build(self) -> (WebRtcSocket, MessageLoopFuture) {
-        assert!(
-            !self.config.channels.is_empty(),
-            "Must have added at least one channel"
-        );
-
-        let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
+        self.validate();
 
         let mut peer_messages_out_rx = Vec::with_capacity(self.config.channels.len());
         let mut messages_from_peers_tx = Vec::with_capacity(self.config.channels.len());

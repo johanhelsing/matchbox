@@ -108,6 +108,14 @@ struct HandshakeResult<D: PeerDataSender, M> {
     metadata: M,
 }
 
+/// A [RTCDataChannel](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel).
+/// A connection to a single peer for a single channel.
+///
+/// Inbound events are bound via [DataChannelEventReceiver].
+pub(crate) trait MatchboxDataChannel: PeerDataSender {
+    fn buffered_amount(&self) -> usize;
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 trait Messenger {

@@ -188,7 +188,7 @@ impl WebRtcSocketBuilder {
         );
     }
 
-    /// Start connecting to the Signaler with this [SocketConfig].
+    /// Start connecting to the Signaller with this [SocketConfig].
     pub fn build_async(self) -> impl Future<Output = async_connection::Connection> {
         self.validate();
         async { todo!() }

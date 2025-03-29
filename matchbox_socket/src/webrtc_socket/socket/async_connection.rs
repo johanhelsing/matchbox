@@ -7,13 +7,17 @@ use std::{pin::Pin, task::Poll};
 
 /// WebRTC connection
 ///
-/// `drop` to stop accepting new peers.
+/// `drop` to stop accepting new peers (and thus disconnect from the Signaller).
 pub struct Connection {
     id: PeerId,
-    events: UnboundedReceiver<PeerConnectionEvent>,
+    /// New Peers from the Signaller after all their channels have been established.
+    /// Closed when disconnected from Signaller.
+    events: UnboundedReceiver<Peer>,
 }
 
 impl Connection {
+    /// The unique id for this (local) Peer, as assigned by the Signaller.
+    /// Remote Peers receive a [Peer] whose [Peer::id] matches this to communicate with this one.
     pub fn id(&self) -> PeerId {
         self.id
     }
@@ -21,12 +25,14 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        todo!()
+        // This explicit drop implementation is likely unnecessary, but it makes the intended semantics more clear.
+        // When the Signaller sees `events` has been closed (which drop would do by default anyway), it can shutdown.
+        self.events.close();
     }
 }
 
 impl Stream for Connection {
-    type Item = PeerConnectionEvent;
+    type Item = Peer;
 
     fn poll_next(
         mut self: Pin<&mut Self>,
@@ -39,6 +45,8 @@ impl Stream for Connection {
 pub struct Peer {
     pub id: PeerId,
     pub channels: Box<[PeerDataChannel]>,
+
+    /// This (remote) peer has left the signaling server.
     pub left_signaling_server: futures_channel::oneshot::Receiver<()>,
 }
 
@@ -46,15 +54,6 @@ pub struct Peer {
 pub struct PeerDataChannel {
     pub sink: DataChannelSink,
     pub stream: DataChannelStream,
-}
-
-pub enum PeerConnectionEvent {
-    /// A new peer has connected.
-    /// It can now be taken or sent messages via the [SimpleWebRtc.tx]
-    PeerConnected(Peer),
-    /// A new peer has disconnected.
-    /// It can no longer be taken or sent messages via the [SimpleWebRtc.tx]
-    PeerDisconnected(PeerId),
 }
 
 pub enum SimpleWebRtcClosedReason {

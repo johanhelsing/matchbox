@@ -39,6 +39,7 @@ impl Stream for Connection {
 pub struct Peer {
     pub id: PeerId,
     pub channels: Box<[PeerDataChannel]>,
+    pub left_signaling_server: futures_channel::oneshot::Receiver<()>,
 }
 
 /// A [RTCDataChannel](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel).

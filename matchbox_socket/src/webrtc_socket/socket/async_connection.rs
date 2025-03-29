@@ -72,11 +72,6 @@ pub struct PeerDataChannel {
     pub stream: DataChannelStream,
 }
 
-pub enum SimpleWebRtcClosedReason {
-    Error(String),
-    Closed,
-}
-
 /// [Sink] which sends packets to a specific [Peer] over a specific channel.
 ///
 /// Sink is always ready for more data (buffer is unbounded).
@@ -96,7 +91,7 @@ impl Sink<Packet> for DataChannelSink {
 
     fn poll_ready(
         self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }

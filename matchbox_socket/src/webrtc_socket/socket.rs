@@ -201,6 +201,7 @@ impl WebRtcSocketBuilder {
     /// received.
     pub fn build(self) -> (WebRtcSocket, MessageLoopFuture) {
         self.validate();
+        let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
 
         let mut peer_messages_out_rx = Vec::with_capacity(self.config.channels.len());
         let mut messages_from_peers_tx = Vec::with_capacity(self.config.channels.len());

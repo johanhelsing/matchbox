@@ -98,7 +98,7 @@ pub struct PacketSendError {
     source: error::JsError,
 }
 
-trait PeerDataSender {
+pub(crate) trait PeerDataSender {
     fn send(&mut self, packet: Packet) -> Result<(), PacketSendError>;
 }
 

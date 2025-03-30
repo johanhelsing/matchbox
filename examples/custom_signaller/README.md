@@ -5,6 +5,13 @@ Shows how to use `matchbox_socket` in a simple example.
 ## Instructions
 
 - No need for matchbox server; signaling will be done through Iroh P2P Network
+- extra dependencies: clang
+
+        Windows:  https://github.com/llvm/llvm-project/releases,  LLVM-20.1.1-win64.exe , check "add to path for all users"
+        Linux:    sudo apt install clang
+        MacOS:    brew install llvm
+        
+
 - Run the demo
   - [on Native](#run-on-native)
   - [on WASM](#run-on-wasm)

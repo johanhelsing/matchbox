@@ -15,6 +15,7 @@ use futures_channel::mpsc::{SendError, TrySendError, UnboundedReceiver, Unbounde
 use log::{debug, error};
 use matchbox_protocol::PeerId;
 use std::{collections::HashMap, future::ready, pin::Pin, task::Poll, time::Duration};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio_util::{
     compat::TokioAsyncWriteCompatExt,
     io::{CopyToBytes, SinkWriter},
@@ -697,6 +698,7 @@ impl WebRtcSocket {
         self.take_channel(pos)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Converts the [`WebRtcChannel`] of a given [`PeerId`] into a [`RawPeerChannel`].
     pub fn take_raw_by_id(
         &mut self,
@@ -836,6 +838,7 @@ async fn run_socket(
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn compat_read_write(
     remote: PeerId,
     stream: UnboundedReceiver<(PeerId, Packet)>,

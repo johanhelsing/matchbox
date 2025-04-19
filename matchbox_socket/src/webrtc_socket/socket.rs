@@ -747,7 +747,7 @@ impl WebRtcSocket {
     pub fn take_raw_by_id(
         &mut self,
         remote: PeerId,
-    ) -> Result<RawPeerChannel<impl AsyncRead, impl AsyncWrite>, ChannelError> {
+    ) -> Result<RawPeerChannel<impl AsyncRead + use<>, impl AsyncWrite + use<>>, ChannelError> {
         let channel = self.take_channel_by_id(remote)?;
         let id = self.id();
 
@@ -784,7 +784,7 @@ pub(crate) fn create_data_channels_ready_fut(
     channel_configs: &[ChannelConfig],
 ) -> (
     Vec<futures_channel::mpsc::Sender<()>>,
-    Pin<Box<Fuse<impl Future<Output = ()>>>>,
+    Pin<Box<Fuse<impl Future<Output = ()> + use<>>>>,
 ) {
     let (senders, receivers) = (0..channel_configs.len())
         .map(|_| futures_channel::mpsc::channel(1))

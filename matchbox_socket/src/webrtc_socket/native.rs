@@ -338,12 +338,12 @@ fn new_senders_and_receivers<T>(
         .unzip()
 }
 
-async fn complete_handshake(
+async fn complete_handshake<T: Future<Output = ()>>(
     trickle: Arc<CandidateTrickle>,
     connection: &Arc<RTCPeerConnection>,
     peer_signal_rx: UnboundedReceiver<PeerSignal>,
-    mut wait_for_channels: Pin<Box<Fuse<impl Future<Output = ()>>>>,
-) -> Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>>>>> {
+    mut wait_for_channels: Pin<Box<Fuse<T>>>,
+) -> Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>> + use<T>>>> {
     trickle.send_pending_candidates().await;
     let mut trickle_fut = Box::pin(
         CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), peer_signal_rx)

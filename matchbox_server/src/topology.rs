@@ -98,10 +98,23 @@ impl SignalingTopology<NoCallbacks, ServerState> for MatchmakingDemoTopology {
                 .filter(|other_id| *other_id != peer_id);
             // Tell each connected peer about the disconnected peer.
             let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer.uuid).to_string());
-            for peer_id in other_peers {
-                match state.try_send(peer_id, event.clone()) {
-                    Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
-                    Err(e) => error!("Failure sending peer remove: {e:?}"),
+
+            //Check if the peer was matched by next?
+            let matcheds = state.remove_matched_peer(peer_id);
+            if !matcheds.is_empty() {
+                //Those where matched by next?
+                for matched in matcheds {
+                    match state.try_send(matched, event.clone()) {
+                        Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
+                        Err(e) => error!("Failure sending peer remove: {e:?}"),
+                    }
+                }
+            } else {
+                for peer_id in other_peers {
+                    match state.try_send(peer_id, event.clone()) {
+                        Ok(()) => info!("Sent peer remove to: {:?}", peer_id),
+                        Err(e) => error!("Failure sending peer remove: {e:?}"),
+                    }
                 }
             }
         }

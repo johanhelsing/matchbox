@@ -61,7 +61,7 @@ async fn signaling_loop<S: Signaller>(
             request = requests_receiver.next().fuse() => {
                 let request = serde_json::to_string(&request).expect("serializing request");
                 debug!("-> {request}");
-                signaller.send(request).await.map_err(SignalingError::from)?;
+                signaller.send(request).await?;
             }
 
             message = signaller.next_message().fuse() => {

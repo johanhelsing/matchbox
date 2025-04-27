@@ -29,7 +29,7 @@ signaling = [
 ]
 
 [dependencies]
-bevy = { version = "0.15", default-features = false }
+bevy = { version = "0.16", default-features = false }
 matchbox_socket = { version = "0.11", path = "../matchbox_socket" }
 cfg-if = "1.0"
 
@@ -38,11 +38,12 @@ matchbox_signaling = { version = "0.11", path = "../matchbox_signaling", optiona
 async-compat = { version = "0.2", optional = true }
 
 [dev-dependencies]
-bevy = { version = "0.15", default-features = false, features = [
+bevy = { version = "0.16", default-features = false, features = [
   "bevy_winit",
   "bevy_window",
   "bevy_render",
   "bevy_pbr",
+  "bevy_log",
   "bevy_core_pipeline",
   "bevy_ui",
   "bevy_text",

@@ -1,8 +1,9 @@
 //! Sends messages periodically to all connected peers (or host if connected in
 //! a client server topology).
 
-use bevy::{prelude::*, time::common_conditions::on_timer, utils::Duration};
+use bevy::{prelude::*, time::common_conditions::on_timer};
 use bevy_matchbox::prelude::*;
+use core::time::Duration;
 
 const CHANNEL_ID: usize = 0;
 

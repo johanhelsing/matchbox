@@ -8,8 +8,9 @@
 //! bevy_matchbox = { version = "0.x", features = ["signaling"] }
 //! ```
 
-use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, utils::Duration};
+use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*};
 use bevy_matchbox::{matchbox_signaling::SignalingServer, prelude::*};
+use core::time::Duration;
 use std::net::{Ipv4Addr, SocketAddrV4};
 
 fn main() {

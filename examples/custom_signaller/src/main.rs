@@ -41,9 +41,6 @@ fn main() {
     console_error_panic_hook::set_once();
     let _ = set_global_default(reg);
 
-    // use tracing_log::LogTracer;
-    // LogTracer::init().unwrap();
-
     use custom_signaller::get_browser_url::get_browser_url_hash;
     wasm_bindgen_futures::spawn_local(async_main(get_browser_url_hash()));
 }

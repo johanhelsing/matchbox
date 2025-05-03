@@ -47,7 +47,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run cargo check
-        run: RUSTFLAGS='--cfg=web_sys_unstable_apis --cfg=getrandom_backend="wasm_js"' cargo check >
+        run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo check >
           --all-targets
           --target wasm32-unknown-unknown
           -p matchbox_socket

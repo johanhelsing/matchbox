@@ -55,7 +55,7 @@ pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
 ///
 /// The Signaller is responsible for passing around
 /// [WebRTC signals](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Signaling_and_video_calling#the_signaling_server)
-///  between room peers, encoded as [PeerEvent::Signal] which holds a [PeerSignal].
+/// between room peers, encoded as [PeerEvent::Signal] which holds a [PeerSignal].
 ///
 /// It is also responsible for notifying each peer of the following special events:
 ///

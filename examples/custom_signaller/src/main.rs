@@ -85,13 +85,11 @@ async fn async_main(node_id: Option<String>) {
                     let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
                     socket.channel_mut(CHANNEL_ID).send(packet, peer);
 
-                    for _i in 0..3 {
-                        let packet = format!("ping {}", custom_signaller::get_timestamp())
-                            .as_bytes()
-                            .to_vec()
-                            .into_boxed_slice();
-                        socket.channel_mut(CHANNEL_ID).send(packet, peer);
-                    }
+                    let packet = format!("ping {}", custom_signaller::get_timestamp())
+                        .as_bytes()
+                        .to_vec()
+                        .into_boxed_slice();
+                    socket.channel_mut(CHANNEL_ID).send(packet, peer);
                 }
                 PeerState::Disconnected => {
                     info!("Peer left: {peer}");

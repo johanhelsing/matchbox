@@ -1,4 +1,7 @@
-use super::{HandshakeResult, PacketSendError, PeerDataSender};
+use super::{
+    messages::{PeerEvent, PeerRequest},
+    HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder,
+};
 use crate::{
     webrtc_socket::{
         error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
@@ -42,11 +45,18 @@ pub(crate) struct NativeSignaller {
     websocket_stream: WebSocketStream<ConnectStream>,
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct NativeSignallerBuilder;
+
 #[async_trait]
-impl Signaller for NativeSignaller {
-    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignalingError> {
+impl SignallerBuilder for NativeSignallerBuilder {
+    async fn new_signaller(
+        &self,
+        mut attempts: Option<u16>,
+        room_url: String,
+    ) -> Result<Box<dyn Signaller>, SignalingError> {
         let websocket_stream = 'signaling: loop {
-            match connect_async(room_url).await.map_err(SignalingError::from) {
+            match connect_async(&room_url).await.map_err(SignalingError::from) {
                 Ok((wss, _)) => break wss,
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {
@@ -66,23 +76,32 @@ impl Signaller for NativeSignaller {
                 }
             };
         };
-        Ok(Self { websocket_stream })
+        Ok(Box::new(NativeSignaller { websocket_stream }))
     }
+}
 
-    async fn send(&mut self, request: String) -> Result<(), SignalingError> {
+#[async_trait]
+impl Signaller for NativeSignaller {
+    async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
+        let request = serde_json::to_string(&request).expect("serializing request");
         self.websocket_stream
             .send(Message::Text(request))
             .await
             .map_err(SignalingError::from)
     }
 
-    async fn next_message(&mut self) -> Result<String, SignalingError> {
-        match self.websocket_stream.next().await {
+    async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
+        let message = match self.websocket_stream.next().await {
             Some(Ok(Message::Text(message))) => Ok(message),
             Some(Ok(_)) => Err(SignalingError::UnknownFormat),
             Some(Err(err)) => Err(SignalingError::from(err)),
             None => Err(SignalingError::StreamExhausted),
-        }
+        }?;
+        let message = serde_json::from_str(&message).map_err(|e| {
+            error!("failed to deserialize message: {e:?}");
+            SignalingError::UnknownFormat
+        })?;
+        Ok(message)
     }
 }
 

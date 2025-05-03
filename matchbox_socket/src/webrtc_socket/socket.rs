@@ -1,8 +1,11 @@
-use super::error::{ChannelError, SignalingError};
+use super::{
+    error::{ChannelError, SignalingError},
+    SignallerBuilder,
+};
 use crate::{
     webrtc_socket::{
         message_loop, signaling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
-        UseMessenger, UseSignaller,
+        UseMessenger, UseSignallerBuilder,
     },
     Error,
 };
@@ -14,7 +17,7 @@ use futures::{
 use futures_channel::mpsc::{SendError, TrySendError, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
-use std::{collections::HashMap, future::ready, pin::Pin, task::Poll, time::Duration};
+use std::{collections::HashMap, future::ready, pin::Pin, sync::Arc, task::Poll, time::Duration};
 use tokio_util::{
     compat::TokioAsyncWriteCompatExt,
     io::{CopyToBytes, SinkWriter},
@@ -113,6 +116,7 @@ pub(crate) struct SocketConfig {
 #[derive(Debug, Clone)]
 pub struct WebRtcSocketBuilder {
     pub(crate) config: SocketConfig,
+    pub(crate) signaller_builder: Option<Arc<dyn SignallerBuilder>>,
 }
 
 impl WebRtcSocketBuilder {
@@ -130,6 +134,7 @@ impl WebRtcSocketBuilder {
                 attempts: Some(3),
                 keep_alive_interval: Some(Duration::from_secs(10)),
             },
+            signaller_builder: None,
         }
     }
 
@@ -179,6 +184,12 @@ impl WebRtcSocketBuilder {
         self
     }
 
+    /// Sets an alternative signalling implementation for this [`WebRtcSocket`].
+    pub fn signaller_builder(mut self, signaller_builder: Arc<dyn SignallerBuilder>) -> Self {
+        self.signaller_builder = Some(signaller_builder);
+        self
+    }
+
     /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] according to the
     /// configuration supplied.
     ///
@@ -210,8 +221,12 @@ impl WebRtcSocketBuilder {
         }
 
         let (id_tx, id_rx) = futures_channel::oneshot::channel();
+        let signaller_builder = self
+            .signaller_builder
+            .unwrap_or_else(|| Arc::new(UseSignallerBuilder::default()));
 
         let socket_fut = run_socket(
+            signaller_builder,
             id_tx,
             self.config,
             peer_messages_out_rx,
@@ -224,6 +239,7 @@ impl WebRtcSocketBuilder {
                 SignalingError::UndeliverableSignal(e) => Error::Disconnected(e.into()),
                 SignalingError::NegotiationFailed(e) => Error::ConnectionFailed(*e),
                 SignalingError::WebSocket(e) => Error::Disconnected(e.into()),
+                SignalingError::UserImplementationError(_) => Error::ConnectionFailed(e),
                 SignalingError::UnknownFormat | SignalingError::StreamExhausted => {
                     unimplemented!("these errors should never be propagated here")
                 }
@@ -765,6 +781,7 @@ pub struct MessageLoopChannels {
 }
 
 async fn run_socket(
+    builder: Arc<dyn SignallerBuilder>,
     id_tx: futures_channel::oneshot::Sender<PeerId>,
     config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
@@ -776,7 +793,8 @@ async fn run_socket(
     let (requests_sender, requests_receiver) = futures_channel::mpsc::unbounded::<PeerRequest>();
     let (events_sender, events_receiver) = futures_channel::mpsc::unbounded::<PeerEvent>();
 
-    let signaling_loop_fut = signaling_loop::<UseSignaller>(
+    let signaling_loop_fut = signaling_loop(
+        builder,
         config.attempts,
         config.room_url,
         requests_receiver,

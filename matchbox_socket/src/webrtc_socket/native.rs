@@ -97,8 +97,10 @@ impl Signaller for NativeSignaller {
             Some(Err(err)) => Err(SignalingError::from(err)),
             None => Err(SignalingError::StreamExhausted),
         }?;
-        let message = serde_json::from_str(&message)
-            .map_err(|e| SignalingError::UserImplementationError(e.to_string()))?;
+        let message = serde_json::from_str(&message).map_err(|e| {
+            error!("failed to deserialize message: {e:?}");
+            SignalingError::UnknownFormat
+        })?;
         Ok(message)
     }
 }

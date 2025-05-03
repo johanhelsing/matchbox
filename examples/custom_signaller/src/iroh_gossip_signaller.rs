@@ -8,7 +8,7 @@ use iroh_gossip::{
     proto::TopicId,
 };
 use matchbox_socket::{
-    async_trait::async_trait, error::SignalingError, PeerEvent, PeerId, PeerRequest, PeerSignal,
+    async_trait::async_trait, PeerEvent, PeerId, PeerRequest, PeerSignal, SignalingError,
     Signaller, SignallerBuilder,
 };
 use n0_future::StreamExt;

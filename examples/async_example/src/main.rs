@@ -50,6 +50,7 @@ async fn async_main() {
 
     let (tx0, rx0) = socket.take_channel(CHANNEL_ID).unwrap().split();
 
+    #[allow(clippy::type_complexity)]
     let tasks: Arc<
         RwLock<
             BTreeMap<

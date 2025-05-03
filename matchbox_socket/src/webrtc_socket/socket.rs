@@ -289,6 +289,7 @@ pub struct WebRtcChannel {
 impl WebRtcChannel {
     /// Split the channel into a reader and writer.
     /// Useful for concurrently sending and receiving messages using async code.
+    #[allow(clippy::type_complexity)]
     pub fn split(
         self,
     ) -> (

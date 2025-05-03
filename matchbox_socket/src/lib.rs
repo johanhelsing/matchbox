@@ -2,13 +2,13 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
-pub mod error;
+mod error;
 #[cfg(feature = "ggrs")]
 mod ggrs_socket;
 mod webrtc_socket;
 
 pub use async_trait;
-pub use error::Error;
+pub use error::{Error, SignalingError};
 pub use matchbox_protocol::PeerId;
 pub use webrtc_socket::{
     error::ChannelError, ChannelConfig, MessageLoopFuture, Packet, PeerEvent, PeerRequest,

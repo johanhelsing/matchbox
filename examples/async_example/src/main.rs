@@ -116,7 +116,7 @@ async fn async_main() {
 
 async fn socket_task(peer: PeerId, tx: Sender<Packet>, mut rx: Receiver<Packet>) {
     let writer = tx.clone();
-    let _ping_task = spawn(async move {
+    let ping_task = spawn(async move {
         for _i in 0..20 {
             n0_future::time::sleep(Duration::from_secs_f32(0.25)).await;
             if _i == 0 {
@@ -134,7 +134,7 @@ async fn socket_task(peer: PeerId, tx: Sender<Packet>, mut rx: Receiver<Packet>)
         }
     });
     let writer = tx.clone();
-    let _pong_task = spawn(async move {
+    let pong_task = spawn(async move {
         while let Some(packet) = rx.recv().await {
             let message = String::from_utf8_lossy(&packet);
             if message.starts_with("ping") {
@@ -151,6 +151,6 @@ async fn socket_task(peer: PeerId, tx: Sender<Packet>, mut rx: Receiver<Packet>)
             }
         }
     });
-    _ping_task.await.unwrap();
-    _pong_task.await.unwrap();
+    ping_task.await.unwrap();
+    pong_task.await.unwrap();
 }

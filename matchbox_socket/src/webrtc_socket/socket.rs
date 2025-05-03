@@ -287,6 +287,24 @@ pub struct WebRtcChannel {
 }
 
 impl WebRtcChannel {
+    /// Split the channel into a reader and writer.
+    /// Useful for concurrently sending and receiving messages using async code.
+    #[allow(clippy::type_complexity)]
+    pub fn split(
+        self,
+    ) -> (
+        UnboundedSender<(PeerId, Packet)>,
+        UnboundedReceiver<(PeerId, Packet)>,
+    ) {
+        (self.tx, self.rx)
+    }
+
+    /// Clone a sender for this channel.
+    /// Useful for sending messages to the same channel from multiple threads/async tasks.
+    pub fn sender_clone(&self) -> UnboundedSender<(PeerId, Packet)> {
+        self.tx.clone()
+    }
+
     /// Returns the [`ChannelConfig`] used to create this channel.
     pub fn config(&self) -> &ChannelConfig {
         &self.config
@@ -491,6 +509,18 @@ impl WebRtcSocket {
         WebRtcSocketBuilder::new(room_url)
             .add_channel(ChannelConfig::reliable())
             .build()
+    }
+}
+
+impl Stream for WebRtcSocket {
+    type Item = (PeerId, PeerState);
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        let mut peer_state_rx = Pin::new(&mut self.get_mut().peer_state_rx);
+        peer_state_rx.as_mut().poll_next(cx)
     }
 }
 

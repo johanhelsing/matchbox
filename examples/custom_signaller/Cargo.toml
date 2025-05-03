@@ -22,7 +22,6 @@ js-sys = "0.3.77"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing = { version = "0.1" }
 
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "1.0"

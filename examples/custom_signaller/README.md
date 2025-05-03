@@ -1,6 +1,7 @@
-# Simple Example
+# Custom signaller example
 
-Shows how to use `matchbox_socket` in a simple example.
+Shows how to use `matchbox_socket` with a custom signaller implementation; In
+this case, the iroh p2p network.
 
 ## Instructions
 

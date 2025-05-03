@@ -4,10 +4,10 @@ mod signal_peer;
 mod socket;
 
 use self::error::SignalingError;
-use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
+use crate::{Error, webrtc_socket::signal_peer::SignalPeer};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
-use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, StreamExt};
+use futures::{Future, FutureExt, StreamExt, future::Either, stream::FuturesUnordered};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;

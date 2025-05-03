@@ -1,26 +1,26 @@
 use super::{
-    messages::{PeerEvent, PeerRequest},
     HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder,
+    messages::{PeerEvent, PeerRequest},
 };
 use crate::{
-    webrtc_socket::{
-        error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
-        socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, Signaller,
-    },
     RtcIceServerConfig,
+    webrtc_socket::{
+        ChannelConfig, Messenger, Packet, Signaller, error::SignalingError, messages::PeerSignal,
+        signal_peer::SignalPeer, socket::create_data_channels_ready_fut,
+    },
 };
 use async_compat::CompatExt;
 use async_trait::async_trait;
 use async_tungstenite::{
-    async_std::{connect_async, ConnectStream},
-    tungstenite::Message,
     WebSocketStream,
+    async_std::{ConnectStream, connect_async},
+    tungstenite::Message,
 };
 use bytes::Bytes;
 use futures::{
+    Future, FutureExt, StreamExt,
     future::{Fuse, FusedFuture},
     stream::FuturesUnordered,
-    Future, FutureExt, StreamExt,
 };
 use futures_channel::mpsc::{Receiver, Sender, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
@@ -30,14 +30,14 @@ use matchbox_protocol::PeerId;
 use std::{pin::Pin, sync::Arc, time::Duration};
 use webrtc::{
     api::APIBuilder,
-    data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
+    data_channel::{RTCDataChannel, data_channel_init::RTCDataChannelInit},
     ice_transport::{
         ice_candidate::{RTCIceCandidate, RTCIceCandidateInit},
         ice_server::RTCIceServer,
     },
     peer_connection::{
-        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
-        RTCPeerConnection,
+        RTCPeerConnection, configuration::RTCConfiguration,
+        sdp::session_description::RTCSessionDescription,
     },
 };
 
@@ -64,7 +64,9 @@ impl SignallerBuilder for NativeSignallerBuilder {
                             return Err(SignalingError::NegotiationFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
-                            warn!("connection to signaling server failed, {attempts} attempt(s) remain");
+                            warn!(
+                                "connection to signaling server failed, {attempts} attempt(s) remain"
+                            );
                             warn!("waiting 3 seconds to re-try connection...");
                             Delay::new(Duration::from_secs(3)).await;
                             info!("retrying connection...");
@@ -428,7 +430,9 @@ impl CandidateTrickle {
                         }
                         Err(err) => {
                             if *candidate_json == *"null" {
-                                debug!("Received null ice candidate, this means there are no further ice candidates");
+                                debug!(
+                                    "Received null ice candidate, this means there are no further ice candidates"
+                                );
                             } else {
                                 warn!("failed to parse ice candidate json, ignoring: {err:?}");
                             }

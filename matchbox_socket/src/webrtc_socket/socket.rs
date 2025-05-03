@@ -1,18 +1,18 @@
 use super::{
-    error::{ChannelError, SignalingError},
     SignallerBuilder,
+    error::{ChannelError, SignalingError},
 };
 use crate::{
-    webrtc_socket::{
-        message_loop, signaling_loop, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
-        UseMessenger, UseSignallerBuilder,
-    },
     Error,
+    webrtc_socket::{
+        MessageLoopFuture, Packet, PeerEvent, PeerRequest, UseMessenger, UseSignallerBuilder,
+        message_loop, signaling_loop,
+    },
 };
 use bytes::Bytes;
 use futures::{
-    future::Fuse, select, AsyncRead, AsyncWrite, Future, FutureExt, Sink, SinkExt, Stream,
-    StreamExt, TryStreamExt,
+    AsyncRead, AsyncWrite, Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryStreamExt,
+    future::Fuse, select,
 };
 use futures_channel::mpsc::{SendError, TrySendError, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};

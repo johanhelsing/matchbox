@@ -5,7 +5,7 @@ use crate::{
         full_mesh::{FullMesh, FullMeshCallbacks, FullMeshState},
     },
 };
-use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router};
+use axum::{Router, extract::connect_info::IntoMakeServiceWithConnectInfo};
 use std::net::{SocketAddr, TcpListener};
 use tokio::net as tokio;
 

@@ -1,5 +1,5 @@
 use bevy::{log::LogPlugin, prelude::*};
-use bevy_ggrs::{ggrs::SessionBuilder, GgrsApp, GgrsPlugin, GgrsSchedule, ReadInputs, Session};
+use bevy_ggrs::{GgrsApp, GgrsPlugin, GgrsSchedule, ReadInputs, Session, ggrs::SessionBuilder};
 use bevy_matchbox::prelude::*;
 
 mod args;

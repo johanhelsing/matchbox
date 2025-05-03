@@ -11,7 +11,7 @@ pub use async_trait;
 pub use error::{Error, SignalingError};
 pub use matchbox_protocol::PeerId;
 pub use webrtc_socket::{
-    error::ChannelError, ChannelConfig, MessageLoopFuture, Packet, PeerEvent, PeerRequest,
-    PeerSignal, PeerState, RtcIceServerConfig, Signaller, SignallerBuilder, WebRtcChannel,
-    WebRtcSocket, WebRtcSocketBuilder,
+    ChannelConfig, MessageLoopFuture, Packet, PeerEvent, PeerRequest, PeerSignal, PeerState,
+    RtcIceServerConfig, Signaller, SignallerBuilder, WebRtcChannel, WebRtcSocket,
+    WebRtcSocketBuilder, error::ChannelError,
 };

@@ -1,8 +1,8 @@
 use crate::signaling_server::{
-    handlers::WsStateMeta, NoCallbacks, NoState, SignalingCallbacks, SignalingState,
+    NoCallbacks, NoState, SignalingCallbacks, SignalingState, handlers::WsStateMeta,
 };
 use async_trait::async_trait;
-use futures::{future::BoxFuture, Future};
+use futures::{Future, future::BoxFuture};
 use std::sync::Arc;
 
 /// An implementation of a client server topolgy
@@ -53,7 +53,7 @@ where
 pub mod common_logic {
     use crate::signaling_server::error::{ClientRequestError, SignalingError};
     use axum::extract::ws::{Message, WebSocket};
-    use futures::{stream::SplitSink, StreamExt};
+    use futures::{StreamExt, stream::SplitSink};
     use matchbox_protocol::JsonPeerRequest;
     use std::{
         str::FromStr,

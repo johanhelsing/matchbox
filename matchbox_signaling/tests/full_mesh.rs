@@ -9,7 +9,7 @@ mod tests {
         net::TcpStream,
         sync::mpsc::{error::TryRecvError, unbounded_channel},
     };
-    use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
+    use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 
     // Helper to take the next PeerEvent from a stream
     async fn recv_peer_event(

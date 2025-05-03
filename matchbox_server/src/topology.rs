@@ -4,7 +4,7 @@ use axum::extract::ws::Message;
 use futures::StreamExt;
 use matchbox_protocol::{JsonPeerEvent, PeerRequest};
 use matchbox_signaling::{
-    common_logic::parse_request, ClientRequestError, NoCallbacks, SignalingTopology, WsStateMeta,
+    ClientRequestError, NoCallbacks, SignalingTopology, WsStateMeta, common_logic::parse_request,
 };
 use tracing::{error, info, warn};
 
@@ -125,15 +125,15 @@ impl SignalingTopology<NoCallbacks, ServerState> for MatchmakingDemoTopology {
 mod tests {
     use super::MatchmakingDemoTopology;
     use crate::{
-        state::{RequestedRoom, RoomId},
         ServerState,
+        state::{RequestedRoom, RoomId},
     };
-    use futures::{pin_mut, SinkExt, StreamExt};
+    use futures::{SinkExt, StreamExt, pin_mut};
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signaling::{SignalingServer, SignalingServerBuilder};
     use std::{net::Ipv4Addr, str::FromStr, time::Duration};
     use tokio::{net::TcpStream, select, time};
-    use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
+    use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 
     fn app() -> SignalingServer {
         let mut state = ServerState::default();

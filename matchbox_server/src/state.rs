@@ -1,8 +1,8 @@
-use axum::{extract::ws::Message, Error};
+use axum::{Error, extract::ws::Message};
 use matchbox_protocol::PeerId;
 use matchbox_signaling::{
-    common_logic::{self, StateObj},
     SignalingError, SignalingState,
+    common_logic::{self, StateObj},
 };
 use serde::Deserialize;
 use std::{

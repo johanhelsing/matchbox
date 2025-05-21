@@ -1124,7 +1124,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_matchbox"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-compat",
  "bevy",
@@ -4316,7 +4316,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_protocol"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "cfg-if",
  "derive_more 2.0.1",
@@ -4327,7 +4327,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_server"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -4349,7 +4349,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_signaling"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -4370,7 +4370,7 @@ dependencies = [
 
 [[package]]
 name = "matchbox_socket"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-compat",
  "async-trait",

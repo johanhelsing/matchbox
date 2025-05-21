@@ -1,6 +1,6 @@
 [package]
 name = "bevy_matchbox"
-version = "0.11.0"
+version = "0.12.0"
 authors = [
   "Johan Helsing <johanhelsing@gmail.com>",
   "Garry O'Donnell <garry.euan.odonnell@ntlworld.com",
@@ -30,11 +30,11 @@ signaling = [
 
 [dependencies]
 bevy = { version = "0.16", default-features = false }
-matchbox_socket = { version = "0.11", path = "../matchbox_socket" }
+matchbox_socket = { version = "0.12", path = "../matchbox_socket" }
 cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-matchbox_signaling = { version = "0.11", path = "../matchbox_signaling", optional = true }
+matchbox_signaling = { version = "0.12", path = "../matchbox_signaling", optional = true }
 async-compat = { version = "0.2", optional = true }
 
 [dev-dependencies]

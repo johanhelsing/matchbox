@@ -1,6 +1,6 @@
 [package]
 name = "matchbox_protocol"
-version = "0.11.0"
+version = "0.12.0"
 authors = [
   "Johan Helsing <johanhelsing@gmail.com>",
   "Spencer C. Imbleau <spencer@imbleau.com>",

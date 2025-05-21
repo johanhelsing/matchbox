@@ -1,7 +1,6 @@
 use async_compat::CompatExt;
 use bevy::{
-    ecs::world::Command,
-    prelude::{Commands, Resource},
+    prelude::{Command, Commands, Resource},
     tasks::{IoTaskPool, Task},
 };
 pub use matchbox_signaling;

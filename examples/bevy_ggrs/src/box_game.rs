@@ -1,8 +1,5 @@
-use bevy::{prelude::*, utils::HashMap};
-use bevy_ggrs::{
-    AddRollbackCommandExtension, GgrsConfig, LocalInputs, LocalPlayers, PlayerInputs, Rollback,
-    Session,
-};
+use bevy::{platform::collections::HashMap, prelude::*};
+use bevy_ggrs::{LocalInputs, LocalPlayers, prelude::*};
 use bevy_matchbox::prelude::PeerId;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;

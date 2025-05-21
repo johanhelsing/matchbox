@@ -57,7 +57,6 @@ impl ServerState {
 
     /// Remove the waiting peer, returning the peer's requested room
     pub fn remove_waiting_peer(&mut self, peer_id: PeerId) -> RequestedRoom {
-        
         {
             let mut lock = self.clients_in_queue.lock().unwrap();
             lock.remove(&peer_id).expect("waiting peer")

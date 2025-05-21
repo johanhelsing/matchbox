@@ -1,5 +1,5 @@
 use bevy::{log::LogPlugin, prelude::*};
-use bevy_ggrs::{GgrsApp, GgrsPlugin, GgrsSchedule, ReadInputs, Session, ggrs::SessionBuilder};
+use bevy_ggrs::prelude::*;
 use bevy_matchbox::prelude::*;
 
 mod args;
@@ -116,7 +116,7 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
     for e in query.iter() {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).despawn();
     }
 }
 

@@ -80,7 +80,7 @@ async-tungstenite = { version = "0.28", default-features = false, features = [
   "async-std-runtime",
   "async-tls",
 ] }
-webrtc = { version = "0.12", default-features = false }
+webrtc = { version = "0.13", default-features = false }
 async-compat = { version = "0.2", default-features = false }
 
 [dev-dependencies]

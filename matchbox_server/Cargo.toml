@@ -2,7 +2,7 @@
 name = "matchbox_server"
 version = "0.11.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
-edition = "2021"
+edition = "2024"
 description = "A signaling server for WebRTC peer-to-peer full-mesh networking"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]

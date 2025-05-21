@@ -1,19 +1,19 @@
 use crate::{
+    SignalingCallbacks, SignalingServer, SignalingState,
     signaling_server::{
-        callbacks::{Callback, SharedCallbacks},
-        handlers::{ws_handler, WsUpgradeMeta},
         NoCallbacks, NoState,
+        callbacks::{Callback, SharedCallbacks},
+        handlers::{WsUpgradeMeta, ws_handler},
     },
     topologies::{SignalingStateMachine, SignalingTopology},
-    SignalingCallbacks, SignalingServer, SignalingState,
 };
-use axum::{response::Response, routing::get, Extension, Router};
+use axum::{Extension, Router, response::Response, routing::get};
 use matchbox_protocol::PeerId;
 use std::{convert::identity, net::SocketAddr};
 use tower_http::{
+    LatencyUnit,
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
-    LatencyUnit,
 };
 use tracing::Level;
 

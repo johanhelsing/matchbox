@@ -6,7 +6,7 @@ authors = [
   "Spencer C. Imbleau <spencer@imbleau.com>",
 ]
 description = "Common interfaces between matchbox_socket and matchbox_server"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
 categories = [
@@ -26,7 +26,10 @@ json = ["dep:serde_json"]
 cfg-if = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "1.4", features = ["serde"] }
-derive_more = { version = "1.0", features = ["display", "from"] }
+derive_more = { version = "2.0", features = ["display", "from"] }
 
 # JSON feature
 serde_json = { version = "1.0", default-features = false, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { version = "1.4", features = ["js"] }

@@ -1,8 +1,8 @@
-use axum::{extract::ws::Message, Error};
+use axum::{Error, extract::ws::Message};
 use matchbox_protocol::PeerId;
 use matchbox_signaling::{
-    common_logic::{self, StateObj},
     SignalingError, SignalingState,
+    common_logic::{self, StateObj},
 };
 use serde::Deserialize;
 use std::{
@@ -57,11 +57,10 @@ impl ServerState {
 
     /// Remove the waiting peer, returning the peer's requested room
     pub fn remove_waiting_peer(&mut self, peer_id: PeerId) -> RequestedRoom {
-        let room = {
+        {
             let mut lock = self.clients_in_queue.lock().unwrap();
             lock.remove(&peer_id).expect("waiting peer")
-        };
-        room
+        }
     }
 
     /// Add a peer, returning the peers already in room

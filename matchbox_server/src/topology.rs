@@ -4,7 +4,7 @@ use axum::extract::ws::Message;
 use futures::StreamExt;
 use matchbox_protocol::{JsonPeerEvent, PeerRequest};
 use matchbox_signaling::{
-    common_logic::parse_request, ClientRequestError, NoCallbacks, SignalingTopology, WsStateMeta,
+    ClientRequestError, NoCallbacks, SignalingTopology, WsStateMeta, common_logic::parse_request,
 };
 use tracing::{error, info, warn};
 
@@ -32,7 +32,7 @@ impl SignalingTopology<NoCallbacks, ServerState> for MatchmakingDemoTopology {
         // Tell other waiting peers about me!
         let peers = state.add_peer(peer);
         let event_text = JsonPeerEvent::NewPeer(peer_id).to_string();
-        let event = Message::Text(event_text.clone());
+        let event = Message::Text((&event_text).into());
         for peer_id in peers {
             if let Err(e) = state.try_send(peer_id, event.clone()) {
                 error!("error sending to {peer_id:?}: {e:?}");
@@ -71,7 +71,8 @@ impl SignalingTopology<NoCallbacks, ServerState> for MatchmakingDemoTopology {
                             sender: peer_id,
                             data,
                         }
-                        .to_string(),
+                        .to_string()
+                        .into(),
                     );
                     if let Some(peer) = state.get_peer(&receiver) {
                         if let Err(e) = peer.sender.send(Ok(event)) {
@@ -97,7 +98,11 @@ impl SignalingTopology<NoCallbacks, ServerState> for MatchmakingDemoTopology {
                 .into_iter()
                 .filter(|other_id| *other_id != peer_id);
             // Tell each connected peer about the disconnected peer.
-            let event = Message::Text(JsonPeerEvent::PeerLeft(removed_peer.uuid).to_string());
+            let event = Message::Text(
+                JsonPeerEvent::PeerLeft(removed_peer.uuid)
+                    .to_string()
+                    .into(),
+            );
 
             //Check if the peer was matched by next?
             let matcheds = state.remove_matched_peer(peer_id);
@@ -125,15 +130,15 @@ impl SignalingTopology<NoCallbacks, ServerState> for MatchmakingDemoTopology {
 mod tests {
     use super::MatchmakingDemoTopology;
     use crate::{
-        state::{RequestedRoom, RoomId},
         ServerState,
+        state::{RequestedRoom, RoomId},
     };
-    use futures::{pin_mut, SinkExt, StreamExt};
+    use futures::{SinkExt, StreamExt, pin_mut};
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signaling::{SignalingServer, SignalingServerBuilder};
     use std::{net::Ipv4Addr, str::FromStr, time::Duration};
     use tokio::{net::TcpStream, select, time};
-    use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
+    use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 
     fn app() -> SignalingServer {
         let mut state = ServerState::default();

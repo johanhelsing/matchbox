@@ -89,7 +89,8 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                             sender: peer_id,
                             data,
                         }
-                        .to_string(),
+                        .to_string()
+                        .into(),
                     );
                     if let Err(e) = state.try_send_to_peer(receiver, event) {
                         error!("error sending: {e:?}");
@@ -130,7 +131,7 @@ impl FullMeshState {
     /// Add a peer, returning peers that already existed
     pub fn add_peer(&mut self, peer: PeerId, sender: SignalingChannel) {
         // Alert all peers of new user
-        let event = Message::Text(JsonPeerEvent::NewPeer(peer).to_string());
+        let event = Message::Text(JsonPeerEvent::NewPeer(peer).to_string().into());
         // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
         let peers = { self.peers.lock().unwrap().clone() };
         peers.keys().for_each(|peer_id| {
@@ -153,7 +154,7 @@ impl FullMeshState {
             .map(|sender| (*peer_id, sender));
         if let Some((peer_id, _sender)) = removed_peer {
             // Tell each connected peer about the disconnected peer.
-            let event = Message::Text(JsonPeerEvent::PeerLeft(peer_id).to_string());
+            let event = Message::Text(JsonPeerEvent::PeerLeft(peer_id).to_string().into());
             // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
             let peers = { self.peers.lock().unwrap().clone() };
             peers.keys().for_each(

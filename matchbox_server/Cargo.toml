@@ -22,7 +22,7 @@ matchbox_protocol = { version = "0.11", path = "../matchbox_protocol", features 
   "json",
 ] }
 async-trait = "0.1"
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.8", features = ["ws"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
@@ -36,4 +36,4 @@ thiserror = "2.0"
 tokio-stream = "0.1"
 
 [dev-dependencies]
-tokio-tungstenite = "0.24"
+tokio-tungstenite = "0.26"

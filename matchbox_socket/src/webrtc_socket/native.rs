@@ -87,7 +87,7 @@ impl Signaller for NativeSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
         let request = serde_json::to_string(&request).expect("serializing request");
         self.websocket_stream
-            .send(Message::Text(request))
+            .send(Message::Text(request.into()))
             .await
             .map_err(SignalingError::from)
     }

@@ -127,7 +127,7 @@ where
         let info = alter(
             self.router
                 .route("/", get(ws_handler::<Cb, S>))
-                .route("/:path", get(ws_handler::<Cb, S>))
+                .route("/{path}", get(ws_handler::<Cb, S>))
                 .layer(Extension(state_machine))
                 .layer(Extension(self.shared_callbacks))
                 .layer(Extension(self.callbacks))

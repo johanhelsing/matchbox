@@ -29,7 +29,9 @@ signaling = [
 ]
 
 [dependencies]
-bevy = { version = "0.16", default-features = false, features = ["async_executor"] }
+bevy = { version = "0.16", default-features = false, features = [
+  "async_executor",
+] }
 matchbox_socket = { version = "0.12", path = "../matchbox_socket" }
 cfg-if = "1.0"
 

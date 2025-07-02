@@ -138,6 +138,7 @@ trait PeerDataSender {
 struct HandshakeResult<D: PeerDataSender, M> {
     peer_id: PeerId,
     data_channels: Vec<D>,
+    peer_buffered: PeerBuffered,
     metadata: M,
 }
 
@@ -163,7 +164,7 @@ trait Messenger {
         channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
-    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
+    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta, peer_buffered: PeerBuffered) -> PeerId;
 }
 
 async fn message_loop<M: Messenger>(
@@ -233,7 +234,7 @@ async fn message_loop<M: Messenger>(
                             handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {
-                            if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
+                            if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected, PeerBuffered::default())).is_err() {
                                 // socket dropped, exit cleanly
                                 break Ok(());
                             }
@@ -256,16 +257,17 @@ async fn message_loop<M: Messenger>(
 
             handshake_result = handshakes.select_next_some() => {
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
-                if peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected)).is_err() {
+                if peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected, handshake_result.peer_buffered.clone())).is_err() {
                     // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
                     break Ok(());
                 }
-                peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
+
+                peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata, handshake_result.peer_buffered.clone()));
             }
 
             peer_uuid = peer_loops.select_next_some() => {
                 debug!("peer {peer_uuid} finished");
-                if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
+                if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected, PeerBuffered::default())).is_err() {
                     // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
                     break Ok(());
                 }

@@ -7,3 +7,4 @@ crates/*/target
 /benches/target
 *.code-workspace
 .DS_Store
+.idea

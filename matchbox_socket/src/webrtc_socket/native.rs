@@ -1,7 +1,4 @@
-use super::{
-    HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder,
-    messages::{PeerEvent, PeerRequest},
-};
+use super::{HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder, messages::{PeerEvent, PeerRequest}, PeerBuffered, BufferedChannel};
 use crate::{
     RtcIceServerConfig,
     webrtc_socket::{
@@ -119,6 +116,13 @@ impl PeerDataSender for UnboundedSender<Packet> {
 }
 
 #[async_trait]
+impl BufferedChannel for RTCDataChannel {
+    async fn buffered_amount(&self) -> usize {
+        self.buffered_amount().await
+    }
+}
+
+#[async_trait]
 impl Messenger for NativeMessenger {
     type DataChannel = UnboundedSender<Packet>;
     type HandshakeMeta = (
@@ -201,6 +205,7 @@ impl Messenger for NativeMessenger {
             HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
                 data_channels: to_peer_message_tx,
+                peer_buffered: PeerBuffered::new(channel_configs.len()),
                 metadata: (
                     to_peer_message_rx,
                     data_channels,
@@ -276,6 +281,7 @@ impl Messenger for NativeMessenger {
             HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
                 data_channels: to_peer_message_tx,
+                peer_buffered: PeerBuffered::new(channel_configs.len()),
                 metadata: (
                     to_peer_message_rx,
                     data_channels,
@@ -288,7 +294,7 @@ impl Messenger for NativeMessenger {
         .await
     }
 
-    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
+    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta, peer_buffered: PeerBuffered) -> PeerId {
         async {
             let (mut to_peer_message_rx, data_channels, mut trickle_fut, mut peer_disconnected) =
                 handshake_meta;
@@ -299,16 +305,22 @@ impl Messenger for NativeMessenger {
                 "amount of data channels and receivers differ"
             );
 
+            for (index, data_channel) in data_channels.iter().enumerate() {
+                peer_buffered.add_channel(index, data_channel.clone() as Arc<dyn BufferedChannel>);
+            }
+
             let mut message_loop_futs: FuturesUnordered<_> = data_channels
                 .iter()
                 .zip(to_peer_message_rx.iter_mut())
-                .map(|(data_channel, rx)| async move {
-                    while let Some(message) = rx.next().await {
-                        trace!("sending packet {message:?}");
-                        let message = message.clone();
-                        let message = Bytes::from(message);
-                        if let Err(e) = data_channel.send(&message).await {
-                            error!("error sending to data channel: {e:?}")
+                .map(|(data_channel, rx)| {
+                    async move {
+                        while let Some(message) = rx.next().await {
+                            trace!("sending packet {message:?}");
+                            let message = message.clone();
+                            let message = Bytes::from(message);
+                            if let Err(e) = data_channel.send(&message).await {
+                                error!("error sending to data channel: {e:?}")
+                            }
                         }
                     }
                 })

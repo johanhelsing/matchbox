@@ -81,7 +81,7 @@ async fn async_main() {
     let tasks_ = tasks.clone();
     let _dispatch_task = AbortOnDropHandle::new(spawn(async move {
         // Handle any new peers
-        while let Some((peer, state)) = socket.next().await {
+        while let Some((peer, state, _)) = socket.next().await {
             let mut tx0 = tx0.clone();
             match state {
                 PeerState::Connected => {

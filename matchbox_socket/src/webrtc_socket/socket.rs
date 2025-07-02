@@ -1,7 +1,4 @@
-use super::{
-    SignallerBuilder,
-    error::{ChannelError, SignalingError},
-};
+use super::{SignallerBuilder, error::{ChannelError, SignalingError}, PeerBuffered};
 use crate::{
     Error,
     webrtc_socket::{
@@ -253,6 +250,7 @@ impl WebRtcSocketBuilder {
                 peer_state_rx,
                 peers: Default::default(),
                 channels,
+                peer_buffer_info: Default::default(),
             },
             Box::pin(socket_fut),
         )
@@ -470,8 +468,9 @@ where
 pub struct WebRtcSocket {
     id: once_cell::race::OnceBox<PeerId>,
     id_rx: futures_channel::oneshot::Receiver<PeerId>,
-    peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
+    peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState, PeerBuffered)>,
     peers: HashMap<PeerId, PeerState>,
+    peer_buffer_info: HashMap<PeerId, PeerBuffered>,
     channels: Vec<Option<WebRtcChannel>>,
 }
 
@@ -513,7 +512,7 @@ impl WebRtcSocket {
 }
 
 impl Stream for WebRtcSocket {
-    type Item = (PeerId, PeerState);
+    type Item = (PeerId, PeerState, PeerBuffered);
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -564,10 +563,15 @@ impl WebRtcSocket {
         let mut changes = Vec::new();
         while let Ok(res) = self.peer_state_rx.try_next() {
             match res {
-                Some((id, state)) => {
+                Some((id, state, buffer)) => {
                     let old = self.peers.insert(id, state);
+                    self.peer_buffer_info.insert(id, buffer);
                     if old != Some(state) {
                         changes.push((id, state));
+                    }
+
+                    if state == PeerState::Disconnected {
+                        let _ = self.peer_buffer_info.remove(&id);
                     }
                 }
                 None => return Err(ChannelError::Closed),
@@ -575,6 +579,11 @@ impl WebRtcSocket {
         }
 
         Ok(changes)
+    }
+
+    /// Returns a reference to the PeerBuffered info for the given peer ID, if it exists.
+    pub fn get_peer_buffer_info(&self, id: PeerId) -> Option<&PeerBuffered> {
+        self.peer_buffer_info.get(&id)
     }
 
     /// Returns an iterator of the ids of the connected peers.
@@ -806,7 +815,7 @@ pub struct MessageLoopChannels {
     pub requests_sender: futures_channel::mpsc::UnboundedSender<PeerRequest>,
     pub events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     pub peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
-    pub peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
+    pub peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState, PeerBuffered)>,
     pub messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 }
 
@@ -815,7 +824,7 @@ async fn run_socket(
     id_tx: futures_channel::oneshot::Sender<PeerId>,
     config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
-    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
+    peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState, PeerBuffered)>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) -> Result<(), SignalingError> {
     debug!("Starting WebRtcSocket");

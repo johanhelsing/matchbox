@@ -26,7 +26,7 @@ use std::{
 ///     mut commands: Commands,
 ///     socket: Query<Entity, With<MatchboxSocket>>
 /// ) {
-///     let socket = socket.single();
+///     let socket = socket.single().unwrap();
 ///     commands.entity(socket).despawn();
 /// }
 /// ```

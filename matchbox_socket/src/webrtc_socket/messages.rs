@@ -23,9 +23,9 @@ pub enum PeerSignal {
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub trait MaybeSend: Send {}
+pub trait MaybeSend: Send + Sync {}
 #[cfg(not(target_family = "wasm"))]
-impl<T: Send> MaybeSend for T {}
+impl<T: Send + Sync> MaybeSend for T {}
 
 #[cfg(target_family = "wasm")]
 pub trait MaybeSend {}
@@ -35,7 +35,7 @@ impl<T> MaybeSend for T {}
 /// Trait representing a channel with a buffer, allowing querying of the buffered amount.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-pub trait BufferedChannel: MaybeSend + Sync {
+pub trait BufferedChannel: MaybeSend {
     /// Returns the current buffered amount in the channel.
     async fn buffered_amount(&self) -> usize;
 }

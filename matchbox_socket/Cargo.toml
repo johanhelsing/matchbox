@@ -14,6 +14,9 @@ categories = [
 ]
 repository = "https://github.com/johanhelsing/matchbox"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [features]
 ggrs = ["dep:bincode", "dep:ggrs"]
 
@@ -36,11 +39,12 @@ thiserror = "2.0"
 cfg-if = "1.0"
 async-trait = "0.1"
 once_cell = { version = "1.17", default-features = false, features = [
+  "std",
   "race",
   "alloc",
 ] }
 derive_more = { version = "2.0", features = ["display", "from"] }
-tokio-util = { version = "0.7", features = ["io", "compat"] }
+tokio-util = { version = "0.7.15", features = ["io", "compat"] }
 
 ggrs = { version = "0.11", default-features = false, optional = true }
 bincode = { version = "2.0", default-features = false, features = [

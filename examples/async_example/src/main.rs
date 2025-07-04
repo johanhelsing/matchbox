@@ -140,7 +140,7 @@ async fn socket_task(peer: PeerId, tx: Sender<Packet>, mut rx: Receiver<Packet>)
             let message = String::from_utf8_lossy(&packet);
             if message.starts_with("ping") {
                 let ts = message.split(" ").nth(1).unwrap().parse::<u128>().unwrap();
-                let packet = format!("pong {}", ts).as_bytes().to_vec();
+                let packet = format!("pong {ts}").as_bytes().to_vec();
                 writer.send(packet.into()).await.unwrap();
             } else if message.starts_with("pong") {
                 let ts = message.split(" ").nth(1).unwrap().parse::<u128>().unwrap();

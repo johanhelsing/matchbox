@@ -164,7 +164,7 @@ trait Messenger {
         channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
-    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta, peer_buffered: PeerBuffered) -> PeerId;
+    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
 }
 
 async fn message_loop<M: Messenger>(
@@ -262,7 +262,7 @@ async fn message_loop<M: Messenger>(
                     break Ok(());
                 }
 
-                peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata, handshake_result.peer_buffered.clone()));
+                peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
             }
 
             peer_uuid = peer_loops.select_next_some() => {

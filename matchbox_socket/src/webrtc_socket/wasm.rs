@@ -1,11 +1,8 @@
-use super::{
-    HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder,
-    error::JsErrorExt,
-    messages::{PeerEvent, PeerRequest},
-};
+use super::{HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder, error::JsErrorExt, messages::{PeerEvent, PeerRequest}, BufferedChannel};
 use crate::webrtc_socket::{
     ChannelConfig, Messenger, Packet, RtcIceServerConfig, Signaller, error::SignalingError,
     messages::PeerSignal, signal_peer::SignalPeer, socket::create_data_channels_ready_fut,
+    PeerBuffered,
 };
 use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
@@ -17,12 +14,13 @@ use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
 use std::{pin::Pin, time::Duration};
+use std::sync::Arc;
 use wasm_bindgen::{JsCast, JsValue, convert::FromWasmAbi, prelude::*};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
     RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcPeerConnectionIceEvent,
-    RtcSdpType, RtcSessionDescriptionInit,
+    RtcSdpType, RtcSessionDescriptionInit
 };
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 
@@ -102,6 +100,13 @@ impl PeerDataSender for RtcDataChannel {
     }
 }
 
+#[async_trait(?Send)]
+impl BufferedChannel for RtcDataChannel {
+    async fn buffered_amount(&self) -> usize {
+        self.buffered_amount() as usize
+    }
+}
+
 pub(crate) struct WasmMessenger;
 
 #[async_trait(?Send)]
@@ -133,6 +138,11 @@ impl Messenger for WasmMessenger {
             data_channel_ready_txs,
             channel_configs,
         );
+
+        let peer_buffered = PeerBuffered::new(channel_configs.len());
+        for (index, data_channel) in data_channels.iter().enumerate() {
+            peer_buffered.add_channel(index, Arc::new(data_channel.clone()));
+        }
 
         // Create offer
         let offer = JsFuture::from(conn.create_offer()).await.efix().unwrap();
@@ -202,6 +212,7 @@ impl Messenger for WasmMessenger {
             peer_id: signal_peer.id,
             data_channels,
             metadata: peer_disconnected_rx,
+            peer_buffered,
         }
     }
 
@@ -229,6 +240,11 @@ impl Messenger for WasmMessenger {
             data_channel_ready_txs,
             channel_configs,
         );
+
+        let peer_buffered = PeerBuffered::new(channel_configs.len());
+        for (index, data_channel) in data_channels.iter().enumerate() {
+            peer_buffered.add_channel(index, Arc::new(data_channel.clone()));
+        }
 
         let mut received_candidates = vec![];
 
@@ -307,6 +323,7 @@ impl Messenger for WasmMessenger {
             peer_id: signal_peer.id,
             data_channels,
             metadata: peer_disconnected_rx,
+            peer_buffered,
         }
     }
 

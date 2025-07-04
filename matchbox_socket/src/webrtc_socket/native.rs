@@ -163,6 +163,11 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
+            let peer_buffered = PeerBuffered::new(data_channels.len());
+            for (index, channel) in data_channels.iter().enumerate() {
+                peer_buffered.add_channel(index, channel.clone());
+            }
+
             // TODO: maybe pass in options? ice restart etc.?
             let offer = connection.create_offer(None).await.unwrap();
             let sdp = offer.sdp.clone();
@@ -205,7 +210,7 @@ impl Messenger for NativeMessenger {
             HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
                 data_channels: to_peer_message_tx,
-                peer_buffered: PeerBuffered::new(channel_configs.len()),
+                peer_buffered,
                 metadata: (
                     to_peer_message_rx,
                     data_channels,
@@ -249,6 +254,11 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
+            let peer_buffered = PeerBuffered::new(data_channels.len());
+            for (index, channel) in data_channels.iter().enumerate() {
+                peer_buffered.add_channel(index, channel.clone());
+            }
+
             let offer = loop {
                 match peer_signal_rx.next().await.expect("error") {
                     PeerSignal::Offer(offer) => {
@@ -281,7 +291,7 @@ impl Messenger for NativeMessenger {
             HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
                 data_channels: to_peer_message_tx,
-                peer_buffered: PeerBuffered::new(channel_configs.len()),
+                peer_buffered,
                 metadata: (
                     to_peer_message_rx,
                     data_channels,
@@ -294,7 +304,7 @@ impl Messenger for NativeMessenger {
         .await
     }
 
-    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta, peer_buffered: PeerBuffered) -> PeerId {
+    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
         async {
             let (mut to_peer_message_rx, data_channels, mut trickle_fut, mut peer_disconnected) =
                 handshake_meta;
@@ -304,10 +314,6 @@ impl Messenger for NativeMessenger {
                 to_peer_message_rx.len(),
                 "amount of data channels and receivers differ"
             );
-
-            for (index, data_channel) in data_channels.iter().enumerate() {
-                peer_buffered.add_channel(index, data_channel.clone() as Arc<dyn BufferedChannel>);
-            }
 
             let mut message_loop_futs: FuturesUnordered<_> = data_channels
                 .iter()

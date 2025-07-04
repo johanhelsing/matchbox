@@ -36,7 +36,6 @@ thiserror = "2.0"
 cfg-if = "1.0"
 async-trait = "0.1"
 once_cell = { version = "1.17", default-features = false, features = [
-  "std",
   "race",
   "alloc",
 ] }

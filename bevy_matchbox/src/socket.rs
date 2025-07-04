@@ -24,9 +24,9 @@ use std::{
 ///
 /// fn close_socket_system(
 ///     mut commands: Commands,
-///     socket: Query<Entity, With<MatchboxSocket>>
+///     socket: Single<Entity, With<MatchboxSocket>>
 /// ) {
-///     let socket = socket.single().unwrap();
+///     let socket = socket.into_inner();
 ///     commands.entity(socket).despawn();
 /// }
 /// ```

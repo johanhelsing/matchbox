@@ -28,6 +28,9 @@ jobs:
       - name: Run cargo test
         run: cargo test --features signaling --all-targets
 
+      - name: Run cargo doc tests
+        run: cargo test --doc
+
   # Should be upgraded to test when possible
   check-wasm:
     name: Check Wasm

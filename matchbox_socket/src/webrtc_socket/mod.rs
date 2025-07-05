@@ -74,7 +74,7 @@ pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
 /// 4. It sends [PeerEvent::PeerLeft] with the ID of the disconnected peer to the remaining peer.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-pub trait Signaller: Sync + Send + 'static {
+pub trait Signaller: Sync + MaybeSend + 'static {
     /// Request the signaller to pass a message to another peer.
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError>;
 

@@ -14,7 +14,7 @@ use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
 use std::{pin::Pin, time::Duration};
-use std::sync::Arc;
+use std::ops::{Deref, DerefMut};
 use wasm_bindgen::{JsCast, JsValue, convert::FromWasmAbi, prelude::*};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -26,6 +26,26 @@ use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 
 pub(crate) struct WasmSignaller {
     websocket_stream: futures::stream::Fuse<WsStream>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RtcDataChannelWrapper(pub(crate) RtcDataChannel);
+
+unsafe impl Send for RtcDataChannelWrapper {}
+
+unsafe impl Sync for RtcDataChannelWrapper {}
+
+impl Deref for RtcDataChannelWrapper {
+    type Target = RtcDataChannel;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for RtcDataChannelWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[derive(Debug, Default)]
@@ -92,7 +112,7 @@ impl Signaller for WasmSignaller {
     }
 }
 
-impl PeerDataSender for RtcDataChannel {
+impl PeerDataSender for RtcDataChannelWrapper {
     fn send(&mut self, packet: Packet) -> Result<(), PacketSendError> {
         self.send_with_u8_array(&packet)
             .efix()
@@ -101,9 +121,9 @@ impl PeerDataSender for RtcDataChannel {
 }
 
 #[async_trait(?Send)]
-impl BufferedChannel for RtcDataChannel {
+impl BufferedChannel for RtcDataChannelWrapper {
     async fn buffered_amount(&self) -> usize {
-        self.buffered_amount() as usize
+        self.buffered_amount().await as usize
     }
 }
 
@@ -111,7 +131,7 @@ pub(crate) struct WasmMessenger;
 
 #[async_trait(?Send)]
 impl Messenger for WasmMessenger {
-    type DataChannel = RtcDataChannel;
+    type DataChannel = RtcDataChannelWrapper;
     type HandshakeMeta = Receiver<()>;
 
     async fn offer_handshake(
@@ -139,10 +159,10 @@ impl Messenger for WasmMessenger {
             channel_configs,
         );
 
-        let peer_buffered = PeerBuffered::new(channel_configs.len());
-        for (index, data_channel) in data_channels.iter().enumerate() {
-            peer_buffered.add_channel(index, Arc::new(data_channel.clone()));
-        }
+        let peer_buffered = PeerBuffered::new(data_channels.clone().iter().map(|it| {
+            let channel: Box<dyn BufferedChannel> = Box::new(it.clone());
+            return channel
+        }).collect::<Vec<_>>());
 
         // Create offer
         let offer = JsFuture::from(conn.create_offer()).await.efix().unwrap();
@@ -241,10 +261,10 @@ impl Messenger for WasmMessenger {
             channel_configs,
         );
 
-        let peer_buffered = PeerBuffered::new(channel_configs.len());
-        for (index, data_channel) in data_channels.iter().enumerate() {
-            peer_buffered.add_channel(index, Arc::new(data_channel.clone()));
-        }
+        let peer_buffered = PeerBuffered::new(data_channels.iter().map(|it| {
+            let channel: Box<dyn BufferedChannel> = Box::new(it.clone());
+            return channel
+        }).collect::<Vec<_>>());
 
         let mut received_candidates = vec![];
 
@@ -497,7 +517,7 @@ fn create_data_channels(
     peer_disconnected_tx: futures_channel::mpsc::Sender<()>,
     mut data_channel_ready_txs: Vec<futures_channel::mpsc::Sender<()>>,
     channel_config: &[ChannelConfig],
-) -> Vec<RtcDataChannel> {
+) -> Vec<RtcDataChannelWrapper> {
     channel_config
         .iter()
         .enumerate()
@@ -523,7 +543,7 @@ fn create_data_channel(
     mut channel_open: futures_channel::mpsc::Sender<()>,
     channel_config: &ChannelConfig,
     channel_id: usize,
-) -> RtcDataChannel {
+) -> RtcDataChannelWrapper {
     let data_channel_config = data_channel_config(channel_config);
     data_channel_config.set_id(channel_id as u16);
 
@@ -578,7 +598,7 @@ fn create_data_channel(
         },
     );
 
-    channel
+    RtcDataChannelWrapper(channel)
 }
 
 /// Note that this function leaks some memory because the rust closure is dropped but still needs to

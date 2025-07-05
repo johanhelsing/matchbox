@@ -1,6 +1,5 @@
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
-#![forbid(unsafe_code)]
 
 mod error;
 #[cfg(feature = "ggrs")]

@@ -116,7 +116,7 @@ impl PeerDataSender for UnboundedSender<Packet> {
 }
 
 #[async_trait]
-impl BufferedChannel for RTCDataChannel {
+impl BufferedChannel for Arc<RTCDataChannel> {
     async fn buffered_amount(&self) -> usize {
         self.buffered_amount().await
     }
@@ -163,10 +163,10 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
-            let peer_buffered = PeerBuffered::new(data_channels.len());
-            for (index, channel) in data_channels.iter().enumerate() {
-                peer_buffered.add_channel(index, channel.clone());
-            }
+            let peer_buffered = PeerBuffered::new(data_channels.iter().map(|it| {
+                let channel: Box<dyn BufferedChannel> = Box::new(it.clone());
+                channel
+            }).collect::<Vec<_>>());
 
             // TODO: maybe pass in options? ice restart etc.?
             let offer = connection.create_offer(None).await.unwrap();
@@ -254,10 +254,10 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
-            let peer_buffered = PeerBuffered::new(data_channels.len());
-            for (index, channel) in data_channels.iter().enumerate() {
-                peer_buffered.add_channel(index, channel.clone());
-            }
+            let peer_buffered = PeerBuffered::new(data_channels.iter().map(|it| {
+                let channel: Box<dyn BufferedChannel> = Box::new(it.clone());
+                channel
+            }).collect::<Vec<_>>());
 
             let offer = loop {
                 match peer_signal_rx.next().await.expect("error") {

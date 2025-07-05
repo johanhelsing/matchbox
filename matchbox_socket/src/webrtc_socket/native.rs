@@ -118,7 +118,7 @@ impl PeerDataSender for UnboundedSender<Packet> {
 #[async_trait]
 impl BufferedChannel for Arc<RTCDataChannel> {
     async fn buffered_amount(&self) -> usize {
-        self.buffered_amount().await
+        RTCDataChannel::buffered_amount(&self).await
     }
 }
 

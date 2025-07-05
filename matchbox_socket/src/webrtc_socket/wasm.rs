@@ -123,7 +123,7 @@ impl PeerDataSender for RtcDataChannelWrapper {
 #[async_trait(?Send)]
 impl BufferedChannel for RtcDataChannelWrapper {
     async fn buffered_amount(&self) -> usize {
-        self.buffered_amount().await as usize
+        self.0.buffered_amount() as usize
     }
 }
 

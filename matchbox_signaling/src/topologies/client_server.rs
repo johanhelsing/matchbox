@@ -63,6 +63,7 @@ impl SignalingServerBuilder<ClientServer, ClientServerCallbacks, ClientServerSta
 impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServer {
     async fn state_machine(upgrade: WsStateMeta<ClientServerCallbacks, ClientServerState>) {
         let WsStateMeta {
+            room: _,
             peer_id,
             sender,
             mut receiver,

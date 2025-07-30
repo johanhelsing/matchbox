@@ -22,6 +22,8 @@ use tracing::{error, info};
 
 /// Metastate used during by a signaling server's runtime
 pub struct WsStateMeta<Cb, S> {
+    /// The room to associate the peer with
+    pub room: String,
     /// The peer connecting, by their ID
     pub peer_id: PeerId,
     /// The channel to signal this peer through
@@ -64,6 +66,11 @@ where
     info!("`{origin}` connected.");
 
     let path = path.map(|path| path.0);
+
+    // We will isolate peer connections by path, and if no path was specified
+    // we will connect peers to a global room named 'world'
+    let room = path.clone().unwrap_or("world".to_string());
+
     let meta = WsUpgradeMeta {
         origin,
         path,
@@ -98,7 +105,10 @@ where
             info!("{peer_id} -> {event_text}");
         };
 
+        info!("`{peer_id}` will be isolated to room '{room}'.");
+
         let meta = WsStateMeta {
+            room,
             peer_id,
             sender,
             receiver,

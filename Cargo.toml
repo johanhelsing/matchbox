@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "bevy_matchbox",
+  "flecs_matchbox",
   "matchbox_protocol",
   "matchbox_socket",
   "matchbox_server",

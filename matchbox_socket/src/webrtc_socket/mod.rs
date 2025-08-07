@@ -21,26 +21,26 @@ pub use socket::{
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        mod wasm;
-        type UseMessenger = wasm::WasmMessenger;
-        type UseSignallerBuilder = wasm::WasmSignallerBuilder;
-        /// A future which runs the message loop for the socket and completes
-        /// when the socket closes or disconnects
-        pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
-    } else {
+    if #[cfg(any(not(target_family = "wasm"), all(target_os = "wasi", target_env = "p2")))] {
         mod native;
         type UseMessenger = native::NativeMessenger;
         type UseSignallerBuilder = native::NativeSignallerBuilder;
         /// A future which runs the message loop for the socket and completes
         /// when the socket closes or disconnects
         pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+    } else {
+        mod wasm;
+        type UseMessenger = wasm::WasmMessenger;
+        type UseSignallerBuilder = wasm::WasmSignallerBuilder;
+        /// A future which runs the message loop for the socket and completes
+        /// when the socket closes or disconnects
+        pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
     }
 }
 
 /// A builder that constructs a new [Signaller] from a room URL.
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
 pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
     /// Create a new [Signaller]. The Room URL is an implementation specific identifier for joining
     /// a room.
@@ -72,8 +72,8 @@ pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
 /// 3. It passes [PeerEvent::Signal] events back and forth between them, until one of them
 ///    disconnects.
 /// 4. It sends [PeerEvent::PeerLeft] with the ID of the disconnected peer to the remaining peer.
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
 pub trait Signaller: Sync + Send + 'static {
     /// Request the signaller to pass a message to another peer.
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError>;
@@ -125,9 +125,12 @@ pub type Packet = Box<[u8]>;
 #[derive(Debug, thiserror::Error)]
 #[error("The socket was dropped and package could not be sent")]
 struct PacketSendError {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(
+        not(target_family = "wasm"),
+        all(target_os = "wasi", target_env = "p2")
+    ))]
     source: futures_channel::mpsc::SendError,
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     source: error::JsError,
 }
 
@@ -141,8 +144,8 @@ struct HandshakeResult<D: PeerDataSender, M> {
     metadata: M,
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
 trait Messenger {
     type DataChannel: PeerDataSender;
     type HandshakeMeta: Send;

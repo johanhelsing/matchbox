@@ -49,7 +49,7 @@ bincode = { version = "2.0", default-features = false, features = [
 ], optional = true }
 bytes = { version = "1.1", default-features = false }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 ggrs = { version = "0.11", default-features = false, optional = true, features = [
   "wasm-bindgen",
 ] }
@@ -78,7 +78,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
 ] }
 serde-wasm-bindgen = "0.6"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(any(not(target_family = "wasm"), all(target_os = "wasi", target_env = "p2")))'.dependencies]
 async-tungstenite = { version = "0.29", default-features = false, features = [
   "async-std-runtime",
   "async-tls",

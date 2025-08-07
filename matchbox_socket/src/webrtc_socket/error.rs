@@ -39,12 +39,15 @@ pub enum SignalingError {
     NegotiationFailed(#[from] Box<SignalingError>),
 
     /// Native
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(
+        not(target_family = "wasm"),
+        all(target_os = "wasi", target_env = "p2")
+    ))]
     #[error("socket failure communicating with signaling server: {0}")]
     WebSocket(#[from] async_tungstenite::tungstenite::Error),
 
     /// WASM
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     #[error("socket failure communicating with signaling server: {0}")]
     WebSocket(#[from] ws_stream_wasm::WsErr),
 
@@ -55,7 +58,7 @@ pub enum SignalingError {
 }
 
 cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
+    if #[cfg(all(target_family = "wasm", target_os = "unknown"))] {
         use wasm_bindgen::{JsValue};
         use derive_more::Display;
 

@@ -557,7 +557,7 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onopen(f),
         move |_: JsValue| {
-            debug!("data channel open: {channel_id}");
+            info!("data channel open: {channel_id}");
             channel_open
                 .try_send(())
                 .expect("failed to notify about open connection");
@@ -583,7 +583,18 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onerror(f),
         move |event: Event| {
-            error!("error in data channel: {event:?}");
+            // Convert Event into a JsValue
+            let js_val: JsValue = event.into();
+
+            // Try to get the `error` property
+            match Reflect::get(&js_val, &JsValue::from_str("error")) {
+                Ok(err) => {
+                    error!("DataChannel error: {:?}", err);
+                }
+                Err(_) => {
+                    error!("DataChannel error: (no error field found)");
+                }
+            }
         },
     );
 

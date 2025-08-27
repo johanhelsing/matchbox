@@ -64,6 +64,11 @@ impl PeerBuffered {
         }
     }
 
+    /// Return the number of channels.
+    pub fn len(&self) -> usize {
+        self.channel_refs.len()
+    }
+
     /// Returns the buffered amount for the channel at the given index.
     pub async fn buffered_amount(&self, index: usize) -> usize {
         if let Some(channel) = self.channel_refs.get(index) {

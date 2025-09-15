@@ -19,6 +19,7 @@ pub use socket::{
     ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use crate::webrtc_socket::error::PeerError;
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -150,11 +151,11 @@ trait Messenger {
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
-        mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
+        peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError>;
 
     async fn accept_handshake(
         signal_peer: SignalPeer,
@@ -162,7 +163,7 @@ trait Messenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError>;
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
 }
@@ -256,6 +257,19 @@ async fn message_loop<M: Messenger>(
             }
 
             handshake_result = handshakes.select_next_some() => {
+                 let handshake_result = match handshake_result {
+                    Ok(handshake_result) => handshake_result,
+                    Err(peer_error) => {
+                        warn!("error during handshake: {peer_error:?}");
+                        if peer_state_tx.unbounded_send((peer_error.0, PeerState::Disconnected, PeerBuffered::default())).is_err() {
+                            // socket dropped, exit cleanly
+                            break Ok(());
+                        }
+
+                        continue;
+                    }
+                };
+
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
                 if peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected, handshake_result.peer_buffered.clone())).is_err() {
                     // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore

@@ -37,6 +37,7 @@ use webrtc::{
         sdp::session_description::RTCSessionDescription,
     },
 };
+use crate::webrtc_socket::error::PeerError;
 
 pub(crate) struct NativeSignaller {
     websocket_stream: WebSocketStream<ConnectStream>,
@@ -138,7 +139,7 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError> {
         async {
             let (to_peer_message_tx, to_peer_message_rx) =
                 new_senders_and_receivers(channel_configs);
@@ -175,10 +176,13 @@ impl Messenger for NativeMessenger {
             signal_peer.send(PeerSignal::Offer(sdp));
 
             let answer = loop {
-                let signal = peer_signal_rx
-                    .next()
-                    .await
-                    .expect("Signal server connection lost in the middle of a handshake");
+                let signal = match peer_signal_rx.next().await {
+                    Some(signal) => signal,
+                    None => {
+                        warn!("Signal server connection lost in the middle of a handshake");
+                        return Err(PeerError(signal_peer.id, SignalingError::HandshakeFailed));
+                    }
+                };
 
                 match signal {
                     PeerSignal::Answer(answer) => {
@@ -207,7 +211,7 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
-            HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
+            Ok(HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
                 data_channels: to_peer_message_tx,
                 peer_buffered,
@@ -217,7 +221,7 @@ impl Messenger for NativeMessenger {
                     trickle_fut,
                     peer_disconnected_rx,
                 ),
-            }
+            })
         }
         .compat() // Required to run tokio futures with other async executors
         .await
@@ -229,7 +233,7 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError> {
         async {
             let (to_peer_message_tx, to_peer_message_rx) =
                 new_senders_and_receivers(channel_configs);
@@ -260,7 +264,14 @@ impl Messenger for NativeMessenger {
             }).collect::<Vec<_>>());
 
             let offer = loop {
-                match peer_signal_rx.next().await.expect("error") {
+                let signal = match peer_signal_rx.next().await {
+                    Some(signal) => signal,
+                    None => {
+                        warn!("Signal server connection lost in the middle of a handshake");
+                        return Err(PeerError(signal_peer.id, SignalingError::HandshakeFailed));
+                    }
+                };
+                match signal {
                     PeerSignal::Offer(offer) => {
                         break offer;
                     }
@@ -288,7 +299,7 @@ impl Messenger for NativeMessenger {
             )
             .await;
 
-            HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
+            Ok(HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
                 data_channels: to_peer_message_tx,
                 peer_buffered,
@@ -298,7 +309,7 @@ impl Messenger for NativeMessenger {
                     trickle_fut,
                     peer_disconnected_rx,
                 ),
-            }
+            })
         }
         .compat() // Required to run tokio futures with other async executors
         .await

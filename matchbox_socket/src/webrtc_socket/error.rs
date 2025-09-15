@@ -1,5 +1,6 @@
 use crate::webrtc_socket::messages::PeerEvent;
 use cfg_if::cfg_if;
+use matchbox_protocol::PeerId;
 
 /// An error that can occur when getting a socket's channel through
 /// `get_channel`, `take_channel` or `try_update_peers`.
@@ -17,7 +18,13 @@ pub enum ChannelError {
     /// given an invalid room URL.
     #[error("This channel is closed.")]
     Closed,
+    /// Handshake failed
+    #[error("handshake failed: {0:?}")]
+    HandshakeFailed(()),
 }
+
+#[derive(Debug)]
+pub struct PeerError(pub PeerId, pub SignalingError);
 
 /// An error that can occur with WebRTC messaging. See [Signaller].
 #[derive(Debug, thiserror::Error)]
@@ -52,6 +59,10 @@ pub enum SignalingError {
     /// [`Signaller`] implementations
     #[error("User implementation error: {0}")]
     UserImplementationError(String),
+
+    /// Handshake failed
+    #[error("handshake failed")]
+    HandshakeFailed,
 }
 
 cfg_if! {

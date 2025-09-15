@@ -23,6 +23,7 @@ use web_sys::{
     RtcSdpType, RtcSessionDescriptionInit
 };
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
+use crate::webrtc_socket::error::PeerError;
 
 pub(crate) struct WasmSignaller {
     websocket_stream: futures::stream::Fuse<WsStream>,
@@ -140,7 +141,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError> {
         debug!("making offer");
 
         let conn = create_rtc_peer_connection(ice_server_config);
@@ -191,10 +192,13 @@ impl Messenger for WasmMessenger {
 
         // Wait for answer
         let sdp = loop {
-            let signal = peer_signal_rx
-                .next()
-                .await
-                .expect("Signal server connection lost in the middle of a handshake");
+            let signal = match peer_signal_rx.next().await {
+                Some(signal) => signal,
+                None => {
+                    warn!("Signal server connection lost in the middle of a handshake");
+                    return Err(PeerError(signal_peer.id, SignalingError::HandshakeFailed));
+                }
+            };
 
             match signal {
                 PeerSignal::Answer(answer) => break answer,
@@ -228,12 +232,12 @@ impl Messenger for WasmMessenger {
         )
         .await;
 
-        HandshakeResult {
+        Ok(HandshakeResult {
             peer_id: signal_peer.id,
             data_channels,
             metadata: peer_disconnected_rx,
             peer_buffered,
-        }
+        })
     }
 
     async fn accept_handshake(
@@ -242,7 +246,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError> {
         debug!("handshake_accept");
 
         let conn = create_rtc_peer_connection(ice_server_config);
@@ -269,10 +273,13 @@ impl Messenger for WasmMessenger {
         let mut received_candidates = vec![];
 
         let offer = loop {
-            let signal = peer_signal_rx
-                .next()
-                .await
-                .expect("Signal server connection lost in the middle of a handshake");
+            let signal = match peer_signal_rx.next().await {
+                Some(signal) => signal,
+                None => {
+                    warn!("Signal server connection lost in the middle of a handshake");
+                    return Err(PeerError(signal_peer.id, SignalingError::HandshakeFailed));
+                }
+            };
 
             match signal {
                 PeerSignal::Offer(o) => {
@@ -339,12 +346,12 @@ impl Messenger for WasmMessenger {
         )
         .await;
 
-        HandshakeResult {
+        Ok(HandshakeResult {
             peer_id: signal_peer.id,
             data_channels,
             metadata: peer_disconnected_rx,
             peer_buffered,
-        }
+        })
     }
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {

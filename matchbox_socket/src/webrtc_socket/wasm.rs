@@ -9,7 +9,7 @@ use futures::{Future, SinkExt, StreamExt};
 use futures_channel::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{select, FutureExt};
-use js_sys::{decode_uri, Function, Reflect};
+use js_sys::{Function, Reflect};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;

@@ -24,7 +24,14 @@ pub enum ChannelError {
 }
 
 #[derive(Debug)]
-pub struct PeerError(pub PeerId, pub SignalingError);
+pub struct PeerError(pub PeerId, pub(crate) SignalingError);
+
+impl PeerError {
+    /// Returns the signalling error
+    pub fn error(&self) -> &SignalingError {
+        &self.1
+    }
+}
 
 /// An error that can occur with WebRTC messaging. See [Signaller].
 #[derive(Debug, thiserror::Error)]

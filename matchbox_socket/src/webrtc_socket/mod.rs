@@ -11,7 +11,7 @@ use futures::{Future, FutureExt, StreamExt, future::Either, stream::FuturesUnord
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
-use log::{debug, error, warn};
+use log::{debug, error, warn, info};
 use matchbox_protocol::PeerId;
 pub use messages::*;
 pub(crate) use socket::MessageLoopChannels;
@@ -220,7 +220,7 @@ async fn message_loop<M: Messenger>(
 
             message = events_receiver.next().fuse() => {
                 if let Some(event) = message {
-                    debug!("{event:?}");
+                    info!("{event:?}");
                     match event {
                         PeerEvent::IdAssigned(peer_uuid) => {
                             if id_tx.take().expect("already sent peer id").send(peer_uuid.to_owned()).is_err() {

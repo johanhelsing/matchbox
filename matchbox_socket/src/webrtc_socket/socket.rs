@@ -103,6 +103,8 @@ pub(crate) struct SocketConfig {
     pub(crate) attempts: Option<u16>,
     /// Interval at which to send empty requests to the signaling server
     pub(crate) keep_alive_interval: Option<Duration>,
+    /// Timeout for peer handshake
+    pub(crate) webrtc_handshake_timeout: Duration,
 }
 
 /// Builder for [`WebRtcSocket`]s.
@@ -130,6 +132,7 @@ impl WebRtcSocketBuilder {
                 channels: Vec::default(),
                 attempts: Some(3),
                 keep_alive_interval: Some(Duration::from_secs(10)),
+                webrtc_handshake_timeout: Duration::from_secs(30),
             },
             signaller_builder: None,
         }
@@ -184,6 +187,12 @@ impl WebRtcSocketBuilder {
     /// Sets an alternative signalling implementation for this [`WebRtcSocket`].
     pub fn signaller_builder(mut self, signaller_builder: Arc<dyn SignallerBuilder>) -> Self {
         self.signaller_builder = Some(signaller_builder);
+        self
+    }
+
+    /// Timeout for peer handshake
+    pub fn handshake_timeout(mut self, timeout: Duration) -> Self {
+        self.config.webrtc_handshake_timeout = timeout;
         self
     }
 
@@ -242,6 +251,9 @@ impl WebRtcSocketBuilder {
                 }
                 SignalingError::UnknownFormat | SignalingError::StreamExhausted => {
                     unimplemented!("these errors should never be propagated here")
+                },
+                SignalingError::HandshakeFailedWithReason(reason) => {
+                    Error::ConnectionFailed(SignalingError::HandshakeFailedWithReason(reason))
                 }
             })
         });
@@ -471,7 +483,7 @@ where
 pub struct WebRtcSocket {
     id: once_cell::race::OnceBox<PeerId>,
     id_rx: futures_channel::oneshot::Receiver<PeerId>,
-    peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState, PeerBuffered)>,
+    peer_state_rx: UnboundedReceiver<(PeerId, PeerState, PeerBuffered)>,
     peers: HashMap<PeerId, PeerState>,
     peer_buffer_info: HashMap<PeerId, PeerBuffered>,
     channels: Vec<Option<WebRtcChannel>>,
@@ -557,7 +569,7 @@ impl WebRtcSocket {
     /// [`WebRtcSocket::try_update_peers`] is the equivalent method that will instead return a
     /// `Result`.
     pub fn update_peers(&mut self) -> Vec<(PeerId, PeerState)> {
-        self.try_update_peers().unwrap()
+        self.try_update_peers().unwrap_or_default()
     }
 
     /// Similar to [`WebRtcSocket::update_peers`]. Will instead return a Result::Err if the
@@ -574,6 +586,7 @@ impl WebRtcSocket {
                     }
 
                     if state == PeerState::Disconnected {
+                        let _ = self.peers.remove(&id);
                         let _ = self.peer_buffer_info.remove(&id);
                     }
                 }
@@ -856,6 +869,7 @@ async fn run_socket(
         &config.channels,
         channels,
         config.keep_alive_interval,
+        config.webrtc_handshake_timeout,
     );
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());

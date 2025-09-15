@@ -63,6 +63,9 @@ pub enum SignalingError {
     /// Handshake failed
     #[error("handshake failed")]
     HandshakeFailed,
+
+    #[error("handshake failed: {0}")]
+    HandshakeFailedWithReason(String),
 }
 
 cfg_if! {

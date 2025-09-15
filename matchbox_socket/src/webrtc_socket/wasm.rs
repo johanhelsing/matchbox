@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
 use futures_channel::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
-use futures_util::select;
-use js_sys::{Function, Reflect};
+use futures_util::{select, FutureExt};
+use js_sys::{decode_uri, Function, Reflect};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
@@ -141,6 +141,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        timeout: Duration,
     ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError> {
         debug!("making offer");
 
@@ -184,7 +185,7 @@ impl Messenger for WasmMessenger {
         // however, for some reason removing this wait causes problems with NAT
         // punching in practice.
         // We should figure out why this is happening.
-        wait_for_ice_gathering_complete(conn.clone()).await;
+        wait_for_ice_gathering_complete(signal_peer.id.clone(), conn.clone(), timeout.clone()).await?;
 
         signal_peer.send(PeerSignal::Offer(conn.local_description().unwrap().sdp()));
 
@@ -229,8 +230,9 @@ impl Messenger for WasmMessenger {
             received_candidates,
             data_channels_ready_fut,
             peer_signal_rx,
+            timeout
         )
-        .await;
+        .await?;
 
         Ok(HandshakeResult {
             peer_id: signal_peer.id,
@@ -246,6 +248,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        timeout: Duration,
     ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError> {
         debug!("handshake_accept");
 
@@ -294,6 +297,7 @@ impl Messenger for WasmMessenger {
                 }
             }
         };
+
         debug!("received offer");
 
         // Set remote description
@@ -332,7 +336,7 @@ impl Messenger for WasmMessenger {
         // however, for some reason removing this wait causes problems with NAT
         // punching in practice.
         // We should figure out why this is happening.
-        wait_for_ice_gathering_complete(conn.clone()).await;
+        wait_for_ice_gathering_complete(signal_peer.id.clone(), conn.clone(), timeout.clone()).await?;
 
         let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
         signal_peer.send(answer);
@@ -343,8 +347,9 @@ impl Messenger for WasmMessenger {
             received_candidates,
             data_channels_ready_fut,
             peer_signal_rx,
+            timeout
         )
-        .await;
+        .await?;
 
         Ok(HandshakeResult {
             peer_id: signal_peer.id,
@@ -367,7 +372,9 @@ async fn complete_handshake(
     received_candidates: Vec<String>,
     mut data_channels_ready_fut: Pin<Box<futures::future::Fuse<impl Future<Output = ()>>>>,
     mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
-) {
+    timeout: Duration,
+) -> Result<(), PeerError> {
+    let peer_id = signal_peer.id.clone();
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
         move |event: RtcPeerConnectionIceEvent| {
             let candidate_json = match event.candidate() {
@@ -400,6 +407,7 @@ async fn complete_handshake(
 
     // select for data channels ready or ice candidates
     debug!("waiting for data channels to open");
+    let mut delay = Delay::new(timeout).fuse();
     loop {
         select! {
             _ = data_channels_ready_fut => {
@@ -410,6 +418,10 @@ async fn complete_handshake(
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
                     try_add_rtc_ice_candidate(&conn, &candidate).await;
                 }
+            }
+            _ = delay => {
+                warn!("timeout waiting for data channels to open");
+                return Err(PeerError(peer_id, SignalingError::HandshakeFailed));
             }
         };
     }
@@ -430,6 +442,8 @@ async fn complete_handshake(
         "handshake completed, ice gathering state: {:?}",
         conn.ice_gathering_state()
     );
+
+    Ok(())
 }
 
 async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_string: &str) {
@@ -492,10 +506,10 @@ fn create_rtc_peer_connection(ice_server_config: &RtcIceServerConfig) -> RtcPeer
     connection
 }
 
-async fn wait_for_ice_gathering_complete(conn: RtcPeerConnection) {
+async fn wait_for_ice_gathering_complete(peer_id: PeerId, conn: RtcPeerConnection, timeout: Duration) -> Result<(), PeerError> {
     if conn.ice_gathering_state() == RtcIceGatheringState::Complete {
         debug!("Ice gathering already completed");
-        return;
+        return Ok(());
     }
 
     let (mut tx, mut rx) = futures_channel::mpsc::channel(1);
@@ -511,10 +525,21 @@ async fn wait_for_ice_gathering_complete(conn: RtcPeerConnection) {
 
     conn.set_onicegatheringstatechange(Some(onstatechange.as_ref().unchecked_ref()));
 
-    rx.next().await;
+    let mut delay = Delay::new(timeout).fuse();
+
+    select! {
+        _ = delay => {
+            warn!("timeout waiting for ice gathering to complete");
+            return Err(PeerError(peer_id, SignalingError::HandshakeFailed));
+        },
+        _ = rx.next() => {
+        }
+    }
 
     conn.set_onicegatheringstatechange(None);
     debug!("Ice gathering completed");
+
+    Ok(())
 }
 
 fn create_data_channels(
@@ -564,7 +589,7 @@ fn create_data_channel(
     leaking_channel_event_handler(
         |f| channel.set_onopen(f),
         move |_: JsValue| {
-            info!("data channel open: {channel_id}");
+            debug!("data channel open: {channel_id}");
             channel_open
                 .try_send(())
                 .expect("failed to notify about open connection");

@@ -25,6 +25,7 @@ use futures_util::{lock::Mutex, select};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use std::{pin::Pin, sync::Arc, time::Duration};
+use std::time::Instant;
 use webrtc::{
     api::APIBuilder,
     data_channel::{RTCDataChannel, data_channel_init::RTCDataChannelInit},
@@ -139,6 +140,7 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        timeout: Duration,
     ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError> {
         async {
             let (to_peer_message_tx, to_peer_message_rx) =
@@ -198,18 +200,21 @@ impl Messenger for NativeMessenger {
             };
 
             let remote_description = RTCSessionDescription::answer(answer).unwrap();
-            connection
+            if let Err(e) = connection
                 .set_remote_description(remote_description)
-                .await
-                .unwrap();
+                .await {
+                return Err(PeerError(signal_peer.id, SignalingError::HandshakeFailedWithReason(format!("{e:?}"))));
+            }
 
             let trickle_fut = complete_handshake(
+                signal_peer.id.clone(),
                 trickle,
                 &connection,
                 peer_signal_rx,
                 data_channels_ready_fut,
+                timeout
             )
-            .await;
+            .await?;
 
             Ok(HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
@@ -233,6 +238,7 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        timeout: Duration,
     ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerError> {
         async {
             let (to_peer_message_tx, to_peer_message_rx) =
@@ -292,12 +298,14 @@ impl Messenger for NativeMessenger {
             connection.set_local_description(answer).await.unwrap();
 
             let trickle_fut = complete_handshake(
+                signal_peer.id.clone(),
                 trickle,
                 &connection,
                 peer_signal_rx,
                 data_channels_ready_fut,
+                timeout.clone()
             )
-            .await;
+            .await?;
 
             Ok(HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
                 peer_id: signal_peer.id,
@@ -370,21 +378,28 @@ fn new_senders_and_receivers<T>(
 }
 
 async fn complete_handshake<T: Future<Output = ()>>(
+    peer_id: PeerId,
     trickle: Arc<CandidateTrickle>,
     connection: &Arc<RTCPeerConnection>,
     peer_signal_rx: UnboundedReceiver<PeerSignal>,
     mut wait_for_channels: Pin<Box<Fuse<T>>>,
-) -> Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>> + use<T>>>> {
+    timeout: Duration,
+) -> Result<Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>> + use<T>>>>, PeerError> {
     trickle.send_pending_candidates().await;
     let mut trickle_fut = Box::pin(
         CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), peer_signal_rx)
             .fuse(),
     );
 
+    let mut timeout = Delay::new(timeout).fuse();
+
     loop {
         select! {
             _ = wait_for_channels => {
                 break;
+            },
+            _ = timeout => {
+                return Err(PeerError(peer_id, SignalingError::HandshakeFailed));
             },
             // TODO: this means that the signaling is down, should return an
             // error
@@ -392,7 +407,7 @@ async fn complete_handshake<T: Future<Output = ()>>(
         };
     }
 
-    trickle_fut
+    Ok(trickle_fut)
 }
 
 struct CandidateTrickle {

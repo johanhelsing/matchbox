@@ -252,9 +252,6 @@ impl WebRtcSocketBuilder {
                 SignalingError::UnknownFormat | SignalingError::StreamExhausted => {
                     unimplemented!("these errors should never be propagated here")
                 },
-                SignalingError::HandshakeFailedWithReason(reason) => {
-                    Error::ConnectionFailed(SignalingError::HandshakeFailedWithReason(reason))
-                }
             })
         });
 

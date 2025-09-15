@@ -25,7 +25,6 @@ use futures_util::{lock::Mutex, select};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use std::{pin::Pin, sync::Arc, time::Duration};
-use std::time::Instant;
 use webrtc::{
     api::APIBuilder,
     data_channel::{RTCDataChannel, data_channel_init::RTCDataChannelInit},
@@ -203,7 +202,8 @@ impl Messenger for NativeMessenger {
             if let Err(e) = connection
                 .set_remote_description(remote_description)
                 .await {
-                return Err(PeerError(signal_peer.id, SignalingError::HandshakeFailedWithReason(format!("{e:?}"))));
+                warn!("failed to set remote description: {e:?}");
+                return Err(PeerError(signal_peer.id, SignalingError::HandshakeFailed));
             }
 
             let trickle_fut = complete_handshake(

@@ -11,7 +11,7 @@ use futures::{Future, FutureExt, StreamExt, future::Either, stream::FuturesUnord
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
-use log::{debug, error, warn, info};
+use log::{debug, error, warn};
 use matchbox_protocol::PeerId;
 pub use messages::*;
 pub(crate) use socket::MessageLoopChannels;

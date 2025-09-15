@@ -19,8 +19,8 @@ pub enum ChannelError {
     #[error("This channel is closed.")]
     Closed,
     /// Handshake failed
-    #[error("handshake failed: {0:?}")]
-    HandshakeFailed(()),
+    #[error("handshake failed")]
+    HandshakeFailed,
 }
 
 #[derive(Debug)]
@@ -63,9 +63,6 @@ pub enum SignalingError {
     /// Handshake failed
     #[error("handshake failed")]
     HandshakeFailed,
-
-    #[error("handshake failed: {0}")]
-    HandshakeFailedWithReason(String),
 }
 
 cfg_if! {

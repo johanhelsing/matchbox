@@ -237,6 +237,7 @@ async fn message_loop<M: Messenger>(
                         PeerEvent::PeerLeft(peer_uuid) => {
                             if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected, PeerBuffered::default())).is_err() {
                                 // socket dropped, exit cleanly
+                                warn!("Stop message loop because failed to send peer left event to peer {peer_uuid} (socket dropped)")
                                 break Ok(());
                             }
                         },

@@ -9,7 +9,7 @@ matchbox_socket = { path = "../../matchbox_socket" }
 futures-timer = { version = "3", features = ["wasm-bindgen"] }
 iroh = { version = "0.35", default-features = false }
 iroh-gossip = { version = "0.35", default-features = false, features = ["net"] }
-n0-future = { version = "0.1.2", features = [] }
+n0-future = { version = "0.2", features = [] }
 uuid = { version = "1.16", features = ["v4", "rng-getrandom"] }
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }

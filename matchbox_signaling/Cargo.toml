@@ -35,5 +35,5 @@ tokio-stream = "0.1"
 async-trait = "0.1"
 
 [dev-dependencies]
-tokio-tungstenite = "0.26"
+tokio-tungstenite = "0.28"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

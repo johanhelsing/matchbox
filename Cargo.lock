@@ -495,9 +495,9 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.29.1"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef0f7efedeac57d9b26170f72965ecfd31473ca52ca7a64e925b0b6f5f079886"
+checksum = "ee88b4c88ac8c9ea446ad43498955750a4bbe64c4392f21ccfe5d952865e318f"
 dependencies = [
  "async-std",
  "async-tls",
@@ -507,7 +507,7 @@ dependencies = [
  "futures-task",
  "log",
  "pin-project-lite",
- "tungstenite 0.26.2",
+ "tungstenite 0.27.0",
 ]
 
 [[package]]
@@ -524,7 +524,7 @@ dependencies = [
  "js-sys",
  "log",
  "matchbox_socket",
- "n0-future",
+ "n0-future 0.2.0",
  "serde",
  "serde_json",
  "tokio",
@@ -615,7 +615,7 @@ dependencies = [
  "sha1",
  "sync_wrapper",
  "tokio",
- "tokio-tungstenite 0.28.0",
+ "tokio-tungstenite",
  "tower",
  "tower-layer",
  "tower-service",
@@ -2358,7 +2358,7 @@ dependencies = [
  "iroh-gossip",
  "js-sys",
  "matchbox_socket",
- "n0-future",
+ "n0-future 0.2.0",
  "serde",
  "serde_json",
  "tokio",
@@ -3950,7 +3950,7 @@ dependencies = [
  "iroh-quinn-proto",
  "iroh-quinn-udp",
  "iroh-relay",
- "n0-future",
+ "n0-future 0.1.3",
  "netdev",
  "netwatch",
  "pin-project",
@@ -4029,7 +4029,7 @@ dependencies = [
  "iroh",
  "iroh-blake3",
  "iroh-metrics",
- "n0-future",
+ "n0-future 0.1.3",
  "postcard",
  "rand 0.8.5",
  "rand_core 0.6.4",
@@ -4142,7 +4142,7 @@ dependencies = [
  "iroh-quinn",
  "iroh-quinn-proto",
  "lru 0.12.5",
- "n0-future",
+ "n0-future 0.1.3",
  "num_enum",
  "pin-project",
  "pkarr",
@@ -4425,7 +4425,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite 0.26.2",
+ "tokio-tungstenite",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -4446,7 +4446,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite 0.26.2",
+ "tokio-tungstenite",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -4622,6 +4622,27 @@ name = "n0-future"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bb0e5d99e681ab3c938842b96fcb41bf8a7bb4bfdb11ccbd653a7e83e06c794"
+dependencies = [
+ "cfg_aliases",
+ "derive_more 1.0.0",
+ "futures-buffered",
+ "futures-lite",
+ "futures-util",
+ "js-sys",
+ "pin-project",
+ "send_wrapper 0.6.0",
+ "tokio",
+ "tokio-util",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-time",
+]
+
+[[package]]
+name = "n0-future"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89d7dd42bd0114c9daa9c4f2255d692a73bba45767ec32cf62892af6fe5d31f6"
 dependencies = [
  "cfg_aliases",
  "derive_more 1.0.0",
@@ -4841,7 +4862,7 @@ dependencies = [
  "iroh-quinn-udp",
  "js-sys",
  "libc",
- "n0-future",
+ "n0-future 0.1.3",
  "nested_enum_utils",
  "netdev",
  "netlink-packet-core",
@@ -7151,18 +7172,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.26.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
-dependencies = [
- "futures-util",
- "log",
- "tokio",
- "tungstenite 0.26.2",
-]
-
-[[package]]
-name = "tokio-tungstenite"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25a406cddcc431a75d3d9afc6a7c0f7428d4891dd973e4d54c56b46127bf857"
@@ -7412,9 +7421,9 @@ checksum = "2c591d83f69777866b9126b24c6dd9a18351f177e49d625920d19f989fd31cf8"
 
 [[package]]
 name = "tungstenite"
-version = "0.26.2"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4793cb5e56680ecbb1d843515b23b6de9a75eb04b66643e256a396d43be33c13"
+checksum = "eadc29d668c91fcc564941132e17b28a7ceb2f3ebf0b9dae3e03fd7a6748eb0d"
 dependencies = [
  "bytes",
  "data-encoding",

@@ -29,7 +29,7 @@ signaling = [
 ]
 
 [dependencies]
-bevy = { version = "0.16", default-features = false, features = [
+bevy = { version = "0.17", default-features = false, features = [
   "async_executor",
 ] }
 matchbox_socket = { version = "0.12", path = "../matchbox_socket" }
@@ -40,18 +40,18 @@ matchbox_signaling = { version = "0.12", path = "../matchbox_signaling", optiona
 async-compat = { version = "0.2", optional = true }
 
 [dev-dependencies]
-bevy = { version = "0.16", default-features = false, features = [
+bevy = { version = "0.17", default-features = false, features = [
   "bevy_winit",
   "bevy_window",
   "bevy_render",
   "bevy_pbr",
   "bevy_log",
   "bevy_core_pipeline",
-  "bevy_ui",
+  "bevy_ui_render",
   "bevy_text",
   "bevy_asset",
   "ktx2",
-  "zstd",
+  "zstd_rust",
   "tonemapping_luts",
   "webgl2",
   # gh actions runners don't like wayland

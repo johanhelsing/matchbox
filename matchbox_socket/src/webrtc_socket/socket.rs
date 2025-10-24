@@ -9,20 +9,13 @@ use crate::{
         message_loop, signaling_loop,
     },
 };
-use bytes::Bytes;
-use futures::{
-    AsyncRead, AsyncWrite, Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryStreamExt,
-    future::Fuse, select,
-};
+#[cfg(not(target_arch = "wasm32"))]
+use futures::{AsyncRead, AsyncWrite, TryStreamExt};
+use futures::{Future, FutureExt, Sink, Stream, StreamExt, future::Fuse, select};
 use futures_channel::mpsc::{SendError, TrySendError, UnboundedReceiver, UnboundedSender};
 use log::{debug, error};
 use matchbox_protocol::PeerId;
-use std::{collections::HashMap, future::ready, pin::Pin, sync::Arc, task::Poll, time::Duration};
-#[cfg(not(target_arch = "wasm32"))]
-use tokio_util::{
-    compat::TokioAsyncWriteCompatExt,
-    io::{CopyToBytes, SinkWriter},
-};
+use std::{collections::HashMap, pin::Pin, sync::Arc, task::Poll, time::Duration};
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
@@ -398,6 +391,7 @@ impl Sink<(PeerId, Packet)> for WebRtcChannel {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// A channel which supports reading and writing raw bytes.
 pub struct RawPeerChannel<R, W> {
     id: Option<PeerId>,
@@ -406,6 +400,7 @@ pub struct RawPeerChannel<R, W> {
     writer: W,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<R, W> RawPeerChannel<R, W> {
     /// Returns the id of this peer.
     ///
@@ -420,6 +415,7 @@ impl<R, W> RawPeerChannel<R, W> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<R, W> AsyncRead for RawPeerChannel<R, W>
 where
     Self: Unpin,
@@ -435,7 +431,8 @@ where
     }
 }
 
-impl<R, W> AsyncWrite for RawPeerChannel<R, W>
+#[cfg(not(target_arch = "wasm32"))]
+impl<R, W> futures::AsyncWrite for RawPeerChannel<R, W>
 where
     Self: Unpin,
     W: AsyncWrite + Unpin,
@@ -892,6 +889,14 @@ fn compat_read_write(
     stream: UnboundedReceiver<(PeerId, Packet)>,
     sink: UnboundedSender<(PeerId, Packet)>,
 ) -> (impl AsyncRead, impl AsyncWrite) {
+    use bytes::Bytes;
+    use futures::SinkExt;
+    use std::future::ready;
+    use tokio_util::{
+        compat::TokioAsyncWriteCompatExt,
+        io::{CopyToBytes, SinkWriter},
+    };
+
     let reader = stream
         .then(|(_, packet)| ready(Ok::<_, std::io::Error>(packet)))
         .into_async_read();

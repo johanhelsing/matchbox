@@ -11,9 +11,9 @@
 
 use bevy::{
     app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, time::common_conditions::on_timer,
-    utils::Duration,
 };
 use bevy_matchbox::{matchbox_signaling::SignalingServer, prelude::*};
+use core::time::Duration;
 use std::net::{Ipv4Addr, SocketAddrV4};
 
 fn main() {

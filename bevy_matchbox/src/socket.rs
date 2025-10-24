@@ -1,6 +1,5 @@
 use bevy::{
-    ecs::world::Command,
-    prelude::{Commands, Component, Resource, World},
+    prelude::{Command, Commands, Component, Resource, World},
     tasks::IoTaskPool,
 };
 pub use matchbox_socket;
@@ -25,9 +24,9 @@ use std::{
 ///
 /// fn close_socket_system(
 ///     mut commands: Commands,
-///     socket: Query<Entity, With<MatchboxSocket>>
+///     socket: Single<Entity, With<MatchboxSocket>>
 /// ) {
-///     let socket = socket.single();
+///     let socket = socket.into_inner();
 ///     commands.entity(socket).despawn();
 /// }
 /// ```

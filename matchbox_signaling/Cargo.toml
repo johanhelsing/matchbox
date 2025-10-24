@@ -1,12 +1,12 @@
 [package]
 name = "matchbox_signaling"
-version = "0.11.0"
+version = "0.12.0"
 authors = [
   "Johan Helsing <johanhelsing@gmail.com>",
   "Spencer C. Imbleau <spencer@imbleau.com>",
 ]
 description = "Painless WebRTC peer-to-peer signaling servers"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
 categories = [
@@ -18,10 +18,10 @@ categories = [
 repository = "https://github.com/johanhelsing/matchbox"
 
 [dependencies]
-matchbox_protocol = { version = "0.11", path = "../matchbox_protocol", features = [
+matchbox_protocol = { version = "0.12", path = "../matchbox_protocol", features = [
   "json",
 ] }
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.8", features = ["ws"] }
 hyper = { version = "1.2", features = ["server"] }
 tracing = { version = "0.1", features = ["log"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
@@ -35,5 +35,5 @@ tokio-stream = "0.1"
 async-trait = "0.1"
 
 [dev-dependencies]
-tokio-tungstenite = "0.24"
+tokio-tungstenite = "0.28"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

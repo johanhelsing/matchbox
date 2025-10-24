@@ -1,14 +1,14 @@
 use crate::{
+    Callback, SignalingCallbacks, SignalingServerBuilder,
     signaling_server::{
+        SignalingState,
         error::{ClientRequestError, SignalingError},
         handlers::WsStateMeta,
-        SignalingState,
     },
     topologies::{
-        common_logic::{parse_request, try_send, SignalingChannel, StateObj},
         SignalingTopology,
+        common_logic::{SignalingChannel, StateObj, parse_request, try_send},
     },
-    Callback, SignalingCallbacks, SignalingServerBuilder,
 };
 use async_trait::async_trait;
 use axum::extract::ws::Message;
@@ -78,7 +78,7 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
             callbacks.on_host_connected.emit(peer_id);
         } else {
             // Alert server of new user
-            let event = Message::Text(JsonPeerEvent::NewPeer(peer_id).to_string());
+            let event = Message::Text(JsonPeerEvent::NewPeer(peer_id).to_string().into());
             // Tell host about this new client
             match state.try_send_to_host(event) {
                 Ok(_) => {
@@ -138,7 +138,8 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
                             sender: peer_id,
                             data,
                         }
-                        .to_string(),
+                        .to_string()
+                        .into(),
                     );
                     if let Err(e) = {
                         if is_host {
@@ -210,7 +211,7 @@ impl ClientServerState {
     /// Remove a client from the state if it existed.
     pub fn remove_client(&mut self, peer_id: &PeerId) {
         // Tell host about disconnected clent
-        let event = Message::Text(JsonPeerEvent::PeerLeft(*peer_id).to_string());
+        let event = Message::Text(JsonPeerEvent::PeerLeft(*peer_id).to_string().into());
         match self.try_send_to_host(event) {
             Ok(()) => {
                 info!("Notified host of peer remove: {peer_id}")
@@ -257,7 +258,7 @@ impl ClientServerState {
         };
         if let Some(host_id) = host_id {
             // Tell each connected peer about the disconnected host.
-            let event = Message::Text(JsonPeerEvent::PeerLeft(host_id).to_string());
+            let event = Message::Text(JsonPeerEvent::PeerLeft(host_id).to_string().into());
             // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
             let clients = { self.clients.lock().unwrap().clone() };
             clients.keys().for_each(|peer_id| {

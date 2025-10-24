@@ -1,20 +1,20 @@
 use crate::{
-    signaling_server::{callbacks::SharedCallbacks, SignalingState},
-    topologies::{
-        common_logic::{spawn_sender_task, try_send, SignalingChannel},
-        SignalingStateMachine,
-    },
     SignalingCallbacks,
+    signaling_server::{SignalingState, callbacks::SharedCallbacks},
+    topologies::{
+        SignalingStateMachine,
+        common_logic::{SignalingChannel, spawn_sender_task, try_send},
+    },
 };
 use axum::{
+    Extension,
     extract::{
-        ws::{Message, WebSocket},
         ConnectInfo, Path, Query, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     response::IntoResponse,
-    Extension,
 };
-use futures::{stream::SplitStream, StreamExt};
+use futures::{StreamExt, stream::SplitStream};
 use hyper::{HeaderMap, StatusCode};
 use matchbox_protocol::{JsonPeerEvent, PeerId};
 use std::{collections::HashMap, net::SocketAddr};
@@ -91,7 +91,7 @@ where
 
         // Send ID to peer
         let event_text = JsonPeerEvent::IdAssigned(peer_id).to_string();
-        let event = Message::Text(event_text.clone());
+        let event = Message::Text((&event_text).into());
         if let Err(e) = try_send(&sender, event) {
             error!("error sending to {peer_id}: {e:?}");
         } else {

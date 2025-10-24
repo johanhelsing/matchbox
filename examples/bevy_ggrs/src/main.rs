@@ -1,5 +1,5 @@
 use bevy::{log::LogPlugin, prelude::*};
-use bevy_ggrs::{ggrs::SessionBuilder, GgrsApp, GgrsPlugin, GgrsSchedule, ReadInputs, Session};
+use bevy_ggrs::prelude::*;
 use bevy_matchbox::prelude::*;
 
 mod args;
@@ -7,8 +7,6 @@ mod box_game;
 
 use args::*;
 use box_game::*;
-
-const FPS: usize = 60;
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Hash, States)]
 enum AppState {
@@ -26,7 +24,6 @@ fn main() {
 
     App::new()
         .add_plugins(GgrsPlugin::<BoxConfig>::default())
-        .set_rollback_schedule_fps(FPS)
         .add_systems(ReadInputs, read_local_inputs)
         // Rollback behavior can be customized using a variety of extension methods and plugins:
         // The FrameCount resource implements Copy, we can use that to have minimal overhead
@@ -116,7 +113,7 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn lobby_cleanup(query: Query<Entity, With<LobbyUI>>, mut commands: Commands) {
     for e in query.iter() {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).despawn();
     }
 }
 
@@ -159,9 +156,7 @@ fn lobby_system(
     let mut sess_build = SessionBuilder::<BoxConfig>::new()
         .with_num_players(args.players)
         .with_max_prediction_window(max_prediction)
-        .with_input_delay(2)
-        .with_fps(FPS)
-        .expect("invalid fps");
+        .with_input_delay(2);
 
     for (i, player) in players.into_iter().enumerate() {
         sess_build = sess_build

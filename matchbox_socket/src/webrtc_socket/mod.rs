@@ -1,76 +1,109 @@
-pub(crate) mod error;
+pub mod error;
 mod messages;
 mod signal_peer;
 mod socket;
 
 use self::error::SignalingError;
-use crate::{webrtc_socket::signal_peer::SignalPeer, Error};
+use crate::{Error, webrtc_socket::signal_peer::SignalPeer};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
-use futures::{future::Either, stream::FuturesUnordered, Future, FutureExt, StreamExt};
+use futures::{Future, FutureExt, StreamExt, future::Either, stream::FuturesUnordered};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
 use log::{debug, error, warn};
 use matchbox_protocol::PeerId;
-use messages::*;
+pub use messages::*;
 pub(crate) use socket::MessageLoopChannels;
 pub use socket::{
     ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
-use std::{collections::HashMap, pin::Pin, time::Duration};
+use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm;
         type UseMessenger = wasm::WasmMessenger;
-        type UseSignaller = wasm::WasmSignaller;
+        type UseSignallerBuilder = wasm::WasmSignallerBuilder;
         /// A future which runs the message loop for the socket and completes
         /// when the socket closes or disconnects
         pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>>>>;
     } else {
         mod native;
         type UseMessenger = native::NativeMessenger;
-        type UseSignaller = native::NativeSignaller;
+        type UseSignallerBuilder = native::NativeSignallerBuilder;
         /// A future which runs the message loop for the socket and completes
         /// when the socket closes or disconnects
         pub type MessageLoopFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
     }
 }
 
+/// A builder that constructs a new [Signaller] from a room URL.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-trait Signaller: Sized {
-    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignalingError>;
-
-    async fn send(&mut self, request: String) -> Result<(), SignalingError>;
-
-    async fn next_message(&mut self) -> Result<String, SignalingError>;
+pub trait SignallerBuilder: std::fmt::Debug + Sync + Send + 'static {
+    /// Create a new [Signaller]. The Room URL is an implementation specific identifier for joining
+    /// a room.
+    async fn new_signaller(
+        &self,
+        attempts: Option<u16>,
+        room_url: String,
+    ) -> Result<Box<dyn Signaller>, SignalingError>;
 }
 
-async fn signaling_loop<S: Signaller>(
+/// A signalling implementation.
+///
+/// The Signaller is responsible for passing around
+/// [WebRTC signals](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Signaling_and_video_calling#the_signaling_server)
+/// between room peers, encoded as [PeerEvent::Signal] which holds a [PeerSignal].
+///
+/// It is also responsible for notifying each peer of the following special events:
+///
+/// - [PeerEvent::IdAssigned] -- first event in stream, received once at connection time.
+/// - [PeerEvent::NewPeer] -- received when a new peer has joined the room, AND when this node must
+///   send an offer to them.
+/// - [PeerEvent::PeerLeft] -- received when a peer leaves the room.
+///
+/// To achieve a full mesh configuration, the signaller must do the following for **each pair** of
+/// peers in a room:
+///
+/// 1. It decides which peer is the "Offerer" and which is the "Answerer".
+/// 2. It sends [PeerEvent::NewPeer] to the "Offerer" only.
+/// 3. It passes [PeerEvent::Signal] events back and forth between them, until one of them
+///    disconnects.
+/// 4. It sends [PeerEvent::PeerLeft] with the ID of the disconnected peer to the remaining peer.
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+pub trait Signaller: Sync + Send + 'static {
+    /// Request the signaller to pass a message to another peer.
+    async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError>;
+
+    /// Get the next event from the signaller.
+    async fn next_message(&mut self) -> Result<PeerEvent, SignalingError>;
+}
+
+async fn signaling_loop(
+    builder: Arc<dyn SignallerBuilder>,
     attempts: Option<u16>,
     room_url: String,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
 ) -> Result<(), SignalingError> {
-    let mut signaller = S::new(attempts, &room_url).await?;
+    let mut signaller = builder.new_signaller(attempts, room_url).await?;
 
     loop {
         select! {
             request = requests_receiver.next().fuse() => {
-                let request = serde_json::to_string(&request).expect("serializing request");
-                debug!("-> {request}");
-                signaller.send(request).await.map_err(SignalingError::from)?;
+                debug!("-> {request:?}");
+                let Some(request) = request else {break Err(SignalingError::StreamExhausted)};
+                signaller.send(request).await?;
             }
 
             message = signaller.next_message().fuse() => {
                 match message {
                     Ok(message) => {
-                        debug!("Received {message}");
-                        let event: PeerEvent = serde_json::from_str(&message)
-                            .unwrap_or_else(|err| panic!("couldn't parse peer event: {err}.\nEvent: {message}"));
-                        events_sender.unbounded_send(event).map_err(SignalingError::from)?;
+                        debug!("Received {message:?}");
+                        events_sender.unbounded_send(message).map_err(SignalingError::from)?;
                     }
                     Err(SignalingError::UnknownFormat) => {
                         warn!("ignoring unexpected non-text message from signaling server")

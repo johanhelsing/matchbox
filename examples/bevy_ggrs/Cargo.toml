@@ -3,7 +3,7 @@ name = "bevy_ggrs_example"
 version = "0.7.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "A demo game where two web browser can connect and move boxes around"
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/johanhelsing/matchbox"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
 license = "MIT OR Apache-2.0"
@@ -13,29 +13,30 @@ web-sys = { version = "0.3", features = [
   "Document",
   "Location", # for getting args from query string
 ] }
-serde_qs = "0.13"
+serde_qs = "0.15"
 wasm-bindgen = "0.2"
-bevy_ggrs = { version = "0.17", features = ["wasm-bindgen"] }
+bevy_ggrs = { version = "0.19", features = ["wasm-bindgen"] }
 
 [dependencies]
 bevy_matchbox = { path = "../../bevy_matchbox", features = ["ggrs"] }
-bevy = { version = "0.15", default-features = false, features = [
+bevy = { version = "0.17", default-features = false, features = [
   "bevy_winit",
   "bevy_render",
   "bevy_pbr",
   "bevy_core_pipeline",
-  "bevy_ui",
+  "bevy_ui_render",
   "bevy_text",
   "bevy_asset",
-  "bevy_sprite",
+  "bevy_sprite_render",
   "bevy_state",
   "multi_threaded",
   "png",
+  "zstd_rust",
   "webgl2",
   "tonemapping_luts",
   # gh actions runners don't like wayland
   "x11",
 ] }
-bevy_ggrs = "0.17"
+bevy_ggrs = "0.19"
 clap = { version = "4.3", features = ["derive"] }
 serde = "1.0"

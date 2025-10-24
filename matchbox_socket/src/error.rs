@@ -1,4 +1,6 @@
-use crate::webrtc_socket::error::SignalingError;
+//! Error definitions for socket operations.
+
+pub use crate::webrtc_socket::error::SignalingError;
 
 /// Errors that can happen when using Matchbox sockets.
 #[derive(Debug, thiserror::Error)]

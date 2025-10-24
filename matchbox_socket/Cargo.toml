@@ -40,7 +40,6 @@ once_cell = { version = "1.17", default-features = false, features = [
   "alloc",
 ] }
 derive_more = { version = "2.0", features = ["display", "from"] }
-tokio-util = { version = "0.7", features = ["io", "compat"] }
 
 ggrs = { version = "0.11", default-features = false, optional = true }
 bincode = { version = "2.0", default-features = false, features = [
@@ -85,6 +84,7 @@ async-tungstenite = { version = "0.31", default-features = false, features = [
 ] }
 webrtc = { version = "0.14", default-features = false }
 async-compat = { version = "0.2", default-features = false }
+tokio-util = { version = "0.7", features = ["io", "compat"] }
 
 [dev-dependencies]
 futures-test = "0.3"

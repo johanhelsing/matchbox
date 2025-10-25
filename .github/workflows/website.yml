@@ -26,7 +26,7 @@ jobs:
         run: cargo install --git https://github.com/johanhelsing/bevy_wasm_pack
 
       - name: Build bevy_ggrs example
-        run: bevy_wasm_pack dist bevy_ggrs_example --dir-name bevy_ggrs
+        run: RUSTFLAGS='--cfg=getrandom_backend="wasm_js"' bevy_wasm_pack dist bevy_ggrs_example --dir-name bevy_ggrs
 
       - name: Copy index.html
         run: cp website/index.html dist/index.html

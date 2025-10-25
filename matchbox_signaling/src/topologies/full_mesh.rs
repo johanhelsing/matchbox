@@ -46,6 +46,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
     /// One of these handlers is spawned for every web socket.
     async fn state_machine(upgrade: WsStateMeta<FullMeshCallbacks, FullMeshState>) {
         let WsStateMeta {
+            room,
             peer_id,
             sender,
             mut receiver,
@@ -53,7 +54,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
             callbacks,
         } = upgrade;
         // Add peer to state
-        state.add_peer(peer_id, sender.clone());
+        state.add_peer(peer_id, sender.clone(), room.clone());
         // Lifecycle event: On Connected
         callbacks.on_peer_connected.emit(peer_id);
 
@@ -92,7 +93,7 @@ impl SignalingTopology<FullMeshCallbacks, FullMeshState> for FullMesh {
                         .to_string()
                         .into(),
                     );
-                    if let Err(e) = state.try_send_to_peer(receiver, event) {
+                    if let Err(e) = state.try_send_to_peer(receiver, event, room.clone()) {
                         error!("error sending: {e:?}");
                     }
                 }
@@ -120,35 +121,93 @@ pub struct FullMeshCallbacks {
 }
 impl SignalingCallbacks for FullMeshCallbacks {}
 
+/// Signaling server isolated registry of peers, rooms and channels
+#[derive(Default, Debug, Clone)]
+pub struct IsolatedMeshState {
+    rooms: HashMap<String, HashMap<PeerId, SignalingChannel>>,
+    peers: HashMap<PeerId, String>,
+}
+
 /// Signaling server state for full mesh topologies
 #[derive(Default, Debug, Clone)]
 pub struct FullMeshState {
-    pub(crate) peers: StateObj<HashMap<PeerId, SignalingChannel>>,
+    pub(crate) state: StateObj<IsolatedMeshState>,
 }
 impl SignalingState for FullMeshState {}
 
 impl FullMeshState {
     /// Add a peer, returning peers that already existed
-    pub fn add_peer(&mut self, peer: PeerId, sender: SignalingChannel) {
+    pub fn add_peer(&mut self, peer: PeerId, sender: SignalingChannel, room: String) {
         // Alert all peers of new user
         let event = Message::Text(JsonPeerEvent::NewPeer(peer).to_string().into());
+
+        // Create the room if needed
+        if !self
+            .state
+            .lock()
+            .as_ref()
+            .unwrap()
+            .rooms
+            .contains_key(&room)
+        {
+            self.state
+                .lock()
+                .as_mut()
+                .unwrap()
+                .rooms
+                .insert(room.clone(), HashMap::new());
+        }
+
         // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
-        let peers = { self.peers.lock().unwrap().clone() };
-        peers.keys().for_each(|peer_id| {
-            if let Err(e) = self.try_send_to_peer(*peer_id, event.clone()) {
-                error!("error sending to {peer_id}: {e:?}");
+        // let rooms = { self.peers.lock().unwrap().clone() };
+        let state = { self.state.lock().unwrap().clone() };
+        // let rooms = self.peers.lock();
+        state.rooms.iter().for_each(|(name, peers)| {
+            if *name == room {
+                peers.keys().for_each(|peer_id| {
+                    if let Err(e) = self.try_send_to_peer(*peer_id, event.clone(), room.clone()) {
+                        error!("error sending to {peer_id}: {e:?}");
+                    }
+                });
             }
         });
+
         // Safety: All prior locks in this method must be freed prior to this call
-        self.peers.lock().as_mut().unwrap().insert(peer, sender);
+        self.state
+            .lock()
+            .as_mut()
+            .unwrap()
+            .rooms
+            .get_mut(&room)
+            .unwrap()
+            .insert(peer, sender);
+        self.state
+            .lock()
+            .as_mut()
+            .unwrap()
+            .peers
+            .insert(peer, room.clone());
     }
 
     /// Remove a peer from the state if it existed, returning the peer removed.
     pub fn remove_peer(&mut self, peer_id: &PeerId) {
-        let removed_peer = self
+        let peer_room = self
+            .state
+            .lock()
+            .as_ref()
+            .unwrap()
             .peers
+            .get(peer_id)
+            .unwrap()
+            .clone();
+        self.state.lock().as_mut().unwrap().peers.remove(peer_id);
+        let removed_peer = self
+            .state
             .lock()
             .as_mut()
+            .unwrap()
+            .rooms
+            .get_mut(&peer_room)
             .unwrap()
             .remove(peer_id)
             .map(|sender| (*peer_id, sender));
@@ -156,20 +215,33 @@ impl FullMeshState {
             // Tell each connected peer about the disconnected peer.
             let event = Message::Text(JsonPeerEvent::PeerLeft(peer_id).to_string().into());
             // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
-            let peers = { self.peers.lock().unwrap().clone() };
-            peers.keys().for_each(
-                |peer_id| match self.try_send_to_peer(*peer_id, event.clone()) {
-                    Ok(()) => info!("Sent peer remove to: {peer_id}"),
-                    Err(e) => error!("Failure sending peer remove: {e:?}"),
-                },
-            );
+            let state = { self.state.lock().unwrap().clone() };
+            state
+                .rooms
+                .get(&peer_room)
+                .unwrap()
+                .iter()
+                .for_each(|(peer_id, _)| {
+                    match self.try_send_to_peer(*peer_id, event.clone(), peer_room.to_string()) {
+                        Ok(()) => info!("Sent peer remove to: {peer_id}"),
+                        Err(e) => error!("Failure sending peer remove: {e:?}"),
+                    }
+                });
         }
     }
 
     /// Send a message to a peer without blocking.
-    pub fn try_send_to_peer(&self, id: PeerId, message: Message) -> Result<(), SignalingError> {
-        self.peers
+    pub fn try_send_to_peer(
+        &self,
+        id: PeerId,
+        message: Message,
+        room: String,
+    ) -> Result<(), SignalingError> {
+        self.state
             .lock()
+            .unwrap()
+            .rooms
+            .get(&room)
             .unwrap()
             .get(&id)
             .ok_or_else(|| SignalingError::UnknownPeer)

@@ -124,14 +124,14 @@ impl SignalingCallbacks for FullMeshCallbacks {}
 /// Signaling server isolated registry of peers, rooms and channels
 #[derive(Default, Debug, Clone)]
 pub struct IsolatedMeshState {
-    rooms : HashMap<String, HashMap<PeerId, SignalingChannel>>,
+    rooms: HashMap<String, HashMap<PeerId, SignalingChannel>>,
     peers: HashMap<PeerId, String>,
 }
 
 /// Signaling server state for full mesh topologies
 #[derive(Default, Debug, Clone)]
 pub struct FullMeshState {
-    pub(crate) state: StateObj<IsolatedMeshState>
+    pub(crate) state: StateObj<IsolatedMeshState>,
 }
 impl SignalingState for FullMeshState {}
 
@@ -142,15 +142,27 @@ impl FullMeshState {
         let event = Message::Text(JsonPeerEvent::NewPeer(peer).to_string().into());
 
         // Create the room if needed
-        if !self.state.lock().as_ref().unwrap().rooms.contains_key(&room) {
-            self.state.lock().as_mut().unwrap().rooms.insert(room.clone(), HashMap::new());
+        if !self
+            .state
+            .lock()
+            .as_ref()
+            .unwrap()
+            .rooms
+            .contains_key(&room)
+        {
+            self.state
+                .lock()
+                .as_mut()
+                .unwrap()
+                .rooms
+                .insert(room.clone(), HashMap::new());
         }
 
         // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
         // let rooms = { self.peers.lock().unwrap().clone() };
         let state = { self.state.lock().unwrap().clone() };
         // let rooms = self.peers.lock();
-        state.rooms.iter().for_each(|(name,peers)| {
+        state.rooms.iter().for_each(|(name, peers)| {
             if *name == room {
                 peers.keys().for_each(|peer_id| {
                     if let Err(e) = self.try_send_to_peer(*peer_id, event.clone(), room.clone()) {
@@ -161,13 +173,33 @@ impl FullMeshState {
         });
 
         // Safety: All prior locks in this method must be freed prior to this call
-        self.state.lock().as_mut().unwrap().rooms.get_mut(&room).unwrap().insert(peer, sender);
-        self.state.lock().as_mut().unwrap().peers.insert(peer,room.clone());
+        self.state
+            .lock()
+            .as_mut()
+            .unwrap()
+            .rooms
+            .get_mut(&room)
+            .unwrap()
+            .insert(peer, sender);
+        self.state
+            .lock()
+            .as_mut()
+            .unwrap()
+            .peers
+            .insert(peer, room.clone());
     }
 
     /// Remove a peer from the state if it existed, returning the peer removed.
     pub fn remove_peer(&mut self, peer_id: &PeerId) {
-        let peer_room = self.state.lock().as_ref().unwrap().peers.get(peer_id).unwrap().clone();
+        let peer_room = self
+            .state
+            .lock()
+            .as_ref()
+            .unwrap()
+            .peers
+            .get(peer_id)
+            .unwrap()
+            .clone();
         self.state.lock().as_mut().unwrap().peers.remove(peer_id);
         let removed_peer = self
             .state
@@ -175,23 +207,36 @@ impl FullMeshState {
             .as_mut()
             .unwrap()
             .rooms
-            .get_mut(&peer_room).unwrap().remove(peer_id).map(|sender| (*peer_id, sender));
+            .get_mut(&peer_room)
+            .unwrap()
+            .remove(peer_id)
+            .map(|sender| (*peer_id, sender));
         if let Some((peer_id, _sender)) = removed_peer {
             // Tell each connected peer about the disconnected peer.
             let event = Message::Text(JsonPeerEvent::PeerLeft(peer_id).to_string().into());
             // Safety: Lock must be scoped/dropped to ensure no deadlock with loop
             let state = { self.state.lock().unwrap().clone() };
-            state.rooms.get(&peer_room).unwrap().iter().for_each(|(peer_id,_)| {
-                match self.try_send_to_peer(*peer_id, event.clone(), peer_room.to_string()) {
-                    Ok(()) => info!("Sent peer remove to: {peer_id}"),
-                    Err(e) => error!("Failure sending peer remove: {e:?}"),
-                }
-            });
+            state
+                .rooms
+                .get(&peer_room)
+                .unwrap()
+                .iter()
+                .for_each(|(peer_id, _)| {
+                    match self.try_send_to_peer(*peer_id, event.clone(), peer_room.to_string()) {
+                        Ok(()) => info!("Sent peer remove to: {peer_id}"),
+                        Err(e) => error!("Failure sending peer remove: {e:?}"),
+                    }
+                });
         }
     }
 
     /// Send a message to a peer without blocking.
-    pub fn try_send_to_peer(&self, id: PeerId, message: Message, room:String) -> Result<(), SignalingError> {
+    pub fn try_send_to_peer(
+        &self,
+        id: PeerId,
+        message: Message,
+        room: String,
+    ) -> Result<(), SignalingError> {
         self.state
             .lock()
             .unwrap()

@@ -134,6 +134,7 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        high_throughput: bool,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         async {
             let (to_peer_message_tx, to_peer_message_rx) =
@@ -142,7 +143,7 @@ impl Messenger for NativeMessenger {
 
             debug!("making offer");
             let (connection, trickle) =
-                create_rtc_peer_connection(signal_peer.clone(), ice_server_config)
+                create_rtc_peer_connection(signal_peer.clone(), ice_server_config, high_throughput)
                     .await
                     .unwrap();
 
@@ -219,6 +220,7 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        high_throughput: bool,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         async {
             let (to_peer_message_tx, to_peer_message_rx) =
@@ -227,7 +229,7 @@ impl Messenger for NativeMessenger {
 
             debug!("handshake_accept");
             let (connection, trickle) =
-                create_rtc_peer_connection(signal_peer.clone(), ice_server_config)
+                create_rtc_peer_connection(signal_peer.clone(), ice_server_config, high_throughput)
                     .await
                     .unwrap();
 
@@ -455,8 +457,21 @@ impl CandidateTrickle {
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
     ice_server_config: &RtcIceServerConfig,
+    high_throughput: bool,
 ) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
-    let api = APIBuilder::new().build();
+    let api = if high_throughput {
+        // High-throughput mode: increase max SCTP message size for bulk transfer
+        use webrtc::api::setting_engine::{SettingEngine, SctpMaxMessageSize};
+        let mut setting_engine = SettingEngine::default();
+        // Allow larger SCTP messages (256KB) for bulk transfer
+        setting_engine
+            .set_sctp_max_message_size_can_send(SctpMaxMessageSize::Bounded(256 * 1024));
+        // Increase receive MTU for better throughput
+        setting_engine.set_receive_mtu(16384);
+        APIBuilder::new().with_setting_engine(setting_engine).build()
+    } else {
+        APIBuilder::new().build()
+    };
 
     let config = RTCConfiguration {
         ice_servers: vec![RTCIceServer {

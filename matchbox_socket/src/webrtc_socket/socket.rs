@@ -106,6 +106,8 @@ pub(crate) struct SocketConfig {
     pub(crate) attempts: Option<u16>,
     /// Interval at which to send empty requests to the signaling server
     pub(crate) keep_alive_interval: Option<Duration>,
+    /// Enable high-throughput mode (disables Nagle, increases SCTP buffers)
+    pub(crate) high_throughput: bool,
 }
 
 /// Builder for [`WebRtcSocket`]s.
@@ -133,6 +135,7 @@ impl WebRtcSocketBuilder {
                 channels: Vec::default(),
                 attempts: Some(3),
                 keep_alive_interval: Some(Duration::from_secs(10)),
+                high_throughput: false,
             },
             signaller_builder: None,
         }
@@ -181,6 +184,16 @@ impl WebRtcSocketBuilder {
     /// Adds a new reliable channel to the [`WebRtcSocket`] configuration.
     pub fn add_reliable_channel(mut self) -> WebRtcSocketBuilder {
         self.config.channels.push(ChannelConfig::reliable());
+        self
+    }
+
+    /// Enables high-throughput mode for bulk data transfer.
+    ///
+    /// This disables Nagle's algorithm and increases SCTP buffer sizes,
+    /// optimizing for throughput over latency. Use this when transferring
+    /// large amounts of data rather than small real-time messages.
+    pub fn high_throughput(mut self) -> WebRtcSocketBuilder {
+        self.config.high_throughput = true;
         self
     }
 
@@ -844,6 +857,7 @@ async fn run_socket(
         &config.channels,
         channels,
         config.keep_alive_interval,
+        config.high_throughput,
     );
 
     let mut message_loop_done = Box::pin(message_loop_fut.fuse());

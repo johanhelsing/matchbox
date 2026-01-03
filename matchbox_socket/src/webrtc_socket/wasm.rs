@@ -115,6 +115,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        _high_throughput: bool, // WASM doesn't support SettingEngine configuration
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         debug!("making offer");
 
@@ -211,6 +212,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        _high_throughput: bool, // WASM doesn't support SettingEngine configuration
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         debug!("handshake_accept");
 

@@ -34,7 +34,7 @@ impl WebRtcSocket {
 fn build_packet(msg: &Message) -> Packet {
     bincode::serde::encode_to_vec(msg, bincode::config::standard())
         .expect("failed to serialize ggrs packet")
-        .into_boxed_slice()
+        .into()
 }
 
 fn deserialize_packet(message: (PeerId, Packet)) -> (PeerId, Message) {

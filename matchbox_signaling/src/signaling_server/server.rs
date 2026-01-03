@@ -7,7 +7,7 @@ use crate::{
 };
 use axum::{Router, extract::connect_info::IntoMakeServiceWithConnectInfo};
 use std::net::{SocketAddr, TcpListener};
-use tokio::net as tokio;
+use tokio::{net, sync::oneshot};
 
 /// Contains the interface end of a signaling server
 #[derive(Debug)]
@@ -19,6 +19,8 @@ pub struct SignalingServer {
     pub(crate) info: IntoMakeServiceWithConnectInfo<Router, SocketAddr>,
 
     pub(crate) listener: Option<TcpListener>,
+
+    pub(crate) shutdown_rx: Option<oneshot::Receiver<()>>,
 }
 
 /// Common methods
@@ -64,10 +66,24 @@ impl SignalingServer {
             None => _ = self.bind()?,
         };
         let listener =
-            tokio::TcpListener::from_std(self.listener.expect("No listener, this is a bug!"))
+            net::TcpListener::from_std(self.listener.expect("No listener, this is a bug!"))
                 .map_err(crate::Error::Bind)?;
-        axum::serve(listener, self.info)
-            .await
-            .map_err(crate::Error::Serve)
+
+        let server = axum::serve(listener, self.info);
+
+        if let Some(rx) = self.shutdown_rx.take() {
+            server
+                .with_graceful_shutdown(shutdown_signal(rx))
+                .await
+                .map_err(crate::Error::Serve)?;
+        } else {
+            server.await.map_err(crate::Error::Serve)?;
+        }
+
+        Ok(())
     }
+}
+
+async fn shutdown_signal(rx: oneshot::Receiver<()>) {
+    let _ = rx.await;
 }

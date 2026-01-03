@@ -537,7 +537,9 @@ fn create_data_channel(
                 let uarray = js_sys::Uint8Array::new(&arraybuf);
                 let body = uarray.to_vec();
 
-                if let Err(e) = incoming_tx.unbounded_send((peer_id, body.into_boxed_slice())) {
+                if let Err(e) =
+                    incoming_tx.unbounded_send((peer_id, body.into_boxed_slice().into()))
+                {
                     // should only happen if the socket is dropped, or we are out of memory
                     warn!("failed to notify about data channel message: {e:?}");
                 }

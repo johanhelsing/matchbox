@@ -908,7 +908,7 @@ fn compat_read_write(
         .into_async_read();
 
     let writer = sink
-        .with(move |packet: Bytes| ready(Ok::<_, SendError>((remote, Box::from(packet.as_ref())))));
+        .with(move |packet: Bytes| ready(Ok::<_, SendError>((remote, packet))));
 
     let writer = writer.sink_map_err(std::io::Error::other);
     let writer = CopyToBytes::new(writer);

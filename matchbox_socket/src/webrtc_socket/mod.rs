@@ -6,6 +6,7 @@ mod socket;
 use self::error::SignalingError;
 use crate::{Error, webrtc_socket::signal_peer::SignalPeer};
 use async_trait::async_trait;
+use bytes::Bytes;
 use cfg_if::cfg_if;
 use futures::{Future, FutureExt, StreamExt, future::Either, stream::FuturesUnordered};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -119,7 +120,7 @@ async fn signaling_loop(
 }
 
 /// The raw format of data being sent and received.
-pub type Packet = Box<[u8]>;
+pub type Packet = Bytes;
 
 /// Errors that can happen when sending packets
 #[derive(Debug, thiserror::Error)]
@@ -153,6 +154,7 @@ trait Messenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        high_throughput: bool,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
     async fn accept_handshake(
@@ -161,6 +163,7 @@ trait Messenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        high_throughput: bool,
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
@@ -172,6 +175,7 @@ async fn message_loop<M: Messenger>(
     channel_configs: &[ChannelConfig],
     channels: MessageLoopChannels,
     keep_alive_interval: Option<Duration>,
+    high_throughput: bool,
 ) -> Result<(), SignalingError> {
     let MessageLoopChannels {
         requests_sender,
@@ -230,7 +234,7 @@ async fn message_loop<M: Messenger>(
                             let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
                             handshake_signals.insert(peer_uuid, signal_tx);
                             let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
+                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs, high_throughput))
                         },
                         PeerEvent::PeerLeft(peer_uuid) => {
                             if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
@@ -242,7 +246,7 @@ async fn message_loop<M: Messenger>(
                             let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
                                 let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
                                 let signal_peer = SignalPeer::new(sender, requests_sender.clone());
-                                handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs));
+                                handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs, high_throughput));
                                 from_peer_tx
                             });
 

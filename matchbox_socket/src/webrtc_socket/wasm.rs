@@ -115,6 +115,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        _high_throughput: bool, // WASM doesn't support SettingEngine configuration
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         debug!("making offer");
 
@@ -211,6 +212,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
+        _high_throughput: bool, // WASM doesn't support SettingEngine configuration
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
         debug!("handshake_accept");
 
@@ -535,7 +537,9 @@ fn create_data_channel(
                 let uarray = js_sys::Uint8Array::new(&arraybuf);
                 let body = uarray.to_vec();
 
-                if let Err(e) = incoming_tx.unbounded_send((peer_id, body.into_boxed_slice())) {
+                if let Err(e) =
+                    incoming_tx.unbounded_send((peer_id, body.into_boxed_slice().into()))
+                {
                     // should only happen if the socket is dropped, or we are out of memory
                     warn!("failed to notify about data channel message: {e:?}");
                 }

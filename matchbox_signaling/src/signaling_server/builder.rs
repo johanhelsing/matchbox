@@ -10,6 +10,7 @@ use crate::{
 use axum::{Extension, Router, response::Response, routing::get};
 use matchbox_protocol::PeerId;
 use std::{convert::identity, net::SocketAddr};
+use tokio::sync::oneshot;
 use tower_http::{
     LatencyUnit,
     cors::{Any, CorsLayer},
@@ -44,6 +45,8 @@ where
 
     /// Arbitrary state accompanying a server
     pub(crate) state: S,
+
+    pub(crate) shutdown_rx: Option<oneshot::Receiver<()>>,
 }
 
 impl<Topology, Cb, S> SignalingServerBuilder<Topology, Cb, S>
@@ -61,6 +64,7 @@ where
             callbacks: Cb::default(),
             topology,
             state,
+            shutdown_rx: None,
         }
     }
 
@@ -114,6 +118,12 @@ where
         self
     }
 
+    /// set receiver for gracefull shutdown
+    pub fn with_shutdown(mut self, rx: oneshot::Receiver<()>) -> Self {
+        self.shutdown_rx = Some(rx);
+        self
+    }
+
     /// Create a [`SignalingServer`].
     pub fn build(self) -> SignalingServer {
         self.build_with(identity)
@@ -138,6 +148,7 @@ where
             requested_addr: self.socket_addr,
             info,
             listener: None,
+            shutdown_rx: self.shutdown_rx,
         }
     }
 }

@@ -1,4 +1,4 @@
-use futures::{select, FutureExt};
+use futures::{FutureExt, select};
 use futures_timer::Delay;
 use log::info;
 use matchbox_socket::{PeerState, WebRtcSocket};

@@ -1,8 +1,11 @@
-use super::{error::JsErrorExt, HandshakeResult, PacketSendError, PeerDataSender};
+use super::{
+    HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder,
+    error::JsErrorExt,
+    messages::{PeerEvent, PeerRequest},
+};
 use crate::webrtc_socket::{
-    error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer,
-    socket::create_data_channels_ready_fut, ChannelConfig, Messenger, Packet, RtcIceServerConfig,
-    Signaller,
+    ChannelConfig, Messenger, Packet, RtcIceServerConfig, Signaller, error::SignalingError,
+    messages::PeerSignal, signal_peer::SignalPeer, socket::create_data_channels_ready_fut,
 };
 use async_trait::async_trait;
 use futures::{Future, SinkExt, StreamExt};
@@ -14,7 +17,7 @@ use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
 use std::{pin::Pin, time::Duration};
-use wasm_bindgen::{convert::FromWasmAbi, prelude::*, JsCast, JsValue};
+use wasm_bindgen::{JsCast, JsValue, convert::FromWasmAbi, prelude::*};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
@@ -27,11 +30,18 @@ pub(crate) struct WasmSignaller {
     websocket_stream: futures::stream::Fuse<WsStream>,
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct WasmSignallerBuilder;
+
 #[async_trait(?Send)]
-impl Signaller for WasmSignaller {
-    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignalingError> {
+impl SignallerBuilder for WasmSignallerBuilder {
+    async fn new_signaller(
+        &self,
+        mut attempts: Option<u16>,
+        room_url: String,
+    ) -> Result<Box<dyn Signaller>, SignalingError> {
         let websocket_stream = 'signaling: loop {
-            match WsMeta::connect(room_url, None)
+            match WsMeta::connect(&room_url, None)
                 .await
                 .map_err(SignalingError::from)
             {
@@ -42,7 +52,9 @@ impl Signaller for WasmSignaller {
                             return Err(SignalingError::NegotiationFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
-                            warn!("connection to signaling server failed, {attempts} attempt(s) remain");
+                            warn!(
+                                "connection to signaling server failed, {attempts} attempt(s) remain"
+                            );
                             warn!("waiting 3 seconds to re-try connection...");
                             Delay::new(Duration::from_secs(3)).await;
                             info!("retrying connection...");
@@ -54,22 +66,31 @@ impl Signaller for WasmSignaller {
                 }
             };
         };
-        Ok(Self { websocket_stream })
+        Ok(Box::new(WasmSignaller { websocket_stream }))
     }
+}
 
-    async fn send(&mut self, request: String) -> Result<(), SignalingError> {
+#[async_trait(?Send)]
+impl Signaller for WasmSignaller {
+    async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
+        let request = serde_json::to_string(&request).expect("serializing request");
         self.websocket_stream
             .send(WsMessage::Text(request))
             .await
             .map_err(SignalingError::from)
     }
 
-    async fn next_message(&mut self) -> Result<String, SignalingError> {
-        match self.websocket_stream.next().await {
+    async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
+        let message = match self.websocket_stream.next().await {
             Some(WsMessage::Text(message)) => Ok(message),
             Some(_) => Err(SignalingError::UnknownFormat),
             None => Err(SignalingError::StreamExhausted),
-        }
+        }?;
+        let message = serde_json::from_str(&message).map_err(|e| {
+            error!("failed to deserialize message: {e:?}");
+            SignalingError::UnknownFormat
+        })?;
+        Ok(message)
     }
 }
 
@@ -149,8 +170,8 @@ impl Messenger for WasmMessenger {
                 PeerSignal::Answer(answer) => break answer,
                 PeerSignal::IceCandidate(candidate) => {
                     debug!(
-                    "offerer: received an ice candidate while waiting for answer: {candidate:?}"
-                );
+                        "offerer: received an ice candidate while waiting for answer: {candidate:?}"
+                    );
                     received_candidates.push(candidate);
                 }
                 _ => {
@@ -311,7 +332,9 @@ async fn complete_handshake(
                     .as_string()
                     .unwrap(),
                 None => {
-                    debug!("Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session");
+                    debug!(
+                        "Received RtcPeerConnectionIceEvent with no candidate. This means there are no further ice candidates for this session"
+                    );
                     "null".to_string()
                 }
             };

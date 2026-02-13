@@ -1,12 +1,12 @@
 [package]
 name = "bevy_matchbox"
-version = "0.11.0"
+version = "0.13.0"
 authors = [
   "Johan Helsing <johanhelsing@gmail.com>",
   "Garry O'Donnell <garry.euan.odonnell@ntlworld.com",
   "Spencer C. Imbleau",
 ]
-edition = "2021"
+edition = "2024"
 description = "A Bevy extension for Matchbox WebRtc networking"
 license = "MIT OR Apache-2.0"
 keywords = ["bevy", "webrtc", "peer-to-peer", "networking", "wasm"]
@@ -29,26 +29,29 @@ signaling = [
 ]
 
 [dependencies]
-bevy = { version = "0.15", default-features = false }
-matchbox_socket = { version = "0.11", path = "../matchbox_socket" }
+bevy = { version = "0.18.0", default-features = false, features = [
+  "async_executor",
+] }
+matchbox_socket = { version = "0.13", path = "../matchbox_socket" }
 cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-matchbox_signaling = { version = "0.11", path = "../matchbox_signaling", optional = true }
+matchbox_signaling = { version = "0.13", path = "../matchbox_signaling", optional = true }
 async-compat = { version = "0.2", optional = true }
 
 [dev-dependencies]
-bevy = { version = "0.15", default-features = false, features = [
+bevy = { version = "0.18.0", default-features = false, features = [
   "bevy_winit",
   "bevy_window",
   "bevy_render",
   "bevy_pbr",
+  "bevy_log",
   "bevy_core_pipeline",
-  "bevy_ui",
+  "bevy_ui_render",
   "bevy_text",
   "bevy_asset",
   "ktx2",
-  "zstd",
+  "zstd_rust",
   "tonemapping_luts",
   "webgl2",
   # gh actions runners don't like wayland

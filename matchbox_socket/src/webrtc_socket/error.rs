@@ -19,31 +19,39 @@ pub enum ChannelError {
     Closed,
 }
 
-/// An error that can occur with WebRTC messaging.
+/// An error that can occur with WebRTC messaging. See [Signaller].
 #[derive(Debug, thiserror::Error)]
 pub enum SignalingError {
-    // Common
+    /// Common
     #[error("failed to send to signaling server: {0}")]
     UndeliverableSignal(#[from] futures_channel::mpsc::TrySendError<PeerEvent>),
 
+    /// Stream Is Exhausted
     #[error("The stream is exhausted")]
     StreamExhausted,
 
+    /// Message Received In Unknown Format
     #[error("Message received in unknown format")]
     UnknownFormat,
 
+    /// Failed To Establish Initial Connection
     #[error("failed to establish initial connection: {0}")]
     NegotiationFailed(#[from] Box<SignalingError>),
 
-    // Native
+    /// Native
     #[cfg(not(target_arch = "wasm32"))]
     #[error("socket failure communicating with signaling server: {0}")]
     WebSocket(#[from] async_tungstenite::tungstenite::Error),
 
-    // WASM
+    /// WASM
     #[cfg(target_arch = "wasm32")]
     #[error("socket failure communicating with signaling server: {0}")]
     WebSocket(#[from] ws_stream_wasm::WsErr),
+
+    /// User Implementation Error that may be returned from using custom [`SignallerBuilder`] and
+    /// [`Signaller`] implementations
+    #[error("User implementation error: {0}")]
+    UserImplementationError(String),
 }
 
 cfg_if! {

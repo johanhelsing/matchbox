@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -28,13 +28,16 @@ jobs:
       - name: Run cargo test
         run: cargo test --features signaling --all-targets
 
+      - name: Run cargo doc tests
+        run: cargo test --doc
+
   # Should be upgraded to test when possible
   check-wasm:
     name: Check Wasm
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -46,20 +49,22 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run cargo check
-        run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo check >
+        # getrandom_backend="wasm_js" is needed for tracing to compile
+        run: RUSTFLAGS='--cfg=web_sys_unstable_apis --cfg=getrandom_backend="wasm_js"' cargo check >
           --all-targets
           --target wasm32-unknown-unknown
           -p matchbox_socket
           -p bevy_matchbox
           -p bevy_ggrs_example
           -p simple_example
+          -p custom_signaller
 
   format:
     name: Format
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -76,13 +81,10 @@ jobs:
 
   lint-native:
     name: Lints native
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -101,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -114,13 +116,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run cargo clippy
-        run: RUSTFLAGS=--cfg=web_sys_unstable_apis cargo clippy >
+        run: RUSTFLAGS='--cfg=web_sys_unstable_apis --cfg=getrandom_backend="wasm_js"' cargo clippy >
             --all-targets
             --target wasm32-unknown-unknown
             -p matchbox_socket
             -p bevy_matchbox
             -p bevy_ggrs_example
             -p simple_example
+            -p custom_signaller
             --
             -D warnings
 
@@ -132,7 +135,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Generate Image Name
         run: echo IMAGE_REPOSITORY=ghcr.io/$(tr '[:upper:]' '[:lower:]' <<< "${{ github.repository }}")/matchbox_server >> $GITHUB_ENV

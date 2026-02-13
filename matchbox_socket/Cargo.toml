@@ -1,9 +1,9 @@
 [package]
 name = "matchbox_socket"
-version = "0.11.0"
+version = "0.13.0"
 authors = ["Johan Helsing <johanhelsing@gmail.com>"]
 description = "Painless WebRTC peer-to-peer full-mesh networking socket"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 keywords = ["gamedev", "webrtc", "peer-to-peer", "networking", "wasm"]
 categories = [
@@ -18,7 +18,7 @@ repository = "https://github.com/johanhelsing/matchbox"
 ggrs = ["dep:bincode", "dep:ggrs"]
 
 [dependencies]
-matchbox_protocol = { version = "0.11", path = "../matchbox_protocol", default-features = false }
+matchbox_protocol = { version = "0.13", path = "../matchbox_protocol", default-features = false }
 futures-channel = { version = "0.3", default-features = false, features = [
   "sink",
 ] }
@@ -39,13 +39,16 @@ once_cell = { version = "1.17", default-features = false, features = [
   "race",
   "alloc",
 ] }
-derive_more = { version = "1.0", features = ["display", "from"] }
+derive_more = { version = "2.0", features = ["display", "from"] }
 tokio-util = { version = "0.7", features = ["io", "compat"] }
 arc-swap = "1.7.1"
 parking_lot = "0.12.3"
 
 ggrs = { version = "0.11", default-features = false, optional = true }
-bincode = { version = "1.3", default-features = false, optional = true }
+bincode = { version = "2.0", default-features = false, features = [
+  "serde",
+  "alloc",
+], optional = true }
 bytes = { version = "1.1", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -78,11 +81,11 @@ web-sys = { version = "0.3.22", default-features = false, features = [
 serde-wasm-bindgen = "0.6"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-async-tungstenite = { version = "0.28", default-features = false, features = [
+async-tungstenite = { version = "0.32", default-features = false, features = [
   "async-std-runtime",
   "async-tls",
 ] }
-webrtc = { version = "0.12", default-features = false }
+webrtc = { version = "0.17", default-features = false }
 async-compat = { version = "0.2", default-features = false }
 
 [dev-dependencies]

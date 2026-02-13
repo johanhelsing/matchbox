@@ -1,8 +1,5 @@
-use bevy::{prelude::*, utils::HashMap};
-use bevy_ggrs::{
-    AddRollbackCommandExtension, GgrsConfig, LocalInputs, LocalPlayers, PlayerInputs, Rollback,
-    Session,
-};
+use bevy::{platform::collections::HashMap, prelude::*};
+use bevy_ggrs::{LocalInputs, LocalPlayers, prelude::*};
 use bevy_matchbox::prelude::PeerId;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
@@ -210,9 +207,9 @@ pub fn move_cube_system(
         t.translation.z += v.z * dt;
 
         // constrain cube to plane
-        t.translation.x = t.translation.x.max(-1. * (PLANE_SIZE - CUBE_SIZE) * 0.5);
+        t.translation.x = t.translation.x.max(-(PLANE_SIZE - CUBE_SIZE) * 0.5);
         t.translation.x = t.translation.x.min((PLANE_SIZE - CUBE_SIZE) * 0.5);
-        t.translation.z = t.translation.z.max(-1. * (PLANE_SIZE - CUBE_SIZE) * 0.5);
+        t.translation.z = t.translation.z.max(-(PLANE_SIZE - CUBE_SIZE) * 0.5);
         t.translation.z = t.translation.z.min((PLANE_SIZE - CUBE_SIZE) * 0.5);
     }
 }

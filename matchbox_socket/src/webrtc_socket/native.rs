@@ -1,23 +1,28 @@
 use super::{
-    ChannelBuilder, DataChannelEventReceiver, HandshakeResult, PacketSendError, PeerDataSender,
+    HandshakeResult, PacketSendError, PeerDataSender, SignallerBuilder,
+    messages::{PeerEvent, PeerRequest},
 };
 use crate::{
-    webrtc_socket::{
-        error::SignalingError, messages::PeerSignal, signal_peer::SignalPeer, Messenger, Packet,
-        Signaller,
-    },
     RtcIceServerConfig,
+    webrtc_socket::{
+        ChannelConfig, Messenger, Packet, Signaller, error::SignalingError, messages::PeerSignal,
+        signal_peer::SignalPeer, socket::create_data_channels_ready_fut,
+    },
 };
 use async_compat::CompatExt;
 use async_trait::async_trait;
 use async_tungstenite::{
-    async_std::{connect_async, ConnectStream},
-    tungstenite::Message,
     WebSocketStream,
+    async_std::{ConnectStream, connect_async},
+    tungstenite::Message,
 };
 use bytes::Bytes;
-use futures::{future::Fuse, stream::FuturesUnordered, Future, FutureExt, StreamExt};
-use futures_channel::mpsc::{TrySendError, UnboundedReceiver, UnboundedSender};
+use futures::{
+    Future, FutureExt, StreamExt,
+    future::{Fuse, FusedFuture},
+    stream::FuturesUnordered,
+};
+use futures_channel::mpsc::{Receiver, Sender, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::{lock::Mutex, select};
 use log::{debug, error, info, trace, warn};
@@ -25,14 +30,14 @@ use matchbox_protocol::PeerId;
 use std::{pin::Pin, sync::Arc, time::Duration};
 use webrtc::{
     api::APIBuilder,
-    data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
+    data_channel::{RTCDataChannel, data_channel_init::RTCDataChannelInit},
     ice_transport::{
         ice_candidate::{RTCIceCandidate, RTCIceCandidateInit},
         ice_server::RTCIceServer,
     },
     peer_connection::{
-        configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription,
-        RTCPeerConnection,
+        RTCPeerConnection, configuration::RTCConfiguration,
+        sdp::session_description::RTCSessionDescription,
     },
 };
 
@@ -40,11 +45,18 @@ pub(crate) struct NativeSignaller {
     websocket_stream: WebSocketStream<ConnectStream>,
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct NativeSignallerBuilder;
+
 #[async_trait]
-impl Signaller for NativeSignaller {
-    async fn new(mut attempts: Option<u16>, room_url: &str) -> Result<Self, SignalingError> {
+impl SignallerBuilder for NativeSignallerBuilder {
+    async fn new_signaller(
+        &self,
+        mut attempts: Option<u16>,
+        room_url: String,
+    ) -> Result<Box<dyn Signaller>, SignalingError> {
         let websocket_stream = 'signaling: loop {
-            match connect_async(room_url).await.map_err(SignalingError::from) {
+            match connect_async(&room_url).await.map_err(SignalingError::from) {
                 Ok((wss, _)) => break wss,
                 Err(e) => {
                     if let Some(attempts) = attempts.as_mut() {
@@ -52,7 +64,9 @@ impl Signaller for NativeSignaller {
                             return Err(SignalingError::NegotiationFailed(Box::new(e)));
                         } else {
                             *attempts -= 1;
-                            warn!("connection to signaling server failed, {attempts} attempt(s) remain");
+                            warn!(
+                                "connection to signaling server failed, {attempts} attempt(s) remain"
+                            );
                             warn!("waiting 3 seconds to re-try connection...");
                             Delay::new(Duration::from_secs(3)).await;
                             info!("retrying connection...");
@@ -64,23 +78,32 @@ impl Signaller for NativeSignaller {
                 }
             };
         };
-        Ok(Self { websocket_stream })
+        Ok(Box::new(NativeSignaller { websocket_stream }))
     }
+}
 
-    async fn send(&mut self, request: String) -> Result<(), SignalingError> {
+#[async_trait]
+impl Signaller for NativeSignaller {
+    async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
+        let request = serde_json::to_string(&request).expect("serializing request");
         self.websocket_stream
-            .send(Message::Text(request))
+            .send(Message::Text(request.into()))
             .await
             .map_err(SignalingError::from)
     }
 
-    async fn next_message(&mut self) -> Result<String, SignalingError> {
-        match self.websocket_stream.next().await {
+    async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
+        let message = match self.websocket_stream.next().await {
             Some(Ok(Message::Text(message))) => Ok(message),
             Some(Ok(_)) => Err(SignalingError::UnknownFormat),
             Some(Err(err)) => Err(SignalingError::from(err)),
             None => Err(SignalingError::StreamExhausted),
-        }
+        }?;
+        let message = serde_json::from_str(&message).map_err(|e| {
+            error!("failed to deserialize message: {e:?}");
+            SignalingError::UnknownFormat
+        })?;
+        Ok(message)
     }
 }
 
@@ -262,12 +285,20 @@ impl<Tx: DataChannelEventReceiver> Messenger<Tx> for NativeMessenger {
     }
 }
 
-async fn complete_handshake(
+fn new_senders_and_receivers<T>(
+    channel_configs: &[ChannelConfig],
+) -> (Vec<UnboundedSender<T>>, Vec<UnboundedReceiver<T>>) {
+    (0..channel_configs.len())
+        .map(|_| futures_channel::mpsc::unbounded())
+        .unzip()
+}
+
+async fn complete_handshake<T: Future<Output = ()>>(
     trickle: Arc<CandidateTrickle>,
     connection: &Arc<RTCPeerConnection>,
     peer_signal_rx: UnboundedReceiver<PeerSignal>,
-    mut wait_for_channels: Pin<Box<Fuse<impl Future<Output = ()>>>>,
-) -> Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>>>>> {
+    mut wait_for_channels: Pin<Box<Fuse<T>>>,
+) -> Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>> + use<T>>>> {
     trickle.send_pending_candidates().await;
     let mut trickle_fut = Box::pin(
         CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), peer_signal_rx)
@@ -352,7 +383,9 @@ impl CandidateTrickle {
                         }
                         Err(err) => {
                             if *candidate_json == *"null" {
-                                debug!("Received null ice candidate, this means there are no further ice candidates");
+                                debug!(
+                                    "Received null ice candidate, this means there are no further ice candidates"
+                                );
                             } else {
                                 warn!("failed to parse ice candidate json, ignoring: {err:?}");
                             }

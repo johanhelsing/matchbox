@@ -32,11 +32,18 @@ impl WebRtcSocket {
 }
 
 fn build_packet(msg: &Message) -> Packet {
-    bincode::serialize(&msg).unwrap().into_boxed_slice()
+    bincode::serde::encode_to_vec(msg, bincode::config::standard())
+        .expect("failed to serialize ggrs packet")
+        .into_boxed_slice()
 }
 
 fn deserialize_packet(message: (PeerId, Packet)) -> (PeerId, Message) {
-    (message.0, bincode::deserialize(&message.1).unwrap())
+    (
+        message.0,
+        bincode::serde::decode_from_slice(&message.1, bincode::config::standard())
+            .expect("failed to deserialize ggrs packet")
+            .0,
+    )
 }
 
 impl ggrs::NonBlockingSocket<PeerId> for WebRtcChannel {

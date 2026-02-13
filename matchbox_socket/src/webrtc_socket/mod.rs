@@ -22,7 +22,15 @@ pub(crate) use socket::MessageLoopChannels;
 pub use socket::{
     ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use socket::{PeerMessage, SocketConfig, UnboundedDataChannelReceiver};
+use std::{
+    collections::HashMap,
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize},
+    },
+};
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

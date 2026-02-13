@@ -348,7 +348,9 @@ impl WebRtcChannel {
     /// # Panics
     /// Panics if the socket future is dropped.
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
-        self.try_send(packet, peer).expect("Send failed");
+        let _ = self
+            .try_send(packet, peer)
+            .inspect_err(|err| log::warn!("Send failed: {err:?}"));
     }
 }
 

@@ -1,3 +1,7 @@
+//! The webrtc_socket module provides a unified API for dealing with WebRtc on both native and wasm
+//! builds. This common API only implements behaviors needed by the rest of matchbox_socket: it is
+//! not a general WebRtc abstraction.
+
 pub mod error;
 mod messages;
 mod signal_peer;

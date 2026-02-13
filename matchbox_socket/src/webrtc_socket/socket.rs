@@ -189,9 +189,11 @@ impl WebRtcSocketBuilder {
     }
 
     /// Start connecting to the Signaller with this [SocketConfig].
-    pub fn build_async(self) -> impl Future<Output = async_connection::Connection> {
+    /// TODO: actual error return type.
+    pub fn build_async(self) -> impl Future<Output = Result<async_connection::Connection, String>> {
         self.validate();
-        async { todo!() }
+        debug!("Starting WebRtcSocket");
+        async_connection::Connection::new(self.config)
     }
 
     /// Creates a [`WebRtcSocket`] and the corresponding [`MessageLoopFuture`] according to the

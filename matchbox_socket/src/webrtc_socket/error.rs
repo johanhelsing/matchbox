@@ -3,7 +3,7 @@ use cfg_if::cfg_if;
 
 /// An error that can occur when getting a socket's channel through
 /// `get_channel`, `take_channel` or `try_update_peers`.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum ChannelError {
     /// Can occur if trying to get a channel with an Id that was not added while building the
     /// socket

@@ -20,8 +20,10 @@ pub enum PeerRequest<S> {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerEvent<S> {
     /// Sent by the server to the connecting peer, immediately after connection
-    /// before any other events
+    /// before any other events.
+    /// Includes the PeerId that that the receiver should consider to be theirs.
     IdAssigned(PeerId),
+    /// Includes the PeerId for the connecting remote peer.
     NewPeer(PeerId),
     PeerLeft(PeerId),
     Signal {

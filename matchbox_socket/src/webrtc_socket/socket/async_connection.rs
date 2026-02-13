@@ -14,21 +14,48 @@
 //! TODO: provide an implementation of such an API on-top of this one.
 //! TODO: reimplement existing match_box socket synchronous API on-top of this, but with options to "take"/expose these underlying objects.
 
-use crate::webrtc_socket::{MatchboxDataChannel, PacketSendError};
+use crate::webrtc_socket::messages::PeerEvent;
+use crate::webrtc_socket::{
+    DataChannelEventReceiver, MatchboxDataChannel, Messenger, PacketSendError, Signaller,
+    UseSignaller,
+};
 use crate::Packet;
-use futures::{Sink, Stream, StreamExt};
-use futures_channel::mpsc::UnboundedReceiver;
+use futures::future::BoxFuture;
+use futures::stream::FuturesUnordered;
+use futures::{FutureExt, Sink, Stream, StreamExt};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use log::{debug, warn};
 use matchbox_protocol::PeerId;
+use std::collections::HashMap;
+use std::future::Future;
+use std::sync::Arc;
 use std::{pin::Pin, task::Poll};
+
+use super::SocketConfig;
 
 /// WebRTC connection
 ///
 /// `drop` to stop accepting new peers (and thus disconnect from the Signaller).
 pub struct Connection {
     id: PeerId,
-    /// New Peers from the Signaller after all their channels have been established.
-    /// Closed when disconnected from Signaller.
-    events: UnboundedReceiver<Peer>,
+
+    pending_peers: FuturesUnordered<BoxFuture<'static, Result<Peer, PendingPeerError>>>,
+
+    config: SocketConfig,
+    signaller: UseSignaller, // TODO; Box<dyn Signaller>
+}
+
+enum PendingPeerError {
+    FailedPeerConnection(PeerId, String),
+    /// Means no more peers after any existing pending ones are finished.
+    DisconnectedFromSignaler(String),
+    // /// DisconnectedFromSignaler, and non pending.
+    // NoMore,
+}
+
+/// Info the [Connection] holds onto about a peer.
+struct PeerInfo {
+    left_signaling_server: futures_channel::oneshot::Sender<()>,
 }
 
 impl Connection {
@@ -37,13 +64,127 @@ impl Connection {
     pub fn id(&self) -> PeerId {
         self.id
     }
+
+    pub(crate) fn new(config: SocketConfig) -> impl Future<Output = Result<Self, String>> {
+        async move {
+            let mut signaller = UseSignaller::new(config.attempts, &config.room_url)
+                .await
+                .map_err(|e| "signal error")?;
+
+            // Grab id from first message from Signaller
+            let id = {
+                let message = signaller.next_message().await.map_err(|e| "signal error")?;
+                debug!("Received {message}");
+                let first_event: PeerEvent = serde_json::from_str(&message).map_err(|err| {
+                    format!("couldn't parse peer event: {err}.\nEvent: {message}")
+                })?;
+
+                match first_event {
+                    PeerEvent::IdAssigned(id) => id,
+                    _ => return Result::Err("Signaller sent event before Id".to_owned()),
+                }
+            };
+
+            let pending_peers = FuturesUnordered::new();
+            pending_peers.push(future);
+
+            Result::Ok(Self {
+                id,
+                signaller,
+                config,
+                peer_info: HashMap::default(),
+                pending_peers: FuturesUnordered::new(),
+            })
+        }
+    }
+
+    async fn next<M, Tx: DataChannelEventReceiver>(mut self: Pin<&mut Self>) -> Result<Peer, String>
+    where
+        M: Messenger<Tx>,
+    {
+        // TODO: loop over select between pending_peers.
+        loop {
+            match self.signaller.next_message().await {
+                Ok(message) => {
+                    debug!("Received {message}");
+                    let event: PeerEvent = serde_json::from_str(&message).map_err(|err| {
+                        format!("couldn't parse peer event: {err}.\nEvent: {message}")
+                    })?;
+
+                    match event {
+                        PeerEvent::IdAssigned(_) => Result::Err("IdAssigned again".to_owned()),
+                        PeerEvent::NewPeer(sender) => {
+                            let (leave_tx, leave_rx) = futures_channel::oneshot::channel();
+                            let replaced = self.peer_info.insert(
+                                sender,
+                                PeerInfo {
+                                    left_signaling_server: leave_tx,
+                                },
+                            );
+                            if matches!(replaced, Some(_)) {
+                                return Result::Err("Added peer that already exists".to_owned());
+                            }
+                            let peer = M::offer_handshake(
+                                signal_peer,
+                                signal_rx,
+                                builders,
+                                &self.config.ice_server,
+                                ready_receiver,
+                            );
+
+                            self.pending_peers.push(future);
+
+                            return Ok(Peer {
+                                id: sender,
+                                channels,
+                                left_signaling_server: leave_rx,
+                            });
+                        }
+                        PeerEvent::PeerLeft(peer_uuid) => {
+                            // TODO: Better cleanup
+                            handshake_signals.remove(&peer_uuid);
+                            todo!()
+                        }
+                        PeerEvent::Signal { sender, data } => {
+                            let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
+                                let (
+                                    signal_peer,
+                                    signal_rx,
+                                    builders,
+                                    ready_receiver,
+                                    from_peer_tx,
+                                ) = setup_peer(sender, &mut handshake_signals, &mut ready_signals);
+                                handshakes.push(M::accept_handshake(
+                                    signal_peer,
+                                    signal_rx,
+                                    builders,
+                                    &config.ice_server,
+                                    ready_receiver,
+                                ));
+                                from_peer_tx
+                            });
+
+                            if signal_tx.unbounded_send(data).is_err() {
+                                warn!("ignoring signal from peer {sender} because the handshake has already finished");
+                            }
+                            todo!()
+                        }
+                    }
+
+                    todo!()
+                }
+                Err(error) => return Result::Err("signaling error".to_owned()),
+            }
+        }
+    }
 }
 
 impl Drop for Connection {
     fn drop(&mut self) {
         // This explicit drop implementation is likely unnecessary, but it makes the intended semantics more clear.
         // When the Signaller sees `events` has been closed (which drop would do by default anyway), it can shutdown.
-        self.events.close();
+        // self.events.close();
+        todo!()
     }
 }
 
@@ -54,7 +195,11 @@ impl Stream for Connection {
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        self.events.poll_next_unpin(cx)
+        match self.next().poll_unpin(cx) {
+            Poll::Ready(Result::Ok(peer)) => Poll::Ready(Some(peer)),
+            Poll::Ready(Result::Err(error)) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 
@@ -137,5 +282,129 @@ impl Stream for DataChannelStream {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         self.rx.poll_next_unpin(cx)
+    }
+}
+
+fn signaller_loop(
+    config: SocketConfig,
+    signaller: UseSignaller,
+    pending_peers: UnboundedSender<BoxFuture<'static, Result<Peer, PendingPeerError>>>,
+) -> impl Future<Output = String> {
+    async {
+        let mut peer_info: HashMap<PeerId, PeerInfo> = HashMap::default();
+
+        loop {
+            match signaller.next_message().await {
+                Ok(message) => {
+                    debug!("Received {message}");
+                    let event: PeerEvent = serde_json::from_str(&message).map_err(|err| {
+                        format!("couldn't parse peer event: {err}.\nEvent: {message}")
+                    })?;
+
+                    match event {
+                        PeerEvent::IdAssigned(_) => Result::Err("IdAssigned again".to_owned()),
+                        PeerEvent::NewPeer(sender) => {
+                            let (leave_tx, leave_rx) = futures_channel::oneshot::channel();
+                            let replaced = peer_info.insert(
+                                sender,
+                                PeerInfo {
+                                    left_signaling_server: leave_tx,
+                                },
+                            );
+                            if matches!(replaced, Some(_)) {
+                                return "Added peer that already exists".to_owned();
+                            }
+
+                            // TODO: make EventCollectors for each channel.
+                            // await all futures for them to open -> put this future into pending_peers
+
+                            let peer = M::offer_handshake(
+                                signal_peer,
+                                signal_rx,
+                                builders,
+                                &self.config.ice_server,
+                                ready_receiver,
+                            );
+
+                            pending_peers.push(future);
+                        }
+                        PeerEvent::PeerLeft(peer_uuid) => match peer_info.get(&peer_uuid) {
+                            Some(info) => {
+                                info.left_signaling_server.send(());
+                            }
+                            None => return "Invalid peer left".to_owned(),
+                        },
+                        PeerEvent::Signal { sender, data } => {
+                            let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
+                                let (
+                                    signal_peer,
+                                    signal_rx,
+                                    builders,
+                                    ready_receiver,
+                                    from_peer_tx,
+                                ) = setup_peer(sender, &mut handshake_signals, &mut ready_signals);
+                                handshakes.push(M::accept_handshake(
+                                    signal_peer,
+                                    signal_rx,
+                                    builders,
+                                    &config.ice_server,
+                                    ready_receiver,
+                                ));
+                                from_peer_tx
+                            });
+
+                            if signal_tx.unbounded_send(data).is_err() {
+                                warn!("ignoring signal from peer {sender} because the handshake has already finished");
+                            }
+                            todo!()
+                        }
+                    }
+
+                    todo!()
+                }
+                Err(error) => return Result::Err("signaling error".to_owned()),
+            }
+        }
+    }
+}
+
+struct EventCollector {
+    peer: Arc<PeerInfo>,
+
+    opened: Option<futures_channel::oneshot::Sender<Result<(), String>>>,
+
+    packets: futures_channel::mpsc::UnboundedSender<Result<Packet, String>>,
+}
+
+impl DataChannelEventReceiver for EventCollector {
+    fn on_open(&mut self) {
+        self.opened.take().unwrap().send(Result::Ok(()));
+    }
+
+    fn on_close(&mut self) {
+        self.fail("closed".to_string());
+    }
+
+    fn on_error(&mut self, message: String) {
+        warn!("data channel error {message}");
+        self.fail(message);
+    }
+
+    fn on_message(&mut self, packet: Packet) {
+        self.packets.unbounded_send(Ok(packet));
+    }
+
+    fn on_buffered_amount_low(&mut self) {
+        todo!()
+    }
+}
+
+impl EventCollector {
+    /// Send error to opened channel if not open yet.
+    /// Prevents hang waiting for open after error.
+    /// Closes packets channel.
+    fn fail(&mut self, message: String) {
+        self.opened.take().map(|x| x.send(Result::Err(message)));
+        self.packets.close_channel();
     }
 }

@@ -279,6 +279,8 @@ pub enum PeerState {
 }
 /// Used to send and receive packets on a given WebRTC channel. Must be created as part of a
 /// [`WebRtcSocket`].
+/// This corespondents to a collection of lower level channels, one for each [PeerState::Connected]
+/// peer (identified by their PeerId).
 #[derive(Debug)]
 pub struct WebRtcChannel {
     config: ChannelConfig,
@@ -472,6 +474,9 @@ pub struct WebRtcSocket {
     id_rx: futures_channel::oneshot::Receiver<PeerId>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
     peers: HashMap<PeerId, PeerState>,
+    /// The channels, in the order specified by the builder.
+    /// These are [Some] even before any connection is made: the only transition to [None] when
+    /// [ChannelError::Taken].
     channels: Vec<Option<WebRtcChannel>>,
 }
 
@@ -711,7 +716,8 @@ impl WebRtcSocket {
             .ok_or(ChannelError::Taken)
     }
 
-    /// Takes the [`WebRtcChannel`] of a given id.
+    /// Takes the [`WebRtcChannel`] at the specified index.
+    /// The channels are indexed based on the order they were added to the builder.
     ///
     /// ```
     /// use matchbox_socket::*;
@@ -725,9 +731,9 @@ impl WebRtcSocket {
     /// ```
     ///
     /// See also: [`WebRtcSocket::channel`]
-    pub fn take_channel(&mut self, channel: usize) -> Result<WebRtcChannel, ChannelError> {
+    pub fn take_channel(&mut self, channel_index: usize) -> Result<WebRtcChannel, ChannelError> {
         self.channels
-            .get_mut(channel)
+            .get_mut(channel_index)
             .ok_or(ChannelError::NotFound)?
             .take()
             .ok_or(ChannelError::Taken)
@@ -735,12 +741,12 @@ impl WebRtcSocket {
 
     /// Takes the [`WebRtcChannel`] of a given [`PeerId`].
     pub fn take_channel_by_id(&mut self, id: PeerId) -> Result<WebRtcChannel, ChannelError> {
-        let pos = self
+        let peer_index = self
             .connected_peers()
             .position(|peer_id| peer_id == id)
             .ok_or(ChannelError::NotFound)?;
 
-        self.take_channel(pos)
+        self.take_channel(peer_index)
     }
 
     /// Converts the [`WebRtcChannel`] of a given [`PeerId`] into a [`RawPeerChannel`].
@@ -906,7 +912,7 @@ fn compat_read_write(
 
 #[cfg(test)]
 mod test {
-    use crate::{ChannelConfig, Error, WebRtcSocketBuilder};
+    use crate::{ChannelConfig, ChannelError, Error, WebRtcSocket, WebRtcSocketBuilder};
 
     #[futures_test::test]
     async fn unreachable_server() {
@@ -936,5 +942,44 @@ mod test {
             result.unwrap_err(),
             Error::ConnectionFailed { .. },
         ));
+    }
+
+    #[test]
+    #[should_panic(expected = "Must have added at least one channel")]
+    fn no_channels() {
+        let (_socket, _fut) = WebRtcSocketBuilder::new("wss://example.invalid").build();
+    }
+
+    #[test]
+    fn builder() {
+        let mut builder = WebRtcSocket::builder("wss://example.invalid");
+        builder = builder.add_reliable_channel();
+        builder = builder.add_unreliable_channel();
+        let (socket, _fut) = builder.build();
+        assert_eq!(socket.channels.len(), 2);
+        // Channels are populated immediately, even before connecting.
+        let config_0 = &socket.channels[0].as_ref().unwrap().config;
+        let config_1 = &socket.channels[1].as_ref().unwrap().config;
+        assert_eq!(config_0.ordered, true);
+        assert_eq!(config_0.max_retransmits, None);
+        assert_eq!(config_1.ordered, false);
+        assert_eq!(config_1.max_retransmits, Some(0));
+    }
+
+    #[test]
+    fn take_channel() {
+        let mut builder = WebRtcSocket::builder("wss://example.invalid");
+        builder = builder.add_reliable_channel();
+        let (mut socket, _fut) = builder.build();
+        assert!(socket.channels[0].is_some());
+        let mut taken = socket.take_channel(0).unwrap();
+        assert!(socket.channels[0].is_none());
+        assert!(matches!(
+            socket.take_channel(0).unwrap_err(),
+            ChannelError::Taken,
+        ));
+        assert!(!taken.is_closed());
+        taken.close();
+        assert!(taken.is_closed());
     }
 }

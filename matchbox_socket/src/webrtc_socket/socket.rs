@@ -960,9 +960,9 @@ mod test {
         // Channels are populated immediately, even before connecting.
         let config_0 = &socket.channels[0].as_ref().unwrap().config;
         let config_1 = &socket.channels[1].as_ref().unwrap().config;
-        assert_eq!(config_0.ordered, true);
+        assert!(config_0.ordered);
         assert_eq!(config_0.max_retransmits, None);
-        assert_eq!(config_1.ordered, false);
+        assert!(!config_1.ordered);
         assert_eq!(config_1.max_retransmits, Some(0));
     }
 

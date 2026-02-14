@@ -10,6 +10,7 @@ mod socket;
 use self::error::SignalingError;
 use crate::{Error, webrtc_socket::signal_peer::SignalPeer};
 use async_trait::async_trait;
+use bytes::Bytes;
 use cfg_if::cfg_if;
 use futures::{Future, FutureExt, StreamExt, future::Either, stream::FuturesUnordered};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -123,7 +124,7 @@ async fn signaling_loop(
 }
 
 /// The raw format of data being sent and received.
-pub type Packet = Box<[u8]>;
+pub type Packet = Bytes;
 
 /// Errors that can happen when sending packets
 #[derive(Debug, thiserror::Error)]

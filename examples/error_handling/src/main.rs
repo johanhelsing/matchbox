@@ -66,7 +66,7 @@ async fn async_main() {
             match state {
                 PeerState::Connected => {
                     info!("Peer joined: {peer}");
-                    let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
+                    let packet = "hello friend!".as_bytes().to_vec().into();
                     socket.channel_mut(CHANNEL_ID).send(packet, peer);
                 }
                 PeerState::Disconnected => {
@@ -86,7 +86,7 @@ async fn async_main() {
             _ = (&mut timeout).fuse() => {
                 let peers: Vec<PeerId> = socket.connected_peers().collect();
                 for peer in peers {
-                    let packet = "ping!".as_bytes().to_vec().into_boxed_slice();
+                    let packet = "ping!".as_bytes().to_vec().into();
                     socket.channel_mut(CHANNEL_ID).send(packet, peer);
                 }
                 timeout.reset(Duration::from_millis(10));

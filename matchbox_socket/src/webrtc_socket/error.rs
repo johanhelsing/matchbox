@@ -12,7 +12,6 @@ pub enum ChannelError {
     #[error("This channel was never created")]
     NotFound,
     /// The channel has already been taken and is no longer on the socket.
-    /// See [Web]
     #[error("This channel has already been taken and is no longer on the socket")]
     Taken,
     /// Channel might have been opened but later closed, or never opened in the first place.

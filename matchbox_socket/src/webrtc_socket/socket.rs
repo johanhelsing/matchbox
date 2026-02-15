@@ -279,7 +279,7 @@ pub enum PeerState {
 }
 /// Used to send and receive packets on a given WebRTC channel. Must be created as part of a
 /// [`WebRtcSocket`].
-/// This corresponds to a collection of lower level channels, one for each [PeerState::Connected]
+/// This corresponds to a collection of lower level channels, one for each [`PeerState::Connected`]
 /// peer (identified by their PeerId).
 #[derive(Debug)]
 pub struct WebRtcChannel {
@@ -476,7 +476,7 @@ pub struct WebRtcSocket {
     peers: HashMap<PeerId, PeerState>,
     /// The channels, in the order specified by the builder.
     /// These are [`Some`] even before any connection is made: the only transition to [`None`] when
-    /// [ChannelError::Taken].
+    /// [`ChannelError::Taken`].
     channels: Vec<Option<WebRtcChannel>>,
 }
 

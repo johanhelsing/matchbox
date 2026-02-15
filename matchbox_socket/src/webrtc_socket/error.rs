@@ -2,14 +2,16 @@ use crate::webrtc_socket::messages::PeerEvent;
 use cfg_if::cfg_if;
 
 /// An error that can occur when getting a socket's channel through
-/// `get_channel`, `take_channel` or `try_update_peers`.
+/// [`get_channel`](crate::webrtc_socket::WebRtcSocket::get_channel),
+/// [`take_channel`](crate::webrtc_socket::WebRtcSocket::take_channel) or
+/// [`try_update_peers`](crate::webrtc_socket::WebRtcSocket::try_update_peers).
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelError {
     /// Can occur if trying to get a channel with an Id that was not added while building the
     /// socket
     #[error("This channel was never created")]
     NotFound,
-    /// The channel has already been taken and is no longer on the socket
+    /// The channel has already been taken and is no longer on the socket.
     #[error("This channel has already been taken and is no longer on the socket")]
     Taken,
     /// Channel might have been opened but later closed, or never opened in the first place.

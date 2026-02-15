@@ -475,7 +475,7 @@ pub struct WebRtcSocket {
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
     peers: HashMap<PeerId, PeerState>,
     /// The channels, in the order specified by the builder.
-    /// These are [Some] even before any connection is made: the only transition to [None] when
+    /// These are [`Some`] even before any connection is made: the only transition to [`None`] when
     /// [ChannelError::Taken].
     channels: Vec<Option<WebRtcChannel>>,
 }

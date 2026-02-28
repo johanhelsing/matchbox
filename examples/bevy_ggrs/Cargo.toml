@@ -21,22 +21,10 @@ bevy_ggrs = { version = "0.20", features = ["wasm-bindgen"] }
 [dependencies]
 bevy_matchbox = { path = "../../bevy_matchbox", features = ["ggrs"] }
 bevy = { version = "0.18", default-features = false, features = [
-  "bevy_winit",
-  "bevy_render",
-  "bevy_pbr",
-  "bevy_core_pipeline",
-  "bevy_ui_render",
-  "bevy_text",
-  "bevy_asset",
-  "bevy_sprite_render",
-  "bevy_state",
-  "multi_threaded",
-  "png",
+  "2d",
+  "3d",
+  "ui",
   "zstd_rust",
-  "webgl2",
-  "tonemapping_luts",
-  # gh actions runners don't like wayland
-  "x11",
 ] }
 bevy_ggrs = "0.20"
 clap = { version = "4.3", features = ["derive"] }

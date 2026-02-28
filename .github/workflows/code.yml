@@ -14,6 +14,12 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev libasound2-dev libudev-dev
+
       - name: Checkout sources
         uses: actions/checkout@v6
 
@@ -83,6 +89,12 @@ jobs:
     name: Lints native
     runs-on: ubuntu-latest
     steps:
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev libasound2-dev libudev-dev
+
       - name: Checkout sources
         uses: actions/checkout@v6
 

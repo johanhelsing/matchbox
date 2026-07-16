@@ -1,37 +1,14 @@
 use bevy::{
-    prelude::{Command, Commands, Component, Resource, World},
+    prelude::{Command, Commands, Resource, World},
     tasks::IoTaskPool,
 };
 pub use matchbox_socket;
 use matchbox_socket::{MessageLoopFuture, WebRtcSocket, WebRtcSocketBuilder};
-use std::{
-    fmt::Debug,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
-/// A [`WebRtcSocket`] as a [`Component`] or [`Resource`].
+/// A [`WebRtcSocket`] as a Bevy [`Resource`].
 ///
-/// As a [`Component`], directly
-/// ```
-/// use bevy_matchbox::prelude::*;
-/// use bevy::prelude::*;
-///
-/// fn open_socket_system(mut commands: Commands) {
-///     let room_url = "wss://matchbox.example.com";
-///     let builder = WebRtcSocketBuilder::new(room_url).add_channel(ChannelConfig::reliable());
-///     commands.spawn(MatchboxSocket::from(builder));
-/// }
-///
-/// fn close_socket_system(
-///     mut commands: Commands,
-///     socket: Single<Entity, With<MatchboxSocket>>
-/// ) {
-///     let socket = socket.into_inner();
-///     commands.entity(socket).despawn();
-/// }
-/// ```
-///
-/// As a [`Resource`], with [`Commands`]
+/// Open with [`Commands`]:
 /// ```
 /// use bevy_matchbox::prelude::*;
 /// use bevy::prelude::*;
@@ -46,7 +23,7 @@ use std::{
 /// }
 /// ```
 ///
-/// As a [`Resource`], directly
+/// Or insert directly:
 /// ```
 /// use bevy_matchbox::prelude::*;
 /// use bevy::prelude::*;
@@ -65,9 +42,8 @@ use std::{
 ///     commands.remove_resource::<MatchboxSocket>();
 /// }
 /// ```
-#[derive(Resource, Component, Debug)]
-#[allow(dead_code)] // keep the task alive so it doesn't drop before the socket
-pub struct MatchboxSocket(WebRtcSocket, Box<dyn Debug + Send + Sync>);
+#[derive(Resource, Debug)]
+pub struct MatchboxSocket(WebRtcSocket);
 
 impl Deref for MatchboxSocket {
     type Target = WebRtcSocket;
@@ -92,8 +68,8 @@ impl From<WebRtcSocketBuilder> for MatchboxSocket {
 impl From<(WebRtcSocket, MessageLoopFuture)> for MatchboxSocket {
     fn from((socket, message_loop_fut): (WebRtcSocket, MessageLoopFuture)) -> Self {
         let task_pool = IoTaskPool::get();
-        let task = task_pool.spawn(message_loop_fut);
-        MatchboxSocket(socket, Box::new(task))
+        task_pool.spawn(message_loop_fut).detach();
+        MatchboxSocket(socket)
     }
 }
 
@@ -101,6 +77,8 @@ impl From<(WebRtcSocket, MessageLoopFuture)> for MatchboxSocket {
 struct OpenSocket(WebRtcSocketBuilder);
 
 impl Command for OpenSocket {
+    type Out = ();
+
     fn apply(self, world: &mut World) {
         world.insert_resource(MatchboxSocket::from(self.0));
     }
@@ -122,6 +100,8 @@ impl OpenSocketExt for Commands<'_, '_> {
 struct CloseSocket;
 
 impl Command for CloseSocket {
+    type Out = ();
+
     fn apply(self, world: &mut World) {
         world.remove_resource::<MatchboxSocket>();
     }

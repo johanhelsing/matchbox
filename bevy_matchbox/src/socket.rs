@@ -67,10 +67,62 @@ impl From<WebRtcSocketBuilder> for MatchboxSocket {
 
 impl From<(WebRtcSocket, MessageLoopFuture)> for MatchboxSocket {
     fn from((socket, message_loop_fut): (WebRtcSocket, MessageLoopFuture)) -> Self {
-        let task_pool = IoTaskPool::get();
-        task_pool.spawn(message_loop_fut).detach();
+        spawn_message_loop(message_loop_fut);
         MatchboxSocket(socket)
     }
+}
+
+/// Spawn the matchbox message-loop future so it keeps running for the lifetime
+/// of the socket.
+///
+/// On native, `webrtc-rs` (used by `matchbox_socket`) depends on a live tokio
+/// runtime for timers and I/O. `matchbox_socket` wraps its handshake futures
+/// in `async-compat`, which enters a global single-threaded tokio context —
+/// but that fallback runtime's timer is not sufficient for webrtc-rs 0.17's
+/// DTLS/SCTP handshake to complete when polled from Bevy's `IoTaskPool`
+/// (async-executor). The result: ICE connects but data channels never open,
+/// so `PeerState::Connected` is never emitted and peers never see each other.
+///
+/// Spawning directly on a real multi-threaded tokio runtime fixes this.
+///
+/// On WASM there is no tokio and no webrtc-rs (the browser provides WebRTC),
+/// so we fall back to `IoTaskPool::spawn(…).detach()` as before.
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_message_loop(fut: MessageLoopFuture) {
+    use std::sync::OnceLock;
+    use tokio::runtime::Runtime;
+    use tokio::task::JoinHandle;
+
+    /// A global multi-threaded tokio runtime dedicated to the matchbox message
+    /// loop. Created once, reused for every socket (reconnects, etc.).
+    static MATCHBOX_RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+    let runtime = MATCHBOX_RUNTIME.get_or_init(|| {
+        // webrtc-rs uses rustls for DTLS. rustls 0.23 requires a process-level
+        // CryptoProvider to be installed before any config is built. When the
+        // message loop ran through async-compat's fallback runtime this was set
+        // up implicitly; on a fresh tokio runtime we must install it ourselves.
+        // webrtc-rs pulls in `ring`, so use the ring provider.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("matchbox")
+            .build()
+            .expect("failed to build matchbox tokio runtime")
+    });
+
+    // Detach the JoinHandle so it runs in the background. The runtime lives for
+    // 'static and the task will complete when the socket closes.
+    let _handle: JoinHandle<()> = runtime.spawn(async move {
+        let _ = fut.await;
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn spawn_message_loop(fut: MessageLoopFuture) {
+    let task_pool = IoTaskPool::get();
+    task_pool.spawn(fut).detach();
 }
 
 /// A [`Command`] used to open a [`MatchboxSocket`] and allocate it as a resource.

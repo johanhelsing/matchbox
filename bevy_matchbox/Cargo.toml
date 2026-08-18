@@ -1,6 +1,6 @@
 [package]
 name = "bevy_matchbox"
-version = "0.14.0"
+version = "0.15.0"
 authors = [
   "Johan Helsing <johanhelsing@gmail.com>",
   "Garry O'Donnell <garry.euan.odonnell@ntlworld.com",
@@ -29,18 +29,18 @@ signaling = [
 ]
 
 [dependencies]
-bevy = { version = "0.18.0", default-features = false, features = [
+bevy = { version = "0.19.0", default-features = false, features = [
   "async_executor",
 ] }
-matchbox_socket = { version = "0.14", path = "../matchbox_socket" }
+matchbox_socket = { version = "0.15", path = "../matchbox_socket" }
 cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-matchbox_signaling = { version = "0.14", path = "../matchbox_signaling", optional = true }
+matchbox_signaling = { version = "0.15", path = "../matchbox_signaling", optional = true }
 async-compat = { version = "0.2", optional = true }
 
 [dev-dependencies]
-bevy = { version = "0.18.0", default-features = false, features = [
+bevy = { version = "0.19.0", default-features = false, features = [
   "bevy_winit",
   "bevy_window",
   "bevy_render",
@@ -65,3 +65,6 @@ required-features = ["signaling"]
 [[example]]
 name = "hello_signaling"
 required-features = ["signaling"]
+
+[lints]
+workspace = true

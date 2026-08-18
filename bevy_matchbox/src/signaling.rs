@@ -63,7 +63,9 @@ use std::net::SocketAddr;
 /// }
 /// ```
 #[derive(Debug, Resource)]
-#[allow(dead_code)] // we take ownership of the task to not drop it
+// The serve task is owned rather than detached: dropping it cancels the server, on every target
+// since Bevy 0.19, which is what makes removing the resource stop it.
+#[allow(dead_code)]
 pub struct MatchboxServer(Task<Result<(), Error>>);
 
 impl<Topology, Cb, S> From<SignalingServerBuilder<Topology, Cb, S>> for MatchboxServer
@@ -97,6 +99,8 @@ where
     Cb: SignalingCallbacks,
     S: SignalingState,
 {
+    type Out = ();
+
     fn apply(self, world: &mut bevy::prelude::World) {
         world.insert_resource(MatchboxServer::from(self.0))
     }
@@ -127,6 +131,8 @@ where
 struct StopServer;
 
 impl Command for StopServer {
+    type Out = ();
+
     fn apply(self, world: &mut bevy::prelude::World) {
         world.remove_resource::<MatchboxServer>();
     }

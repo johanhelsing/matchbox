@@ -542,7 +542,13 @@ async fn create_data_channel(
     channel.on_open(Box::new(move || {
         debug!("Data channel ready");
         Box::pin(async move {
-            channel_ready.try_send(()).unwrap();
+            // The receiving end of this channel is the handshake completion
+            // future. If it is already gone the socket was dropped or the
+            // handshake torn down mid-race -- nothing left to notify, and
+            // panicking here would take the whole message loop down.
+            if let Err(e) = channel_ready.try_send(()) {
+                debug!("data channel opened after handshake teardown: {e:?}");
+            }
         })
     }));
 

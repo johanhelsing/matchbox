@@ -278,10 +278,23 @@ async fn message_loop<M: Messenger>(
             message = next_peer_message_out => {
                 match message {
                     Some((channel_index, Some((peer, packet)))) => {
-                        let data_channel = data_channels
-                            .get_mut(&peer)
-                            .expect("couldn't find data channel for peer")
-                            .get_mut(channel_index).unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
+                        // A packet may be queued via `try_send` while the
+                        // target peer is connected, yet dequeued after that
+                        // peer's connection was torn down (WebRTC blip,
+                        // abrupt disconnect, rejoin under a new id). That is
+                        // a routine race, not a logic error: drop the packet
+                        // and carry on. Panicking here would kill the whole
+                        // message loop -- and with it every other peer
+                        // connection of this socket. Upper layers treat
+                        // reliable sends as best-effort and retransmit.
+                        let Some(peer_channels) = data_channels.get_mut(&peer) else {
+                            warn!("dropping outgoing packet for peer {peer}: no data channel (peer gone or handshake incomplete)");
+                            continue;
+                        };
+                        let Some(data_channel) = peer_channels.get_mut(channel_index) else {
+                            warn!("dropping outgoing packet for peer {peer}: no channel with index {channel_index}");
+                            continue;
+                        };
                         if let Err(e) = data_channel.send(packet) {
                             // Peer we're sending to closed their end of the connection.
                             // We anticipate the PeerLeft event soon, but we sent a message before it came.

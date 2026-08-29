@@ -1,11 +1,11 @@
 use async_compat::CompatExt;
 use bevy::{
     prelude::{Command, Commands, Resource},
-    tasks::{IoTaskPool, Task},
+    tasks::IoTaskPool,
 };
 pub use matchbox_signaling;
 use matchbox_signaling::{
-    Error, SignalingCallbacks, SignalingServer, SignalingServerBuilder, SignalingState,
+    SignalingCallbacks, SignalingServer, SignalingServerBuilder, SignalingState,
     topologies::{
         SignalingTopology,
         client_server::{ClientServer, ClientServerCallbacks, ClientServerState},
@@ -63,8 +63,7 @@ use std::net::SocketAddr;
 /// }
 /// ```
 #[derive(Debug, Resource)]
-#[allow(dead_code)] // we take ownership of the task to not drop it
-pub struct MatchboxServer(Task<Result<(), Error>>);
+pub struct MatchboxServer;
 
 impl<Topology, Cb, S> From<SignalingServerBuilder<Topology, Cb, S>> for MatchboxServer
 where
@@ -80,8 +79,8 @@ where
 impl From<SignalingServer> for MatchboxServer {
     fn from(server: SignalingServer) -> Self {
         let task_pool = IoTaskPool::get();
-        let task = task_pool.spawn(server.serve().compat());
-        MatchboxServer(task)
+        task_pool.spawn(server.serve().compat()).detach();
+        MatchboxServer
     }
 }
 
@@ -97,6 +96,8 @@ where
     Cb: SignalingCallbacks,
     S: SignalingState,
 {
+    type Out = ();
+
     fn apply(self, world: &mut bevy::prelude::World) {
         world.insert_resource(MatchboxServer::from(self.0))
     }
@@ -127,6 +128,8 @@ where
 struct StopServer;
 
 impl Command for StopServer {
+    type Out = ();
+
     fn apply(self, world: &mut bevy::prelude::World) {
         world.remove_resource::<MatchboxServer>();
     }

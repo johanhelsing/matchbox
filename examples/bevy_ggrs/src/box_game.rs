@@ -131,9 +131,9 @@ pub fn setup_scene(
                 // ...and components which will be rolled-back...
                 Velocity::default(),
             ))
-            // ...just ensure you call `add_rollback()`
+            // ...just ensure you add a `Rollback` component
             // This ensures a stable ID is available for the rollback system to refer to
-            .add_rollback();
+            .insert(Rollback);
     }
 
     // light

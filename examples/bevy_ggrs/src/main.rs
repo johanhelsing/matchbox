@@ -1,4 +1,8 @@
-use bevy::{log::LogPlugin, prelude::*};
+use bevy::{
+    log::LogPlugin,
+    prelude::*,
+    text::{FontSize, FontSource},
+};
 use bevy_ggrs::prelude::*;
 use bevy_matchbox::prelude::*;
 
@@ -59,10 +63,10 @@ fn main() {
 fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
     let room_id = match &args.room {
         Some(id) => id.clone(),
-        None => format!("bevy_ggrs?next={}", &args.players),
+        None => format!("bevy_ggrs?next={}", args.players),
     };
 
-    let room_url = format!("{}/{}", &args.matchbox, room_id);
+    let room_url = format!("{}/{}", args.matchbox, room_id);
     info!("connecting to matchbox server: {room_url:?}");
 
     commands.insert_resource(MatchboxSocket::new_unreliable(room_url));
@@ -100,8 +104,8 @@ fn lobby_startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                     },
                     Text("Entering lobby...".to_string()),
                     TextFont {
-                        font: asset_server.load("fonts/quicksand-light.ttf"),
-                        font_size: 96.,
+                        font: FontSource::Handle(asset_server.load("fonts/quicksand-light.ttf")),
+                        font_size: FontSize::Px(96.),
                         ..default()
                     },
                     TextColor(Color::BLACK),
@@ -155,6 +159,7 @@ fn lobby_system(
     // create a GGRS P2P session
     let mut sess_build = SessionBuilder::<BoxConfig>::new()
         .with_num_players(args.players)
+        .expect("failed to set num players")
         .with_max_prediction_window(max_prediction)
         .with_input_delay(2);
 

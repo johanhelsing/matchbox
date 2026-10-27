@@ -2,9 +2,10 @@ use std::{collections::BTreeMap, time::Duration};
 
 use anyhow::Context;
 use futures::FutureExt;
-use iroh::{protocol::Router, Endpoint, PublicKey};
+use iroh::{endpoint::presets, protocol::Router, Endpoint, PublicKey};
 use iroh_gossip::{
-    net::{Event, Gossip, GossipEvent, GossipReceiver, GossipSender, Message, GOSSIP_ALPN},
+    api::{Event, GossipReceiver, GossipSender, Message},
+    net::{Gossip, GOSSIP_ALPN},
     proto::TopicId,
 };
 use matchbox_socket::{
@@ -46,12 +47,11 @@ impl IrohGossipSignallerBuilder {
 
     pub async fn new() -> anyhow::Result<Self> {
         info!("Creating new IrohGossipSignallerBuilder");
-        let endpoint = Endpoint::builder()
-            .discovery_n0()
+        let endpoint = Endpoint::builder(presets::N0)
             .alpns(vec![DIRECT_MESSAGE_ALPN.to_vec(), GOSSIP_ALPN.to_vec()])
             .bind()
             .await?;
-        let iroh_id = endpoint.node_id();
+        let iroh_id = endpoint.id();
         let matchbox_id = PeerId(uuid::Uuid::new_v4());
         warn!(
             r#"
@@ -74,7 +74,7 @@ impl IrohGossipSignallerBuilder {
 |----------------------------------------------------------------
         "#
         );
-        let gossip = Gossip::builder().spawn(endpoint.clone()).await?;
+        let gossip = Gossip::builder().spawn(endpoint.clone());
         let (mut direct_message_send, mut direct_message_recv) = async_broadcast::broadcast(2048);
         direct_message_send.set_overflow(true);
         direct_message_recv.set_overflow(true);
@@ -143,7 +143,7 @@ impl IrohGossipSignallerBuilder {
             "Subscribing to gossip topic {:?} with bootstrap: {:?}",
             GOSSIP_TOPIC_ID, bootstrap
         );
-        let mut gossip_topic = self.gossip.subscribe(GOSSIP_TOPIC_ID, bootstrap)?;
+        let mut gossip_topic = self.gossip.subscribe(GOSSIP_TOPIC_ID, bootstrap).await?;
         info!("Joining gossip topic...");
         gossip_topic.joined().await?;
         info!("Connected to gossip topic.");
@@ -222,7 +222,7 @@ impl IrohGossipSignallerBuilder {
                             // Iroh will close the receiver after this event, so we can exit here.
                             anyhow::bail!("Gossip receiver lagged");
                         }
-                        Event::Gossip(GossipEvent::Received(Message { content: gossip_msg, ..})) => {
+                        Event::Received(Message { content: gossip_msg, .. }) => {
                             let GossipMessage{iroh_id, matchbox_id, ..} = serde_json::from_slice(&gossip_msg)?;
                             let now = Instant::now();
                             let is_new = !matchbox_to_iroh.contains_key(&matchbox_id);

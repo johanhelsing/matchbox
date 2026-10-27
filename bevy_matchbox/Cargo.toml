@@ -22,6 +22,7 @@ readme = "../README.md"
 
 [features]
 ggrs = ["matchbox_socket/ggrs"]
+tls12 = ["matchbox_socket/tls12"]
 signaling = [
   "dep:matchbox_signaling",
   "dep:async-compat",

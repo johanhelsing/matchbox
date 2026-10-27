@@ -13,7 +13,7 @@ use async_compat::CompatExt;
 use async_trait::async_trait;
 use async_tungstenite::{
     WebSocketStream,
-    async_std::{ConnectStream, connect_async},
+    smol::{ConnectStream, connect_async},
     tungstenite::Message,
 };
 use bytes::Bytes;
@@ -37,6 +37,7 @@ use webrtc::{
     },
     peer_connection::{
         RTCPeerConnection, configuration::RTCConfiguration,
+        peer_connection_state::RTCPeerConnectionState,
         sdp::session_description::RTCSessionDescription,
     },
 };
@@ -153,11 +154,12 @@ impl Messenger for NativeMessenger {
                 &connection,
                 data_channel_ready_txs,
                 signal_peer.id,
-                peer_disconnected_tx,
+                peer_disconnected_tx.clone(),
                 messages_from_peers_tx,
                 channel_configs,
             )
             .await;
+            notify_on_connection_failure(&connection, peer_disconnected_tx);
 
             // TODO: maybe pass in options? ice restart etc.?
             let offer = connection.create_offer(None).await.unwrap();
@@ -243,6 +245,7 @@ impl Messenger for NativeMessenger {
                 channel_configs,
             )
             .await;
+            notify_on_connection_failure(&connection, peer_disconnected_tx.clone());
 
             let offer = loop {
                 match peer_signal_rx.next().await.expect("error") {
@@ -330,6 +333,30 @@ impl Messenger for NativeMessenger {
         .compat() // Required to run tokio futures with other async executors
         .await
     }
+}
+
+/// Treats the peer connection failing like a data channel closing.
+///
+/// A peer that vanishes without closing its data channels (a crash, lost network, a socket dropped
+/// without closing the connection) never closes them on our side, so it would stay connected
+/// forever whenever the signaling server cannot report it gone (e.g. after the signaling
+/// connection is lost). ICE declares the connection failed about 30 seconds after the peer stops
+/// answering.
+fn notify_on_connection_failure(
+    connection: &RTCPeerConnection,
+    mut peer_disconnected_tx: Sender<()>,
+) {
+    connection.on_peer_connection_state_change(Box::new(move |state| {
+        if matches!(
+            state,
+            RTCPeerConnectionState::Failed | RTCPeerConnectionState::Closed
+        ) {
+            debug!("peer connection {state}");
+            // Full only when a disconnect is already pending, which is just as good.
+            let _ = peer_disconnected_tx.try_send(());
+        }
+        Box::pin(async {})
+    }));
 }
 
 fn new_senders_and_receivers<T>(
@@ -542,7 +569,10 @@ async fn create_data_channel(
     channel.on_open(Box::new(move || {
         debug!("Data channel ready");
         Box::pin(async move {
-            channel_ready.try_send(()).unwrap();
+            // Fails if the socket was dropped mid-handshake
+            if let Err(e) = channel_ready.try_send(()) {
+                debug!("data channel opened after handshake teardown: {e:?}");
+            }
         })
     }));
 

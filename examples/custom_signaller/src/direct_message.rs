@@ -1,4 +1,8 @@
-use iroh::{endpoint::Connection, protocol::ProtocolHandler, Endpoint, PublicKey};
+use iroh::{
+    endpoint::Connection,
+    protocol::{AcceptError, ProtocolHandler},
+    Endpoint, PublicKey,
+};
 use matchbox_socket::PeerEvent;
 
 use crate::get_timestamp;
@@ -11,10 +15,10 @@ type DirectMessage = (PeerEvent, u128);
 
 impl DirectMessageProtocol {
     async fn handle_connection(self, connection: Connection) -> anyhow::Result<()> {
-        let _remote_node_id = connection.remote_node_id()?;
+        let _remote_node_id = connection.remote_id();
         let mut recv = connection.accept_uni().await?;
         let data = recv.read_to_end(1024 * 63).await?;
-        connection.close(0u8.into(), b"done");
+        connection.close(0u32.into(), b"done");
         let data: DirectMessage = serde_json::from_slice(&data)?;
         let data = match &data.0 {
             PeerEvent::Signal { .. } => (_remote_node_id, data),
@@ -28,8 +32,11 @@ impl DirectMessageProtocol {
 }
 
 impl ProtocolHandler for DirectMessageProtocol {
-    fn accept(&self, connection: Connection) -> n0_future::boxed::BoxFuture<anyhow::Result<()>> {
-        Box::pin(self.clone().handle_connection(connection))
+    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        self.clone()
+            .handle_connection(connection)
+            .await
+            .map_err(|e| AcceptError::from_boxed(e.into()))
     }
 }
 pub async fn send_direct_message(

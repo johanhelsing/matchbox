@@ -11,7 +11,11 @@ use self::error::SignalingError;
 use crate::{Error, webrtc_socket::signal_peer::SignalPeer};
 use async_trait::async_trait;
 use cfg_if::cfg_if;
-use futures::{Future, FutureExt, StreamExt, future::Either, stream::FuturesUnordered};
+use futures::{
+    Future, FutureExt, StreamExt,
+    future::Either,
+    stream::{FusedStream, FuturesUnordered},
+};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
@@ -22,7 +26,7 @@ pub(crate) use socket::MessageLoopChannels;
 pub use socket::{
     ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::HashMap, pin::Pin, time::Duration};
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -87,14 +91,10 @@ pub trait Signaller: Sync + Send + 'static {
 }
 
 async fn signaling_loop(
-    builder: Arc<dyn SignallerBuilder>,
-    attempts: Option<u16>,
-    room_url: String,
+    mut signaller: Box<dyn Signaller>,
     mut requests_receiver: futures_channel::mpsc::UnboundedReceiver<PeerRequest>,
     events_sender: futures_channel::mpsc::UnboundedSender<PeerEvent>,
 ) -> Result<(), SignalingError> {
-    let mut signaller = builder.new_signaller(attempts, room_url).await?;
-
     loop {
         select! {
             request = requests_receiver.next().fuse() => {
@@ -210,8 +210,12 @@ async fn message_loop<M: Messenger>(
         select! {
             _  = &mut timeout => {
                 if requests_sender.unbounded_send(PeerRequest::KeepAlive).is_err() {
-                    // socket dropped
-                    break Ok(());
+                    // The signaling loop is gone; keep-alives exist to keep
+                    // the signaling websocket alive, so there is nothing
+                    // left to send them to. Existing peer connections are
+                    // unaffected. Do not break: the socket stays alive on
+                    // its data channels.
+                    debug!("cannot send keep-alive: signaling connection is gone");
                 }
                 if let Some(interval) = keep_alive_interval {
                     timeout = Either::Left(Delay::new(interval)).fuse();
@@ -220,40 +224,65 @@ async fn message_loop<M: Messenger>(
                 }
             }
 
-            message = events_receiver.next().fuse() => {
-                if let Some(event) = message {
-                    debug!("{event:?}");
-                    match event {
-                        PeerEvent::IdAssigned(peer_uuid) => {
-                            if id_tx.take().expect("already sent peer id").send(peer_uuid.to_owned()).is_err() {
-                                // Socket receiver was dropped, exit cleanly.
-                                break Ok(());
-                            };
-                        },
-                        PeerEvent::NewPeer(peer_uuid) => {
-                            let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
-                            handshake_signals.insert(peer_uuid, signal_tx);
-                            let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                            handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
-                        },
-                        PeerEvent::PeerLeft(peer_uuid) => {
-                            if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
-                                // socket dropped, exit cleanly
-                                break Ok(());
-                            }
-                        },
-                        PeerEvent::Signal { sender, data } => {
-                            let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
-                                let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
-                                let signal_peer = SignalPeer::new(sender, requests_sender.clone());
-                                handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs));
-                                from_peer_tx
-                            });
+            event = events_receiver.next() => {
+                match event {
+                    Some(event) => {
+                        debug!("{event:?}");
+                        match event {
+                            PeerEvent::IdAssigned(peer_uuid) => {
+                                if id_tx.take().expect("already sent peer id").send(peer_uuid.to_owned()).is_err() {
+                                    // Socket receiver was dropped, exit cleanly.
+                                    break Ok(());
+                                };
+                            },
+                            PeerEvent::NewPeer(peer_uuid) => {
+                                let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
+                                handshake_signals.insert(peer_uuid, signal_tx);
+                                let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
+                                handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
+                            },
+                            PeerEvent::PeerLeft(peer_uuid) => {
+                                if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
+                                    // socket dropped, exit cleanly
+                                    break Ok(());
+                                }
+                            },
+                            PeerEvent::Signal { sender, data } => {
+                                let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
+                                    let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
+                                    let signal_peer = SignalPeer::new(sender, requests_sender.clone());
+                                    handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs));
+                                    from_peer_tx
+                                });
 
-                            if signal_tx.unbounded_send(data).is_err() {
-                                warn!("ignoring signal from peer {sender} because the handshake has already finished");
-                            }
-                        },
+                                if signal_tx.unbounded_send(data).is_err() {
+                                    warn!("ignoring signal from peer {sender} because the handshake has already finished");
+                                }
+                            },
+                        }
+                    }
+                    None => {
+                        // The signaling loop ended (server restart, lost
+                        // websocket, ...). This is not fatal while peers are
+                        // connected: their connections live entirely on the
+                        // data channels and keep working; only new handshakes
+                        // are impossible until the application rebuilds the
+                        // socket. `signaling_events` has become terminated,
+                        // so this arm is disabled from here on.
+                        //
+                        // With no peer connected, though, there is nothing
+                        // left to keep alive, and a socket that can never
+                        // gain a peer must end, so that the application
+                        // learns the signaling server is gone (e.g. a player
+                        // waiting for a match) instead of waiting forever.
+                        if peer_loops.is_empty() {
+                            break Err(SignalingError::StreamExhausted);
+                        }
+                        warn!(
+                            "signaling connection lost; keeping existing peer \
+                            connections, but no new peers can join until the \
+                            socket is rebuilt"
+                        );
                     }
                 }
             }
@@ -273,15 +302,25 @@ async fn message_loop<M: Messenger>(
                     // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
                     break Ok(());
                 }
+                if events_receiver.is_terminated() && peer_loops.is_empty() {
+                    // The last peer is gone and, without signaling, no new
+                    // one can join: end the socket (see the `None` arm above).
+                    break Err(SignalingError::StreamExhausted);
+                }
             }
 
             message = next_peer_message_out => {
                 match message {
                     Some((channel_index, Some((peer, packet)))) => {
-                        let data_channel = data_channels
-                            .get_mut(&peer)
-                            .expect("couldn't find data channel for peer")
-                            .get_mut(channel_index).unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
+                        // The app may send to a peer this socket never connected to,
+                        // e.g. a stale id from before the socket was rebuilt.
+                        let Some(peer_channels) = data_channels.get_mut(&peer) else {
+                            warn!("dropping packet for unknown peer {peer}");
+                            continue;
+                        };
+                        let data_channel = peer_channels
+                            .get_mut(channel_index)
+                            .unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
                         if let Err(e) = data_channel.send(packet) {
                             // Peer we're sending to closed their end of the connection.
                             // We anticipate the PeerLeft event soon, but we sent a message before it came.

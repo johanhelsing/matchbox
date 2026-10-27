@@ -626,9 +626,7 @@ async fn forward_data_channel_events(
         match event {
             DataChannelEvent::OnOpen => {
                 debug!("Data channel ready");
-                // The receiving end of this channel is the handshake completion
-                // future. If it is already gone the socket was dropped or the
-                // handshake torn down mid-race -- nothing left to notify.
+                // Fails if the socket was dropped mid-handshake
                 if let Err(e) = channel_ready.try_send(()) {
                     debug!("data channel opened after handshake teardown: {e:?}");
                 }

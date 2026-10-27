@@ -93,3 +93,7 @@ bytes = { version = "1.1", default-features = false }
 
 [dev-dependencies]
 futures-test = "0.3"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+matchbox_signaling = { path = "../matchbox_signaling" }
+tokio = { version = "1.32", features = ["macros", "rt-multi-thread", "time"] }

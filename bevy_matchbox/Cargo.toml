@@ -67,5 +67,8 @@ required-features = ["signaling"]
 name = "hello_signaling"
 required-features = ["signaling"]
 
-[lints]
-workspace = true
+# Rejecting a websocket upgrade returns an axum `Response`, which is 128 bytes and
+# rides in the `Err` of every connection-request callback. Boxing it would change a
+# public signature that predates this lint.
+[lints.clippy]
+result_large_err = "allow"

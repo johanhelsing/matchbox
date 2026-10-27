@@ -38,9 +38,11 @@ tokio-stream = "0.1"
 [dev-dependencies]
 tokio-tungstenite = "0.28"
 
-# Not inherited from the workspace: the Dockerfile builds this crate outside of it.
+# Rejecting a websocket upgrade returns an axum `Response`, which is 128 bytes and
+# rides in the `Err` of every connection-request callback. Boxing it would change a
+# public signature that predates this lint.
 [lints.clippy]
-# The connection-request callback returns matchbox_signaling's large `Err` (an axum `Response`).
 result_large_err = "allow"
+
 # Predates the lint.
 collapsible_match = "allow"

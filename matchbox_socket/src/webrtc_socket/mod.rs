@@ -13,8 +13,8 @@ use async_trait::async_trait;
 use cfg_if::cfg_if;
 use futures::{
     Future, FutureExt, StreamExt,
-    future::{Either, FusedFuture},
-    stream::{Fuse, FuturesUnordered},
+    future::Either,
+    stream::{FusedStream, FuturesUnordered},
 };
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
@@ -26,12 +26,7 @@ pub(crate) use socket::MessageLoopChannels;
 pub use socket::{
     ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
 };
-use std::{
-    collections::HashMap,
-    pin::Pin,
-    task::{Context, Poll},
-    time::Duration,
-};
+use std::{collections::HashMap, pin::Pin, time::Duration};
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -175,44 +170,6 @@ trait Messenger {
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
 }
 
-/// The next signaling event, or `None` once the signaling loop has ended.
-///
-/// A fused wrapper around the signaling event channel. After the channel
-/// closes, this future yields `None` once, then stays pending forever and
-/// reports [`FusedFuture::is_terminated`], so a [`select!`] arm polling it
-/// is skipped. This is what allows the message loop to outlive the
-/// signaling loop; simply polling the channel would resolve immediately on
-/// every poll after closure.
-struct SignalingEvents {
-    stream: Fuse<UnboundedReceiver<PeerEvent>>,
-    terminated: bool,
-}
-
-impl Future for SignalingEvents {
-    type Output = Option<PeerEvent>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-        if this.terminated {
-            return Poll::Pending;
-        }
-        match this.stream.poll_next_unpin(cx) {
-            Poll::Ready(Some(event)) => Poll::Ready(Some(event)),
-            Poll::Ready(None) => {
-                this.terminated = true;
-                Poll::Ready(None)
-            }
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}
-
-impl FusedFuture for SignalingEvents {
-    fn is_terminated(&self) -> bool {
-        self.terminated
-    }
-}
-
 async fn message_loop<M: Messenger>(
     id_tx: futures_channel::oneshot::Sender<PeerId>,
     ice_server_config: &RtcIceServerConfig,
@@ -222,7 +179,7 @@ async fn message_loop<M: Messenger>(
 ) -> Result<(), SignalingError> {
     let MessageLoopChannels {
         requests_sender,
-        events_receiver,
+        mut events_receiver,
         mut peer_messages_out_rx,
         messages_from_peers_tx,
         peer_state_tx,
@@ -240,20 +197,6 @@ async fn message_loop<M: Messenger>(
         Either::Right(std::future::pending())
     }
     .fuse();
-
-    // The next signaling event. This future yields the events of the
-    // signaling channel one by one; when the channel closes (the signaling
-    // loop ended), it yields `None` once, then stays pending and reports
-    // `is_terminated`, so the events arm of the select below is skipped
-    // from then on. That is what lets the message loop outlive the
-    // signaling loop: established peer connections do not need signaling,
-    // and polling a closed channel through a recreated fused future would
-    // resolve immediately on every pass through the select, busy-looping
-    // the socket task.
-    let mut signaling_events = SignalingEvents {
-        stream: events_receiver.fuse(),
-        terminated: false,
-    };
 
     loop {
         let mut next_peer_messages_out = peer_messages_out_rx
@@ -281,7 +224,7 @@ async fn message_loop<M: Messenger>(
                 }
             }
 
-            event = &mut signaling_events => {
+            event = events_receiver.next() => {
                 match event {
                     Some(event) => {
                         debug!("{event:?}");
@@ -359,7 +302,7 @@ async fn message_loop<M: Messenger>(
                     // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
                     break Ok(());
                 }
-                if signaling_events.terminated && peer_loops.is_empty() {
+                if events_receiver.is_terminated() && peer_loops.is_empty() {
                     // The last peer is gone and, without signaling, no new
                     // one can join: end the socket (see the `None` arm above).
                     break Err(SignalingError::StreamExhausted);
@@ -369,23 +312,15 @@ async fn message_loop<M: Messenger>(
             message = next_peer_message_out => {
                 match message {
                     Some((channel_index, Some((peer, packet)))) => {
-                        // A packet may be queued via `try_send` while the
-                        // target peer is connected, yet dequeued after that
-                        // peer's connection was torn down (WebRTC blip,
-                        // abrupt disconnect, rejoin under a new id). That is
-                        // a routine race, not a logic error: drop the packet
-                        // and carry on. Panicking here would kill the whole
-                        // message loop -- and with it every other peer
-                        // connection of this socket. Upper layers treat
-                        // reliable sends as best-effort and retransmit.
+                        // The app may send to a peer this socket never connected to,
+                        // e.g. a stale id from before the socket was rebuilt.
                         let Some(peer_channels) = data_channels.get_mut(&peer) else {
-                            warn!("dropping outgoing packet for peer {peer}: no data channel (peer gone or handshake incomplete)");
+                            warn!("dropping packet for unknown peer {peer}");
                             continue;
                         };
-                        let Some(data_channel) = peer_channels.get_mut(channel_index) else {
-                            warn!("dropping outgoing packet for peer {peer}: no channel with index {channel_index}");
-                            continue;
-                        };
+                        let data_channel = peer_channels
+                            .get_mut(channel_index)
+                            .unwrap_or_else(|| panic!("couldn't find data channel with index {channel_index}"));
                         if let Err(e) = data_channel.send(packet) {
                             // Peer we're sending to closed their end of the connection.
                             // We anticipate the PeerLeft event soon, but we sent a message before it came.

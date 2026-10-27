@@ -38,9 +38,8 @@ async-trait = "0.1"
 tokio-tungstenite = "0.28"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Not inherited from the workspace: the server's Dockerfile builds this crate outside of it.
+# Rejecting a websocket upgrade returns an axum `Response`, which is 128 bytes and
+# rides in the `Err` of every connection-request callback. Boxing it would change a
+# public signature that predates this lint.
 [lints.clippy]
-# Rejecting a websocket upgrade returns an axum `Response`, which is 128 bytes and rides in the
-# `Err` of every connection-request callback. Boxing it would change a public signature that
-# predates this lint.
 result_large_err = "allow"

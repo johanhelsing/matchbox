@@ -4,7 +4,6 @@ use iroh::{
     Endpoint, PublicKey,
 };
 use matchbox_socket::PeerEvent;
-use std::future::Future;
 
 use crate::get_timestamp;
 
@@ -33,17 +32,11 @@ impl DirectMessageProtocol {
 }
 
 impl ProtocolHandler for DirectMessageProtocol {
-    fn accept(
-        &self,
-        connection: Connection,
-    ) -> impl Future<Output = Result<(), AcceptError>> + Send {
-        let protocol = self.clone();
-        async move {
-            protocol
-                .handle_connection(connection)
-                .await
-                .map_err(|e| AcceptError::from_boxed(e.into()))
-        }
+    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        self.clone()
+            .handle_connection(connection)
+            .await
+            .map_err(|e| AcceptError::from_boxed(e.into()))
     }
 }
 pub async fn send_direct_message(

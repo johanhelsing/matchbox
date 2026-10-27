@@ -15,9 +15,9 @@ categories = [
 repository = "https://github.com/johanhelsing/matchbox"
 
 [features]
+default = ["tls12"]
 ggrs = ["dep:bincode", "dep:ggrs"]
-# Lets native `wss://` signaling reach servers (or proxies) that only speak TLS 1.2; without
-# it the native TLS stack is TLS 1.3-only. Browsers do their own TLS, so no effect on wasm.
+# TLS 1.2 for native `wss://` signaling, rustls is 1.3-only without it. No effect on wasm.
 tls12 = ["dep:rustls", "rustls/tls12"]
 
 [dependencies]

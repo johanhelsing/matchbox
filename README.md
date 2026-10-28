@@ -65,6 +65,14 @@ All of this, however, is hidden from rust application code. All you will need to
 
 You can hook into the lifecycle of your socket through the socket's API, such as connection state changes. Similarly, you can send packets to peers using the socket through a simple, non-blocking method.
 
+To check whether a connected peer is reached through a TURN relay (yours or theirs), ask the socket after `update_peers()`. The answer is `None` until known:
+
+```rust,ignore
+if socket.is_relayed(peer) == Some(true) {
+    info!("{peer} is connected through the relay");
+}
+```
+
 ## Showcase
 
 Projects using Matchbox:

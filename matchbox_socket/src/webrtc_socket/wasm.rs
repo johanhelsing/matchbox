@@ -3,16 +3,25 @@ use super::{
     error::JsErrorExt,
     messages::{PeerEvent, PeerRequest},
 };
-use crate::webrtc_socket::{
-    ChannelConfig, Messenger, Packet, RtcIceServerConfig, Signaller, error::SignalingError,
-    messages::PeerSignal, signal_peer::SignalPeer, socket::create_data_channels_ready_fut,
+use crate::{
+    CandidatePair, CandidateType,
+    webrtc_socket::{
+        ChannelConfig, Messenger, Packet, RtcIceServerConfig, Signaller,
+        error::SignalingError,
+        messages::PeerSignal,
+        signal_peer::SignalPeer,
+        socket::{
+            SignaledCandidates, create_data_channels_ready_fut, record_signaled_candidate,
+            signaled_type,
+        },
+    },
 };
 use async_trait::async_trait;
-use futures::{Future, SinkExt, StreamExt};
+use futures::{Future, FutureExt, SinkExt, StreamExt};
 use futures_channel::mpsc::{Receiver, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
 use futures_util::select;
-use js_sys::{Function, Reflect};
+use js_sys::{Function, Map, Reflect};
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
 use serde::Serialize;
@@ -107,7 +116,14 @@ pub(crate) struct WasmMessenger;
 #[async_trait(?Send)]
 impl Messenger for WasmMessenger {
     type DataChannel = RtcDataChannel;
-    type HandshakeMeta = Receiver<()>;
+    /// The disconnect signal, the connection for its stats, the candidates the peer signaled and
+    /// the signals still to come
+    type HandshakeMeta = (
+        Receiver<()>,
+        RtcPeerConnection,
+        SignaledCandidates,
+        UnboundedReceiver<PeerSignal>,
+    );
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
@@ -189,19 +205,21 @@ impl Messenger for WasmMessenger {
             .efix()
             .unwrap();
 
-        complete_handshake(
+        let signaled = SignaledCandidates::default();
+        let peer_signal_rx = complete_handshake(
             signal_peer.clone(),
-            conn,
+            conn.clone(),
             received_candidates,
             data_channels_ready_fut,
             peer_signal_rx,
+            signaled.clone(),
         )
         .await;
 
         HandshakeResult {
             peer_id: signal_peer.id,
             data_channels,
-            metadata: peer_disconnected_rx,
+            metadata: (peer_disconnected_rx, conn, signaled, peer_signal_rx),
         }
     }
 
@@ -294,27 +312,144 @@ impl Messenger for WasmMessenger {
         let answer = PeerSignal::Answer(conn.local_description().unwrap().sdp());
         signal_peer.send(answer);
 
-        complete_handshake(
+        let signaled = SignaledCandidates::default();
+        let peer_signal_rx = complete_handshake(
             signal_peer.clone(),
-            conn,
+            conn.clone(),
             received_candidates,
             data_channels_ready_fut,
             peer_signal_rx,
+            signaled.clone(),
         )
         .await;
 
         HandshakeResult {
             peer_id: signal_peer.id,
             data_channels,
-            metadata: peer_disconnected_rx,
+            metadata: (peer_disconnected_rx, conn, signaled, peer_signal_rx),
         }
     }
 
-    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
-        let mut peer_loop_finished_rx = handshake_meta;
-        peer_loop_finished_rx.next().await;
+    async fn peer_loop(
+        peer_uuid: PeerId,
+        handshake_meta: Self::HandshakeMeta,
+        candidate_pair_tx: UnboundedSender<(PeerId, CandidatePair)>,
+    ) -> PeerId {
+        let (mut peer_loop_finished_rx, conn, signaled, mut peer_signal_rx) = handshake_meta;
+        let mut candidate_pairs = Box::pin(
+            report_candidate_pairs(&conn, peer_uuid, candidate_pair_tx, signaled.clone()).fuse(),
+        );
+        loop {
+            select! {
+                _ = peer_loop_finished_rx.next() => break,
+                _ = candidate_pairs => break,
+                // Candidates keep trickling in after the channels opened
+                signal = peer_signal_rx.next() => {
+                    if let Some(PeerSignal::IceCandidate(candidate)) = signal {
+                        try_add_rtc_ice_candidate(&conn, &signaled, &candidate).await;
+                    }
+                }
+            }
+        }
         peer_uuid
     }
+}
+
+/// Reports the candidate pair the connection uses, and again whenever it changes
+async fn report_candidate_pairs(
+    conn: &RtcPeerConnection,
+    peer: PeerId,
+    tx: UnboundedSender<(PeerId, CandidatePair)>,
+    signaled: SignaledCandidates,
+) {
+    let mut reported = None;
+    loop {
+        if let Some(pair) = selected_candidate_pair(conn, &signaled).await
+            && reported != Some(pair)
+        {
+            reported = Some(pair);
+            if tx.unbounded_send((peer, pair)).is_err() {
+                // socket dropped
+                return;
+            }
+        }
+        Delay::new(Duration::from_secs(1)).await;
+    }
+}
+
+/// Reads the selected candidate pair out of `getStats()`. Chrome names it on the transport
+/// stats, Firefox flags the pair itself.
+async fn selected_candidate_pair(
+    conn: &RtcPeerConnection,
+    signaled: &SignaledCandidates,
+) -> Option<CandidatePair> {
+    let report: Map = JsFuture::from(conn.get_stats())
+        .await
+        .ok()?
+        .unchecked_into();
+    let string = |stats: &JsValue, key: &str| Reflect::get(stats, &key.into()).ok()?.as_string();
+    let flag = |stats: &JsValue, key: &str| {
+        Reflect::get(stats, &key.into())
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
+
+    let mut selected_id = None;
+    let mut pairs = vec![];
+    let mut candidates = std::collections::HashMap::new();
+    for stats in report.values().into_iter().flatten() {
+        match string(&stats, "type").as_deref() {
+            Some("transport") => {
+                if let Some(id) = string(&stats, "selectedCandidatePairId") {
+                    selected_id = Some(id);
+                }
+            }
+            Some("candidate-pair") => pairs.push(stats),
+            Some("local-candidate") | Some("remote-candidate") => {
+                if let (Some(id), Some(typ)) =
+                    (string(&stats, "id"), string(&stats, "candidateType"))
+                {
+                    // Older stats call the address `ip`
+                    let address = string(&stats, "address").or_else(|| string(&stats, "ip"));
+                    let port = Reflect::get(&stats, &"port".into())
+                        .ok()
+                        .and_then(|port| port.as_f64())
+                        .map(|port| port as u16);
+                    candidates.insert(id, (typ, address, port));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let pair = pairs.iter().find(|pair| match &selected_id {
+        Some(id) => string(pair, "id").as_deref() == Some(id),
+        None => {
+            flag(pair, "selected")
+                || (flag(pair, "nominated")
+                    && string(pair, "state").as_deref() == Some("succeeded"))
+        }
+    })?;
+    let candidate_type = |key: &str| {
+        let (typ, address, port) = candidates.get(&string(pair, key)?)?;
+        match typ.as_str() {
+            "host" => Some(CandidateType::Host),
+            "srflx" => Some(CandidateType::ServerReflexive),
+            "prflx" => match (address, port) {
+                (Some(address), Some(port)) => {
+                    signaled_type(signaled, address, *port).or(Some(CandidateType::PeerReflexive))
+                }
+                _ => Some(CandidateType::PeerReflexive),
+            },
+            "relay" => Some(CandidateType::Relay),
+            _ => None,
+        }
+    };
+    Some(CandidatePair {
+        local: candidate_type("localCandidateId")?,
+        remote: candidate_type("remoteCandidateId")?,
+    })
 }
 
 async fn complete_handshake(
@@ -323,7 +458,8 @@ async fn complete_handshake(
     received_candidates: Vec<String>,
     mut data_channels_ready_fut: Pin<Box<futures::future::Fuse<impl Future<Output = ()>>>>,
     mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
-) {
+    signaled: SignaledCandidates,
+) -> UnboundedReceiver<PeerSignal> {
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
         move |event: RtcPeerConnectionIceEvent| {
             let candidate_json = match event.candidate() {
@@ -351,7 +487,7 @@ async fn complete_handshake(
     // handle pending ICE candidates
     for candidate in received_candidates {
         debug!("adding ice candidate {candidate:?}");
-        try_add_rtc_ice_candidate(&conn, &candidate).await;
+        try_add_rtc_ice_candidate(&conn, &signaled, &candidate).await;
     }
 
     // select for data channels ready or ice candidates
@@ -364,7 +500,7 @@ async fn complete_handshake(
             }
             msg = peer_signal_rx.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
-                    try_add_rtc_ice_candidate(&conn, &candidate).await;
+                    try_add_rtc_ice_candidate(&conn, &signaled, &candidate).await;
                 }
             }
         };
@@ -386,9 +522,14 @@ async fn complete_handshake(
         "handshake completed, ice gathering state: {:?}",
         conn.ice_gathering_state()
     );
+    peer_signal_rx
 }
 
-async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_string: &str) {
+async fn try_add_rtc_ice_candidate(
+    connection: &RtcPeerConnection,
+    signaled: &SignaledCandidates,
+    candidate_string: &str,
+) {
     let parsed_candidate = match js_sys::JSON::parse(candidate_string) {
         Ok(c) => c,
         Err(err) => {
@@ -401,6 +542,12 @@ async fn try_add_rtc_ice_candidate(connection: &RtcPeerConnection, candidate_str
         debug!("Received null ice candidate, this means there are no further ice candidates");
         None
     } else {
+        if let Some(sdp) = Reflect::get(&parsed_candidate, &"candidate".into())
+            .ok()
+            .and_then(|sdp| sdp.as_string())
+        {
+            record_signaled_candidate(signaled, &sdp);
+        }
         let candidate = RtcIceCandidateInit::from(parsed_candidate);
         debug!("ice candidate received: {candidate:?}");
         Some(candidate)

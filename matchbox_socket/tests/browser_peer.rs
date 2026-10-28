@@ -4,7 +4,10 @@
 #![cfg(target_arch = "wasm32")]
 
 use futures_timer::Delay;
-use matchbox_socket::{ChannelConfig, Packet, PeerId, PeerState, RtcIceServerConfig, WebRtcSocket};
+use matchbox_socket::{
+    CandidatePair, CandidateType, ChannelConfig, Packet, PeerId, PeerState, RtcIceServerConfig,
+    WebRtcSocket,
+};
 use std::time::Duration;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -45,6 +48,17 @@ async fn wait_for_connected_peer(socket: &mut WebRtcSocket) -> PeerId {
 }
 
 /// Everything received the first time something arrives, so that nothing is dropped
+async fn wait_for_candidate_pair(socket: &mut WebRtcSocket, peer: PeerId) -> CandidatePair {
+    for _ in 0..MAX_POLLS {
+        socket.update_peers();
+        if let Some(pair) = socket.candidate_pair(peer) {
+            return pair;
+        }
+        Delay::new(POLL).await;
+    }
+    panic!("candidate pair never reported");
+}
+
 async fn wait_for_packets(socket: &mut WebRtcSocket) -> Vec<(PeerId, Packet)> {
     for _ in 0..MAX_POLLS {
         let packets = socket.channel_mut(0).receive();
@@ -60,6 +74,17 @@ async fn wait_for_packets(socket: &mut WebRtcSocket) -> Vec<(PeerId, Packet)> {
 async fn exchanges_packets_with_a_native_peer() {
     let mut socket = connect("browser");
     let peer = wait_for_connected_peer(&mut socket).await;
+    // On one machine. Only the remote end is comparable across browsers, see CandidatePair, and
+    // the native peer may send from an interface it didn't signal, which shows as peer reflexive.
+    let pair = wait_for_candidate_pair(&mut socket, peer).await;
+    assert!(
+        matches!(
+            pair.remote,
+            CandidateType::Host | CandidateType::PeerReflexive
+        ),
+        "{pair:?}"
+    );
+    assert!(!pair.is_relayed(), "{pair:?}");
 
     socket.channel_mut(0).send(b"ping".to_vec().into(), peer);
     assert_eq!(

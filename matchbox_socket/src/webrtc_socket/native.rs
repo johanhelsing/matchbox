@@ -3,10 +3,16 @@ use super::{
     messages::{PeerEvent, PeerRequest},
 };
 use crate::{
-    RtcIceServerConfig,
+    CandidatePair, CandidateType, RtcIceServerConfig,
     webrtc_socket::{
-        ChannelConfig, Messenger, Packet, Signaller, error::SignalingError, messages::PeerSignal,
-        signal_peer::SignalPeer, socket::create_data_channels_ready_fut,
+        ChannelConfig, Messenger, Packet, Signaller,
+        error::SignalingError,
+        messages::PeerSignal,
+        signal_peer::SignalPeer,
+        socket::{
+            SignaledCandidates, create_data_channels_ready_fut, record_signaled_candidate,
+            signaled_type,
+        },
     },
 };
 use async_trait::async_trait;
@@ -35,8 +41,8 @@ use webrtc::{
     data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit},
     peer_connection::{
         PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCConfigurationBuilder,
-        RTCIceCandidateInit, RTCIceServer, RTCPeerConnectionIceEvent, RTCPeerConnectionState,
-        RTCSessionDescription,
+        RTCIceCandidateInit, RTCIceCandidateType, RTCIceServer, RTCPeerConnectionIceEvent,
+        RTCPeerConnectionState, RTCSessionDescription,
     },
     runtime::{Runtime, SmolRuntime},
 };
@@ -131,7 +137,8 @@ pub(crate) struct NativeHandshakeMeta {
     event_forwarding: EventForwarding,
     trickle_fut: CandidateListener,
     peer_disconnected_rx: Receiver<()>,
-    _connection: ConnectionGuard,
+    connection: ConnectionGuard,
+    signaled: SignaledCandidates,
 }
 
 #[async_trait]
@@ -202,12 +209,14 @@ impl Messenger for NativeMessenger {
             .await
             .unwrap();
 
+        let signaled = SignaledCandidates::default();
         let trickle_fut = complete_handshake(
             &trickle,
             &connection,
             peer_signal_rx,
             data_channels_ready_fut,
             &mut event_forwarding,
+            signaled.clone(),
         )
         .await;
 
@@ -220,7 +229,8 @@ impl Messenger for NativeMessenger {
                 event_forwarding,
                 trickle_fut,
                 peer_disconnected_rx,
-                _connection: connection,
+                connection,
+                signaled,
             },
         }
     }
@@ -278,12 +288,14 @@ impl Messenger for NativeMessenger {
         signal_peer.send(PeerSignal::Answer(answer.sdp.clone()));
         connection.set_local_description(answer).await.unwrap();
 
+        let signaled = SignaledCandidates::default();
         let trickle_fut = complete_handshake(
             &trickle,
             &connection,
             peer_signal_rx,
             data_channels_ready_fut,
             &mut event_forwarding,
+            signaled.clone(),
         )
         .await;
 
@@ -296,20 +308,29 @@ impl Messenger for NativeMessenger {
                 event_forwarding,
                 trickle_fut,
                 peer_disconnected_rx,
-                _connection: connection,
+                connection,
+                signaled,
             },
         }
     }
 
-    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
+    async fn peer_loop(
+        peer_uuid: PeerId,
+        handshake_meta: Self::HandshakeMeta,
+        candidate_pair_tx: UnboundedSender<(PeerId, CandidatePair)>,
+    ) -> PeerId {
         let NativeHandshakeMeta {
             mut to_peer_message_rx,
             data_channels,
             mut event_forwarding,
             mut trickle_fut,
             mut peer_disconnected_rx,
-            _connection,
+            connection,
+            signaled,
         } = handshake_meta;
+        let mut candidate_pairs = Box::pin(
+            report_candidate_pairs(&connection, peer_uuid, candidate_pair_tx, signaled).fuse(),
+        );
 
         assert_eq!(
             data_channels.len(),
@@ -340,11 +361,64 @@ impl Messenger for NativeMessenger {
                 // TODO: this means that the signaling is down, should return an
                 // error
                 _ = trickle_fut => continue,
+                _ = candidate_pairs => continue,
             }
         }
 
         peer_uuid
     }
+}
+
+/// Reports the candidate pair the connection uses, and again whenever it changes
+async fn report_candidate_pairs(
+    connection: &Arc<dyn PeerConnection>,
+    peer: PeerId,
+    tx: UnboundedSender<(PeerId, CandidatePair)>,
+    signaled: SignaledCandidates,
+) {
+    let mut reported = None;
+    loop {
+        if let Some(pair) = selected_candidate_pair(connection, &signaled).await
+            && reported != Some(pair)
+        {
+            reported = Some(pair);
+            if tx.unbounded_send((peer, pair)).is_err() {
+                // socket dropped
+                return;
+            }
+        }
+        Delay::new(Duration::from_secs(1)).await;
+    }
+}
+
+async fn selected_candidate_pair(
+    connection: &Arc<dyn PeerConnection>,
+    signaled: &SignaledCandidates,
+) -> Option<CandidatePair> {
+    let pair = connection
+        .sctp()
+        .await?
+        .transport()
+        .ice_transport()
+        .get_selected_candidate_pair()
+        .await
+        .ok()??;
+    let candidate_type = |typ| match typ {
+        RTCIceCandidateType::Host => Some(CandidateType::Host),
+        RTCIceCandidateType::Srflx => Some(CandidateType::ServerReflexive),
+        RTCIceCandidateType::Prflx => Some(CandidateType::PeerReflexive),
+        RTCIceCandidateType::Relay => Some(CandidateType::Relay),
+        _ => None,
+    };
+    let remote = pair.remote();
+    Some(CandidatePair {
+        local: candidate_type(pair.local().typ)?,
+        remote: match remote.typ {
+            RTCIceCandidateType::Prflx => signaled_type(signaled, &remote.address, remote.port)
+                .unwrap_or(CandidateType::PeerReflexive),
+            typ => candidate_type(typ)?,
+        },
+    })
 }
 
 /// The runtime driving the peer connections.
@@ -427,11 +501,16 @@ async fn complete_handshake<T: Future<Output = ()>>(
     peer_signal_rx: UnboundedReceiver<PeerSignal>,
     mut wait_for_channels: Pin<Box<Fuse<T>>>,
     event_forwarding: &mut EventForwarding,
+    signaled: SignaledCandidates,
 ) -> CandidateListener {
     trickle.send_pending_candidates();
     let mut trickle_fut = Box::pin(
-        CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), peer_signal_rx)
-            .fuse(),
+        CandidateTrickle::listen_for_remote_candidates(
+            Arc::clone(connection),
+            peer_signal_rx,
+            signaled,
+        )
+        .fuse(),
     );
 
     loop {
@@ -502,6 +581,7 @@ impl CandidateTrickle {
     async fn listen_for_remote_candidates(
         peer_connection: Arc<dyn PeerConnection>,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
+        signaled: SignaledCandidates,
     ) -> Result<(), webrtc::error::Error> {
         while let Some(signal) = peer_signal_rx.next().await {
             match signal {
@@ -510,6 +590,7 @@ impl CandidateTrickle {
                     match serde_json::from_str::<RTCIceCandidateInit>(&candidate_json) {
                         Ok(candidate_init) => {
                             debug!("ice candidate received: {}", candidate_init.candidate);
+                            record_signaled_candidate(&signaled, &candidate_init.candidate);
                             peer_connection.add_ice_candidate(candidate_init).await?;
                         }
                         Err(err) => {

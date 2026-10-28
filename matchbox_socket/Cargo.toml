@@ -84,11 +84,13 @@ async-tungstenite = { version = "0.35", default-features = false, features = [
   "smol-runtime",
   "futures-rustls-webpki-roots",
 ] }
-webrtc = { version = "0.17", default-features = false }
+webrtc = { version = "0.21", default-features = false, features = [
+  "runtime-smol",
+  "crypto-ring",
+] }
 # Only for the `tls12` feature: async-tungstenite builds futures-rustls without default
 # features, which leaves rustls without TLS 1.2. The crypto provider (ring) comes from webrtc.
 rustls = { version = "0.23", default-features = false, optional = true }
-async-compat = { version = "0.2", default-features = false }
 bytes = { version = "1.1", default-features = false }
 
 [dev-dependencies]

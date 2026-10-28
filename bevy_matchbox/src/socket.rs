@@ -96,10 +96,9 @@ struct MessageLoop {
     /// Cancelling a task only asks its executor to drop the future, whenever it next gets to it.
     /// With Bevy's single-threaded task pool, that executor is a thread local of the main thread,
     /// ticked once per frame; after the app's last frame, the cancelled loop sits in it until the
-    /// thread-local destructors run at process exit. By then tokio's thread-local context is gone,
-    /// and the loop's webrtc futures cannot be dropped without it (async-compat enters the tokio
-    /// runtime to drop them), so the process aborts on its way out. Taking the loop out of this
-    /// slot in [`Drop`] ends it right away instead, on the thread dropping the socket.
+    /// thread-local destructors run at process exit, and its peer connections stay open until
+    /// then. Taking the loop out of this slot in [`Drop`] ends it right away instead, on the
+    /// thread dropping the socket, which closes the peer connections.
     #[cfg(not(target_arch = "wasm32"))]
     future: Arc<Mutex<Option<MessageLoopFuture>>>,
 }

@@ -9,37 +9,36 @@ use crate::{
         signal_peer::SignalPeer, socket::create_data_channels_ready_fut,
     },
 };
-use async_compat::CompatExt;
 use async_trait::async_trait;
 use async_tungstenite::{
     WebSocketStream,
     smol::{ConnectStream, connect_async},
     tungstenite::Message,
 };
-use bytes::Bytes;
+use bytes::BytesMut;
 use futures::{
     Future, FutureExt, StreamExt,
-    future::{Fuse, FusedFuture},
+    future::{Fuse, FusedFuture, join_all},
     stream::FuturesUnordered,
 };
 use futures_channel::mpsc::{Receiver, Sender, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_timer::Delay;
-use futures_util::{lock::Mutex, select};
+use futures_util::select;
 use log::{debug, error, info, trace, warn};
 use matchbox_protocol::PeerId;
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{
+    pin::Pin,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use webrtc::{
-    api::APIBuilder,
-    data_channel::{RTCDataChannel, data_channel_init::RTCDataChannelInit},
-    ice_transport::{
-        ice_candidate::{RTCIceCandidate, RTCIceCandidateInit},
-        ice_server::RTCIceServer,
-    },
+    data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit},
     peer_connection::{
-        RTCPeerConnection, configuration::RTCConfiguration,
-        peer_connection_state::RTCPeerConnectionState,
-        sdp::session_description::RTCSessionDescription,
+        PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCConfigurationBuilder,
+        RTCIceCandidateInit, RTCIceServer, RTCPeerConnectionIceEvent, RTCPeerConnectionState,
+        RTCSessionDescription,
     },
+    runtime::{Runtime, SmolRuntime},
 };
 
 pub(crate) struct NativeSignaller {
@@ -119,15 +118,26 @@ impl PeerDataSender for UnboundedSender<Packet> {
     }
 }
 
+/// Forwards the events of a peer's data channels, completing once all of them have closed.
+type EventForwarding = Pin<Box<dyn FusedFuture<Output = ()> + Send>>;
+
+/// Adds the remote peer's ICE candidates to the connection for as long as signaling is up.
+type CandidateListener =
+    Pin<Box<dyn FusedFuture<Output = Result<(), webrtc::error::Error>> + Send>>;
+
+pub(crate) struct NativeHandshakeMeta {
+    to_peer_message_rx: Vec<UnboundedReceiver<Packet>>,
+    data_channels: Vec<Arc<dyn DataChannel>>,
+    event_forwarding: EventForwarding,
+    trickle_fut: CandidateListener,
+    peer_disconnected_rx: Receiver<()>,
+    _connection: ConnectionGuard,
+}
+
 #[async_trait]
 impl Messenger for NativeMessenger {
     type DataChannel = UnboundedSender<Packet>;
-    type HandshakeMeta = (
-        Vec<UnboundedReceiver<Packet>>,
-        Vec<Arc<RTCDataChannel>>,
-        Pin<Box<dyn FusedFuture<Output = Result<(), webrtc::Error>> + Send>>,
-        Receiver<()>,
-    );
+    type HandshakeMeta = NativeHandshakeMeta;
 
     async fn offer_handshake(
         signal_peer: SignalPeer,
@@ -136,83 +146,83 @@ impl Messenger for NativeMessenger {
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
-        async {
-            let (to_peer_message_tx, to_peer_message_rx) =
-                new_senders_and_receivers(channel_configs);
-            let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
+        let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(channel_configs);
+        let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
-            debug!("making offer");
-            let (connection, trickle) =
-                create_rtc_peer_connection(signal_peer.clone(), ice_server_config)
-                    .await
-                    .unwrap();
-
-            let (data_channel_ready_txs, data_channels_ready_fut) =
-                create_data_channels_ready_fut(channel_configs);
-
-            let data_channels = create_data_channels(
-                &connection,
-                data_channel_ready_txs,
-                signal_peer.id,
-                peer_disconnected_tx.clone(),
-                messages_from_peers_tx,
-                channel_configs,
-            )
-            .await;
-            notify_on_connection_failure(&connection, peer_disconnected_tx);
-
-            // TODO: maybe pass in options? ice restart etc.?
-            let offer = connection.create_offer(None).await.unwrap();
-            let sdp = offer.sdp.clone();
-            connection.set_local_description(offer).await.unwrap();
-            signal_peer.send(PeerSignal::Offer(sdp));
-
-            let answer = loop {
-                let signal = peer_signal_rx
-                    .next()
-                    .await
-                    .expect("Signal server connection lost in the middle of a handshake");
-
-                match signal {
-                    PeerSignal::Answer(answer) => {
-                        break answer;
-                    }
-                    PeerSignal::Offer(_) => {
-                        warn!("Got an unexpected Offer, while waiting for Answer. Ignoring.")
-                    }
-                    PeerSignal::IceCandidate(_) => {
-                        warn!("Got an unexpected IceCandidate, while waiting for Answer. Ignoring.")
-                    }
-                };
-            };
-
-            let remote_description = RTCSessionDescription::answer(answer).unwrap();
-            connection
-                .set_remote_description(remote_description)
-                .await
-                .unwrap();
-
-            let trickle_fut = complete_handshake(
-                trickle,
-                &connection,
-                peer_signal_rx,
-                data_channels_ready_fut,
-            )
-            .await;
-
-            HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
-                peer_id: signal_peer.id,
-                data_channels: to_peer_message_tx,
-                metadata: (
-                    to_peer_message_rx,
-                    data_channels,
-                    trickle_fut,
-                    peer_disconnected_rx,
-                ),
-            }
-        }
-        .compat() // Required to run tokio futures with other async executors
+        debug!("making offer");
+        let (connection, trickle) = create_rtc_peer_connection(
+            signal_peer.clone(),
+            ice_server_config,
+            peer_disconnected_tx.clone(),
+        )
         .await
+        .unwrap();
+
+        let (data_channel_ready_txs, data_channels_ready_fut) =
+            create_data_channels_ready_fut(channel_configs);
+
+        let (data_channels, mut event_forwarding) = create_data_channels(
+            &**connection,
+            data_channel_ready_txs,
+            signal_peer.id,
+            peer_disconnected_tx,
+            messages_from_peers_tx,
+            channel_configs,
+        )
+        .await;
+
+        // TODO: maybe pass in options? ice restart etc.?
+        let offer = connection.create_offer(None).await.unwrap();
+        let sdp = offer.sdp.clone();
+        connection.set_local_description(offer).await.unwrap();
+        signal_peer.send(PeerSignal::Offer(sdp));
+
+        let answer = loop {
+            let signal = peer_signal_rx
+                .next()
+                .await
+                .expect("Signal server connection lost in the middle of a handshake");
+
+            match signal {
+                PeerSignal::Answer(answer) => {
+                    break answer;
+                }
+                PeerSignal::Offer(_) => {
+                    warn!("Got an unexpected Offer, while waiting for Answer. Ignoring.")
+                }
+                PeerSignal::IceCandidate(_) => {
+                    warn!("Got an unexpected IceCandidate, while waiting for Answer. Ignoring.")
+                }
+            };
+        };
+
+        let remote_description = RTCSessionDescription::answer(answer).unwrap();
+        connection
+            .set_remote_description(remote_description)
+            .await
+            .unwrap();
+
+        let trickle_fut = complete_handshake(
+            &trickle,
+            &connection,
+            peer_signal_rx,
+            data_channels_ready_fut,
+            &mut event_forwarding,
+        )
+        .await;
+
+        HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
+            peer_id: signal_peer.id,
+            data_channels: to_peer_message_tx,
+            metadata: NativeHandshakeMeta {
+                to_peer_message_rx,
+                data_channels,
+                event_forwarding,
+                trickle_fut,
+                peer_disconnected_rx,
+                _connection: connection,
+            },
+        }
     }
 
     async fn accept_handshake(
@@ -222,141 +232,185 @@ impl Messenger for NativeMessenger {
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
-        async {
-            let (to_peer_message_tx, to_peer_message_rx) =
-                new_senders_and_receivers(channel_configs);
-            let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
+        let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(channel_configs);
+        let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
-            debug!("handshake_accept");
-            let (connection, trickle) =
-                create_rtc_peer_connection(signal_peer.clone(), ice_server_config)
-                    .await
-                    .unwrap();
-
-            let (data_channel_ready_txs, data_channels_ready_fut) =
-                create_data_channels_ready_fut(channel_configs);
-
-            let data_channels = create_data_channels(
-                &connection,
-                data_channel_ready_txs,
-                signal_peer.id,
-                peer_disconnected_tx.clone(),
-                messages_from_peers_tx,
-                channel_configs,
-            )
-            .await;
-            notify_on_connection_failure(&connection, peer_disconnected_tx.clone());
-
-            let offer = loop {
-                match peer_signal_rx.next().await.expect("error") {
-                    PeerSignal::Offer(offer) => {
-                        break offer;
-                    }
-                    _ => {
-                        warn!("ignoring other signal!!!");
-                    }
-                }
-            };
-            debug!("received offer");
-            let remote_description = RTCSessionDescription::offer(offer).unwrap();
-            connection
-                .set_remote_description(remote_description)
-                .await
-                .unwrap();
-
-            let answer = connection.create_answer(None).await.unwrap();
-            signal_peer.send(PeerSignal::Answer(answer.sdp.clone()));
-            connection.set_local_description(answer).await.unwrap();
-
-            let trickle_fut = complete_handshake(
-                trickle,
-                &connection,
-                peer_signal_rx,
-                data_channels_ready_fut,
-            )
-            .await;
-
-            HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
-                peer_id: signal_peer.id,
-                data_channels: to_peer_message_tx,
-                metadata: (
-                    to_peer_message_rx,
-                    data_channels,
-                    trickle_fut,
-                    peer_disconnected_rx,
-                ),
-            }
-        }
-        .compat() // Required to run tokio futures with other async executors
+        debug!("handshake_accept");
+        let (connection, trickle) = create_rtc_peer_connection(
+            signal_peer.clone(),
+            ice_server_config,
+            peer_disconnected_tx.clone(),
+        )
         .await
+        .unwrap();
+
+        let (data_channel_ready_txs, data_channels_ready_fut) =
+            create_data_channels_ready_fut(channel_configs);
+
+        let (data_channels, mut event_forwarding) = create_data_channels(
+            &**connection,
+            data_channel_ready_txs,
+            signal_peer.id,
+            peer_disconnected_tx,
+            messages_from_peers_tx,
+            channel_configs,
+        )
+        .await;
+
+        let offer = loop {
+            match peer_signal_rx.next().await.expect("error") {
+                PeerSignal::Offer(offer) => {
+                    break offer;
+                }
+                _ => {
+                    warn!("ignoring other signal!!!");
+                }
+            }
+        };
+        debug!("received offer");
+        let remote_description = RTCSessionDescription::offer(offer).unwrap();
+        connection
+            .set_remote_description(remote_description)
+            .await
+            .unwrap();
+
+        let answer = connection.create_answer(None).await.unwrap();
+        signal_peer.send(PeerSignal::Answer(answer.sdp.clone()));
+        connection.set_local_description(answer).await.unwrap();
+
+        let trickle_fut = complete_handshake(
+            &trickle,
+            &connection,
+            peer_signal_rx,
+            data_channels_ready_fut,
+            &mut event_forwarding,
+        )
+        .await;
+
+        HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
+            peer_id: signal_peer.id,
+            data_channels: to_peer_message_tx,
+            metadata: NativeHandshakeMeta {
+                to_peer_message_rx,
+                data_channels,
+                event_forwarding,
+                trickle_fut,
+                peer_disconnected_rx,
+                _connection: connection,
+            },
+        }
     }
 
     async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId {
-        async {
-            let (mut to_peer_message_rx, data_channels, mut trickle_fut, mut peer_disconnected) =
-                handshake_meta;
+        let NativeHandshakeMeta {
+            mut to_peer_message_rx,
+            data_channels,
+            mut event_forwarding,
+            mut trickle_fut,
+            mut peer_disconnected_rx,
+            _connection,
+        } = handshake_meta;
 
-            assert_eq!(
-                data_channels.len(),
-                to_peer_message_rx.len(),
-                "amount of data channels and receivers differ"
-            );
+        assert_eq!(
+            data_channels.len(),
+            to_peer_message_rx.len(),
+            "amount of data channels and receivers differ"
+        );
 
-            let mut message_loop_futs: FuturesUnordered<_> = data_channels
-                .iter()
-                .zip(to_peer_message_rx.iter_mut())
-                .map(|(data_channel, rx)| async move {
-                    while let Some(message) = rx.next().await {
-                        trace!("sending packet {message:?}");
-                        let message = message.clone();
-                        let message = Bytes::from(message);
-                        if let Err(e) = data_channel.send(&message).await {
-                            error!("error sending to data channel: {e:?}")
-                        }
+        let mut message_loop_futs: FuturesUnordered<_> = data_channels
+            .iter()
+            .zip(to_peer_message_rx.iter_mut())
+            .map(|(data_channel, rx)| async move {
+                while let Some(message) = rx.next().await {
+                    trace!("sending packet {message:?}");
+                    if let Err(e) = data_channel.send(BytesMut::from(&message[..])).await {
+                        error!("error sending to data channel: {e:?}")
                     }
-                })
-                .collect();
-
-            loop {
-                select! {
-                    _ = peer_disconnected.next() => break,
-
-                    _ = message_loop_futs.next() => break,
-                    // TODO: this means that the signaling is down, should return an
-                    // error
-                    _ = trickle_fut => continue,
                 }
-            }
+            })
+            .collect();
 
-            peer_uuid
+        loop {
+            select! {
+                _ = peer_disconnected_rx.next() => break,
+
+                _ = message_loop_futs.next() => break,
+                // Every data channel closed, which is reported on `peer_disconnected_rx`.
+                _ = event_forwarding => continue,
+                // TODO: this means that the signaling is down, should return an
+                // error
+                _ = trickle_fut => continue,
+            }
         }
-        .compat() // Required to run tokio futures with other async executors
-        .await
+
+        peer_uuid
     }
 }
 
-/// Treats the peer connection failing like a data channel closing.
+/// The runtime driving the peer connections.
 ///
-/// A peer that vanishes without closing its data channels (a crash, lost network, a socket dropped
-/// without closing the connection) never closes them on our side, so it would stay connected
-/// forever whenever the signaling server cannot report it gone (e.g. after the signaling
-/// connection is lost). ICE declares the connection failed about 30 seconds after the peer stops
-/// answering.
-fn notify_on_connection_failure(
-    connection: &RTCPeerConnection,
-    mut peer_disconnected_tx: Sender<()>,
-) {
-    connection.on_peer_connection_state_change(Box::new(move |state| {
+/// smol's executor runs on threads of its own, so the connections don't depend on the executor
+/// the socket is polled by, and no tokio context is needed.
+fn runtime() -> Arc<dyn Runtime> {
+    Arc::new(SmolRuntime)
+}
+
+/// Closes the peer connection when dropped.
+///
+/// A webrtc-rs peer connection that is dropped without being closed keeps its driver task, and
+/// with it its sockets, running. The remote peer would then see it as connected until ICE times
+/// out, even though no data channel is served anymore.
+struct ConnectionGuard(Arc<dyn PeerConnection>);
+
+impl std::ops::Deref for ConnectionGuard {
+    type Target = Arc<dyn PeerConnection>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        let connection = Arc::clone(&self.0);
+        // Dropping the returned handle detaches the task.
+        runtime().spawn(Box::pin(async move {
+            if let Err(e) = connection.close().await {
+                debug!("failed to close peer connection: {e:?}");
+            }
+        }));
+    }
+}
+
+/// Handles the events of a peer connection.
+struct ConnectionEventHandler {
+    trickle: Arc<CandidateTrickle>,
+    peer_disconnected_tx: Sender<()>,
+}
+
+#[async_trait]
+impl PeerConnectionEventHandler for ConnectionEventHandler {
+    async fn on_ice_candidate(&self, event: RTCPeerConnectionIceEvent) {
+        self.trickle.on_local_candidate(event);
+    }
+
+    /// Treats the peer connection failing like a data channel closing.
+    ///
+    /// A peer that vanishes without closing its data channels (a crash, lost network, a socket
+    /// dropped without closing the connection) never closes them on our side, so it would stay
+    /// connected forever whenever the signaling server cannot report it gone (e.g. after the
+    /// signaling connection is lost). ICE declares the connection failed about 30 seconds after
+    /// the peer stops answering.
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
         if matches!(
             state,
             RTCPeerConnectionState::Failed | RTCPeerConnectionState::Closed
         ) {
             debug!("peer connection {state}");
             // Full only when a disconnect is already pending, which is just as good.
-            let _ = peer_disconnected_tx.try_send(());
+            let _ = self.peer_disconnected_tx.clone().try_send(());
         }
-        Box::pin(async {})
-    }));
+    }
 }
 
 fn new_senders_and_receivers<T>(
@@ -368,12 +422,13 @@ fn new_senders_and_receivers<T>(
 }
 
 async fn complete_handshake<T: Future<Output = ()>>(
-    trickle: Arc<CandidateTrickle>,
-    connection: &Arc<RTCPeerConnection>,
+    trickle: &CandidateTrickle,
+    connection: &Arc<dyn PeerConnection>,
     peer_signal_rx: UnboundedReceiver<PeerSignal>,
     mut wait_for_channels: Pin<Box<Fuse<T>>>,
-) -> Pin<Box<Fuse<impl Future<Output = Result<(), webrtc::Error>> + use<T>>>> {
-    trickle.send_pending_candidates().await;
+    event_forwarding: &mut EventForwarding,
+) -> CandidateListener {
+    trickle.send_pending_candidates();
     let mut trickle_fut = Box::pin(
         CandidateTrickle::listen_for_remote_candidates(Arc::clone(connection), peer_signal_rx)
             .fuse(),
@@ -384,6 +439,8 @@ async fn complete_handshake<T: Future<Output = ()>>(
             _ = wait_for_channels => {
                 break;
             },
+            // The channels open through their events.
+            _ = event_forwarding.as_mut() => continue,
             // TODO: this means that the signaling is down, should return an
             // error
             _ = trickle_fut => continue,
@@ -395,23 +452,21 @@ async fn complete_handshake<T: Future<Output = ()>>(
 
 struct CandidateTrickle {
     signal_peer: SignalPeer,
-    pending: Mutex<Vec<String>>,
+    /// Local candidates gathered before the remote description was set, `None` once they have
+    /// been sent.
+    pending: Mutex<Option<Vec<String>>>,
 }
 
 impl CandidateTrickle {
     fn new(signal_peer: SignalPeer) -> Self {
         Self {
             signal_peer,
-            pending: Default::default(),
+            pending: Mutex::new(Some(Vec::new())),
         }
     }
 
-    async fn on_local_candidate(
-        &self,
-        peer_connection: &RTCPeerConnection,
-        candidate: RTCIceCandidate,
-    ) {
-        let candidate_init = match candidate.to_json() {
+    fn on_local_candidate(&self, event: RTCPeerConnectionIceEvent) {
+        let candidate_init = match event.candidate.to_json() {
             Ok(candidate_init) => candidate_init,
             Err(err) => {
                 error!("failed to convert ice candidate to candidate init, ignoring: {err}");
@@ -423,29 +478,31 @@ impl CandidateTrickle {
             serde_json::to_string(&candidate_init).expect("failed to serialize candidate to json");
 
         // Local candidates can only be sent after the remote description
-        if peer_connection.remote_description().await.is_some() {
-            // Can send local candidate already
-            debug!("sending IceCandidate signal: {candidate:?}");
-            self.signal_peer
-                .send(PeerSignal::IceCandidate(candidate_json));
-        } else {
-            // Can't send yet, store in pending
-            debug!("storing pending IceCandidate signal: {candidate_json:?}");
-            self.pending.lock().await.push(candidate_json);
+        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+        match pending.as_mut() {
+            Some(pending) => {
+                debug!("storing pending IceCandidate signal: {candidate_json:?}");
+                pending.push(candidate_json);
+            }
+            None => {
+                debug!("sending IceCandidate signal: {candidate_json:?}");
+                self.signal_peer
+                    .send(PeerSignal::IceCandidate(candidate_json));
+            }
         }
     }
 
-    async fn send_pending_candidates(&self) {
-        let mut pending = self.pending.lock().await;
-        for candidate in std::mem::take(&mut *pending) {
+    fn send_pending_candidates(&self) {
+        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+        for candidate in pending.take().into_iter().flatten() {
             self.signal_peer.send(PeerSignal::IceCandidate(candidate));
         }
     }
 
     async fn listen_for_remote_candidates(
-        peer_connection: Arc<RTCPeerConnection>,
+        peer_connection: Arc<dyn PeerConnection>,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
-    ) -> Result<(), webrtc::Error> {
+    ) -> Result<(), webrtc::error::Error> {
         while let Some(signal) = peer_signal_rx.next().await {
             match signal {
                 PeerSignal::IceCandidate(candidate_json) => {
@@ -482,126 +539,118 @@ impl CandidateTrickle {
 async fn create_rtc_peer_connection(
     signal_peer: SignalPeer,
     ice_server_config: &RtcIceServerConfig,
-) -> Result<(Arc<RTCPeerConnection>, Arc<CandidateTrickle>), Box<dyn std::error::Error>> {
-    let api = APIBuilder::new().build();
-
-    let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
+    peer_disconnected_tx: Sender<()>,
+) -> Result<(ConnectionGuard, Arc<CandidateTrickle>), webrtc::error::Error> {
+    let config = RTCConfigurationBuilder::new()
+        .with_ice_servers(vec![RTCIceServer {
             urls: ice_server_config.urls.clone(),
             username: ice_server_config.username.clone().unwrap_or_default(),
             credential: ice_server_config.credential.clone().unwrap_or_default(),
-        }],
-        ..Default::default()
-    };
-
-    let connection = api.new_peer_connection(config).await?;
-    let connection = Arc::new(connection);
+        }])
+        .build();
 
     let trickle = Arc::new(CandidateTrickle::new(signal_peer));
+    let handler = ConnectionEventHandler {
+        trickle: Arc::clone(&trickle),
+        peer_disconnected_tx,
+    };
 
-    let connection2 = Arc::downgrade(&connection);
-    let trickle2 = trickle.clone();
-    connection.on_ice_candidate(Box::new(move |c| {
-        let connection2 = connection2.clone();
-        let trickle2 = trickle2.clone();
-        Box::pin(async move {
-            if let Some(c) = c {
-                if let Some(connection2) = connection2.upgrade() {
-                    trickle2.on_local_candidate(&connection2, c).await;
-                } else {
-                    warn!("missing peer_connection?");
-                }
-            }
-        })
-    }));
+    let connection = PeerConnectionBuilder::new()
+        .with_configuration(config)
+        .with_runtime(runtime())
+        .with_handler(Arc::new(handler))
+        // One socket per local interface. A family the host doesn't have is skipped.
+        .with_udp_addrs(vec!["0.0.0.0:0", "[::]:0"])
+        .build()
+        .await?;
 
-    Ok((connection, trickle))
+    Ok((ConnectionGuard(Arc::new(connection)), trickle))
 }
 
 async fn create_data_channels(
-    connection: &RTCPeerConnection,
+    connection: &dyn PeerConnection,
     mut data_channel_ready_txs: Vec<futures_channel::mpsc::Sender<()>>,
     peer_id: PeerId,
     peer_disconnected_tx: Sender<()>,
     from_peer_message_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
     channel_configs: &[ChannelConfig],
-) -> Vec<Arc<RTCDataChannel>> {
+) -> (Vec<Arc<dyn DataChannel>>, EventForwarding) {
     let mut channels = vec![];
+    let mut event_forwarding = vec![];
     for (i, channel_config) in channel_configs.iter().enumerate() {
-        let channel = create_data_channel(
-            connection,
+        let channel = create_data_channel(connection, channel_config, i).await;
+
+        event_forwarding.push(forward_data_channel_events(
+            Arc::clone(&channel),
             data_channel_ready_txs.pop().unwrap(),
             peer_id,
             peer_disconnected_tx.clone(),
             from_peer_message_tx.get(i).unwrap().clone(),
-            channel_config,
-            i,
-        )
-        .await;
-
+        ));
         channels.push(channel);
     }
 
-    channels
+    (
+        channels,
+        Box::pin(join_all(event_forwarding).map(|_| ()).fuse()),
+    )
 }
 
 async fn create_data_channel(
-    connection: &RTCPeerConnection,
-    mut channel_ready: futures_channel::mpsc::Sender<()>,
-    peer_id: PeerId,
-    mut peer_disconnected_tx: Sender<()>,
-    from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
+    connection: &dyn PeerConnection,
     channel_config: &ChannelConfig,
     channel_index: usize,
-) -> Arc<RTCDataChannel> {
+) -> Arc<dyn DataChannel> {
     let config = RTCDataChannelInit {
-        ordered: Some(channel_config.ordered),
+        ordered: channel_config.ordered,
         negotiated: Some(channel_index as u16),
         max_retransmits: channel_config.max_retransmits,
         ..Default::default()
     };
 
-    let channel = connection
+    connection
         .create_data_channel(&format!("matchbox_socket_{channel_index}"), Some(config))
         .await
-        .unwrap();
+        .unwrap()
+}
 
-    channel.on_open(Box::new(move || {
-        debug!("Data channel ready");
-        Box::pin(async move {
-            // Fails if the socket was dropped mid-handshake
-            if let Err(e) = channel_ready.try_send(()) {
-                debug!("data channel opened after handshake teardown: {e:?}");
+/// Forwards a data channel's events until it closes, then reports the peer disconnected.
+async fn forward_data_channel_events(
+    channel: Arc<dyn DataChannel>,
+    mut channel_ready: futures_channel::mpsc::Sender<()>,
+    peer_id: PeerId,
+    mut peer_disconnected_tx: Sender<()>,
+    from_peer_message_tx: UnboundedSender<(PeerId, Packet)>,
+) {
+    while let Some(event) = channel.poll().await {
+        match event {
+            DataChannelEvent::OnOpen => {
+                debug!("Data channel ready");
+                // Fails if the socket was dropped mid-handshake
+                if let Err(e) = channel_ready.try_send(()) {
+                    debug!("data channel opened after handshake teardown: {e:?}");
+                }
             }
-        })
-    }));
-
-    {
-        channel.on_close(Box::new(move || {
-            debug!("Data channel closed");
-            if let Err(err) = peer_disconnected_tx.try_send(()) {
-                // should only happen if the socket is dropped, or we are out of memory
-                warn!("failed to notify about data channel closing: {err:?}");
+            DataChannelEvent::OnMessage(message) => {
+                let packet = message.data[..].into();
+                trace!("data channel message received: {packet:?}");
+                if let Err(e) = from_peer_message_tx.unbounded_send((peer_id, packet)) {
+                    // should only happen if the socket is dropped, or we are out of memory
+                    warn!("failed to notify about data channel message: {e:?}");
+                }
             }
-            Box::pin(async move {})
-        }));
+            DataChannelEvent::OnError => {
+                // TODO: handle this somehow
+                warn!("data channel error");
+            }
+            DataChannelEvent::OnClose => break,
+            _ => {}
+        }
     }
 
-    channel.on_error(Box::new(move |e| {
-        // TODO: handle this somehow
-        warn!("data channel error {e:?}");
-        Box::pin(async move {})
-    }));
-
-    channel.on_message(Box::new(move |message| {
-        let packet = (*message.data).into();
-        trace!("data channel message received: {packet:?}");
-        if let Err(e) = from_peer_message_tx.unbounded_send((peer_id, packet)) {
-            // should only happen if the socket is dropped, or we are out of memory
-            warn!("failed to notify about data channel message: {e:?}");
-        }
-        Box::pin(async move {})
-    }));
-
-    channel
+    debug!("Data channel closed");
+    if let Err(err) = peer_disconnected_tx.try_send(()) {
+        // should only happen if the socket is dropped, or we are out of memory
+        warn!("failed to notify about data channel closing: {err:?}");
+    }
 }

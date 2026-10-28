@@ -632,7 +632,7 @@ async fn forward_data_channel_events(
                 }
             }
             DataChannelEvent::OnMessage(message) => {
-                let packet = message.data[..].into();
+                let packet = message.data.freeze();
                 trace!("data channel message received: {packet:?}");
                 if let Err(e) = from_peer_message_tx.unbounded_send((peer_id, packet)) {
                     // should only happen if the socket is dropped, or we are out of memory

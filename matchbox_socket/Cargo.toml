@@ -43,6 +43,7 @@ once_cell = { version = "1.17", default-features = false, features = [
   "alloc",
 ] }
 derive_more = { version = "2.0", features = ["display", "from"] }
+bytes = { version = "1.1", default-features = false }
 
 ggrs = { version = "0.13", default-features = false, optional = true }
 bincode = { version = "2.0", default-features = false, features = [
@@ -91,7 +92,6 @@ webrtc = { version = "0.21", default-features = false, features = [
 # Only for the `tls12` feature: async-tungstenite builds futures-rustls without default
 # features, which leaves rustls without TLS 1.2. The crypto provider (ring) comes from webrtc.
 rustls = { version = "0.23", default-features = false, optional = true }
-bytes = { version = "1.1", default-features = false }
 
 [dev-dependencies]
 futures-test = "0.3"

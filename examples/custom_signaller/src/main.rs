@@ -82,13 +82,13 @@ async fn async_main(node_id: Option<String>) {
             match state {
                 PeerState::Connected => {
                     info!("Peer joined: {peer}");
-                    let packet = "hello friend!".as_bytes().to_vec().into_boxed_slice();
+                    let packet = "hello friend!".as_bytes().to_vec().into();
                     socket.channel_mut(CHANNEL_ID).send(packet, peer);
 
                     let packet = format!("ping {}", custom_signaller::get_timestamp())
                         .as_bytes()
                         .to_vec()
-                        .into_boxed_slice();
+                        .into();
                     socket.channel_mut(CHANNEL_ID).send(packet, peer);
                 }
                 PeerState::Disconnected => {
@@ -102,7 +102,7 @@ async fn async_main(node_id: Option<String>) {
             let message = String::from_utf8_lossy(&packet);
             if message.contains("ping") {
                 let ts = message.split(" ").nth(1).unwrap().parse::<u128>().unwrap();
-                let packet = format!("pong {ts}").as_bytes().to_vec().into_boxed_slice();
+                let packet = format!("pong {ts}").as_bytes().to_vec().into();
                 socket.channel_mut(CHANNEL_ID).send(packet, peer);
             }
             if message.contains("pong") {

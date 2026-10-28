@@ -13,21 +13,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v6
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.7.3
-
       - name: Install Taplo
-        uses: actions-rs/cargo@v1
+        uses: taiki-e/install-action@v2
         with:
-          command: install
-          args: taplo-cli --locked
+          tool: taplo
 
       - name: Lint
         run: |

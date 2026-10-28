@@ -68,6 +68,27 @@ jobs:
       - name: Run browser tests
         run: cargo test -p matchbox_socket --test browser -- --ignored
 
+  test-nat:
+    name: Test NAT traversal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      # The test builds its NATs from network namespaces inside an unprivileged user namespace,
+      # which Ubuntu's AppArmor blocks by default
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Run NAT traversal tests
+        run: cargo test -p matchbox_socket --test nat -- --ignored
+
   check-wasm:
     name: Check Wasm
     runs-on: ubuntu-latest

@@ -4635,6 +4635,7 @@ dependencies = [
  "matchbox_protocol",
  "matchbox_signaling",
  "once_cell",
+ "rtc-stun",
  "rustls",
  "serde",
  "serde-wasm-bindgen",

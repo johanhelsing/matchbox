@@ -45,9 +45,9 @@ async fn exchanges_packets_with_the_other_browser() {
 
     socket.channel_mut(0).send(b"hello".to_vec().into(), peer);
     for _ in 0..MAX_POLLS {
-        if let Some((from, packet)) = socket.channel_mut(0).receive().pop() {
-            assert_eq!(from, peer);
-            assert_eq!(&packet[..], b"hello");
+        let packets = socket.channel_mut(0).receive();
+        if !packets.is_empty() {
+            assert_eq!(packets, vec![(peer, b"hello".to_vec().into())]);
             return;
         }
         Delay::new(POLL).await;

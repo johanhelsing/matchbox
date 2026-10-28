@@ -6,12 +6,24 @@ on:
 
 name: Code
 
+env:
+  # Faster builds and smaller caches, nothing here reads the debuginfo
+  CARGO_PROFILE_DEV_DEBUG: 0
+
 jobs:
   test-native:
     name: Test Native
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            packages: --features signaling
+          # Bevy is slow to build and not platform specific, so only ubuntu tests it
+          - os: windows-latest
+            packages: -p matchbox_socket -p matchbox_signaling -p matchbox_server -p matchbox_protocol
+          - os: macos-latest
+            packages: -p matchbox_socket -p matchbox_signaling -p matchbox_server -p matchbox_protocol
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout sources
@@ -26,10 +38,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run cargo test
-        run: cargo test --features signaling --all-targets
+        run: cargo test ${{ matrix.packages }} --all-targets
 
       - name: Run cargo doc tests
-        run: cargo test --doc
+        run: cargo test ${{ matrix.packages }} --doc
 
   # Should be upgraded to test when possible
   check-wasm:

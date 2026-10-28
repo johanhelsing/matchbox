@@ -130,7 +130,11 @@ fn lobby_system(
 ) {
     // regularly call update_peers to update the list of connected peers
     let Ok(peer_changes) = socket.try_update_peers() else {
-        warn!("socket dropped");
+        // The socket ends when the signaling server can't be reached or is lost
+        text.0 = format!(
+            "Could not connect to the signaling server at {}",
+            args.matchbox
+        );
         return;
     };
 

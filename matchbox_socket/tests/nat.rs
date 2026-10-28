@@ -10,7 +10,9 @@
 //!
 //! The peers' host candidates are unreachable from each other, so connecting at all means the
 //! server reflexive candidates worked. A variant puts both peers on lan1, where they must connect
-//! directly although STUN gives them the same public address. Ignored by default:
+//! directly although STUN gives them the same public address. Each peer is native, Chrome or
+//! Firefox, the browsers run through wasm-pack inside the LAN (see tests/nat_browser.rs and
+//! webdriver.json, Chrome's sandbox doesn't start inside a user namespace). Ignored by default:
 //! `cargo test -p matchbox_socket --test nat -- --ignored`
 //!
 //! Set `MATCHBOX_NAT_LOG` to a directory to get a debug log per process and the routers'
@@ -54,6 +56,8 @@ const POLL: Duration = Duration::from_millis(10);
 const NO_STUN_ENV: &str = "MATCHBOX_NAT_NO_STUN";
 /// Which network to build, see [`Topology`]
 const TOPOLOGY_ENV: &str = "MATCHBOX_NAT_TOPOLOGY";
+/// The two peers, see [`Peer`], comma separated
+const PEERS_ENV: &str = "MATCHBOX_NAT_PEERS";
 
 #[derive(Clone, Copy, PartialEq)]
 enum Topology {
@@ -63,27 +67,136 @@ enum Topology {
     SharedLan,
 }
 
+impl Topology {
+    fn name(self) -> &'static str {
+        match self {
+            Self::SeparateNats => "separate_nats",
+            Self::SharedLan => "shared_lan",
+        }
+    }
+
+    fn from_name(name: &str) -> Self {
+        match name {
+            "separate_nats" => Self::SeparateNats,
+            "shared_lan" => Self::SharedLan,
+            _ => panic!("unknown topology {name}"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Peer {
+    /// This test binary
+    Native,
+    /// tests/nat_browser.rs in headless Chrome, through wasm-pack
+    Chrome,
+    /// tests/nat_browser.rs in headless Firefox, through wasm-pack
+    Firefox,
+}
+
+impl Peer {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::Chrome => "chrome",
+            Self::Firefox => "firefox",
+        }
+    }
+
+    fn from_name(name: &str) -> Self {
+        match name {
+            "native" => Self::Native,
+            "chrome" => Self::Chrome,
+            "firefox" => Self::Firefox,
+            _ => panic!("unknown peer {name}"),
+        }
+    }
+}
+
+use Peer::{Chrome, Firefox, Native};
+use Topology::{SeparateNats, SharedLan};
+
 #[test]
 #[ignore]
 fn peers_behind_different_nats_connect() {
-    run_orchestrator(Topology::SeparateNats, true);
+    run_orchestrator(SeparateNats, [Native, Native], true);
 }
 
 /// Checks that the NATs isolate the peers: without STUN they must not find each other
 #[test]
 #[ignore]
 fn peers_behind_different_nats_need_stun() {
-    run_orchestrator(Topology::SeparateNats, false);
+    run_orchestrator(SeparateNats, [Native, Native], false);
 }
 
 /// STUN tells both peers the same public address, they must connect over the LAN anyway
 #[test]
 #[ignore]
 fn peers_on_the_same_lan_connect() {
-    run_orchestrator(Topology::SharedLan, true);
+    run_orchestrator(SharedLan, [Native, Native], true);
 }
 
-fn run_orchestrator(topology: Topology, stun: bool) {
+#[test]
+#[ignore]
+fn native_and_chrome_behind_different_nats() {
+    run_orchestrator(SeparateNats, [Native, Chrome], true);
+}
+
+#[test]
+#[ignore]
+fn native_and_firefox_behind_different_nats() {
+    run_orchestrator(SeparateNats, [Native, Firefox], true);
+}
+
+#[test]
+#[ignore]
+fn chrome_and_chrome_behind_different_nats() {
+    run_orchestrator(SeparateNats, [Chrome, Chrome], true);
+}
+
+#[test]
+#[ignore]
+fn firefox_and_firefox_behind_different_nats() {
+    run_orchestrator(SeparateNats, [Firefox, Firefox], true);
+}
+
+#[test]
+#[ignore]
+fn chrome_and_firefox_behind_different_nats() {
+    run_orchestrator(SeparateNats, [Chrome, Firefox], true);
+}
+
+#[test]
+#[ignore]
+fn native_and_chrome_on_the_same_lan() {
+    run_orchestrator(SharedLan, [Native, Chrome], true);
+}
+
+#[test]
+#[ignore]
+fn native_and_firefox_on_the_same_lan() {
+    run_orchestrator(SharedLan, [Native, Firefox], true);
+}
+
+#[test]
+#[ignore]
+fn chrome_and_chrome_on_the_same_lan() {
+    run_orchestrator(SharedLan, [Chrome, Chrome], true);
+}
+
+#[test]
+#[ignore]
+fn firefox_and_firefox_on_the_same_lan() {
+    run_orchestrator(SharedLan, [Firefox, Firefox], true);
+}
+
+#[test]
+#[ignore]
+fn chrome_and_firefox_on_the_same_lan() {
+    run_orchestrator(SharedLan, [Chrome, Firefox], true);
+}
+
+fn run_orchestrator(topology: Topology, peers: [Peer; 2], stun: bool) {
     // A new user and network namespace, where we are root and own the network
     let mut command = Command::new("unshare");
     command
@@ -91,13 +204,8 @@ fn run_orchestrator(topology: Topology, stun: bool) {
         .arg(env::current_exe().unwrap())
         .args(["orchestrator", "--exact", "--ignored", "--nocapture"])
         .env(ROLE_ENV, "orchestrator")
-        .env(
-            TOPOLOGY_ENV,
-            match topology {
-                Topology::SeparateNats => "separate_nats",
-                Topology::SharedLan => "shared_lan",
-            },
-        );
+        .env(TOPOLOGY_ENV, topology.name())
+        .env(PEERS_ENV, peers.map(Peer::name).join(","));
     if !stun {
         command.env(NO_STUN_ENV, "1");
     }
@@ -163,6 +271,38 @@ fn spawn_role(role: &str, netns: Option<&Child>) -> Child {
     command
         .spawn()
         .unwrap_or_else(|e| panic!("failed to spawn {role}: {e}"))
+}
+
+/// A peer in the network namespace of `host`
+fn spawn_peer(peer: Peer, host: &Child) -> Child {
+    let browser = match peer {
+        Native => return spawn_role("nat_peer", Some(host)),
+        Chrome => "--chrome",
+        Firefox => "--firefox",
+    };
+    let mut command = Command::new("nsenter");
+    command
+        .args(["-t", &host.id().to_string(), "-n"])
+        .args([
+            "wasm-pack",
+            "test",
+            "--headless",
+            browser,
+            "--test",
+            "nat_browser",
+        ])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env(
+            "RUSTFLAGS",
+            "--cfg=web_sys_unstable_apis --cfg=getrandom_backend=\"wasm_js\"",
+        );
+    if let Some(dir) = log_dir() {
+        let name = format!("{}-{}.log", peer.name(), host.id());
+        command.stderr(File::create(Path::new(&dir).join(name)).unwrap());
+    }
+    command
+        .spawn()
+        .unwrap_or_else(|e| panic!("failed to spawn wasm-pack: {e}"))
 }
 
 /// A NAT between the internet and LAN `i`, with the public address 10.0.0.1i and a bridge for
@@ -232,11 +372,12 @@ fn orchestrator() {
     if role().as_deref() != Some("orchestrator") {
         return;
     }
-    let topology = match env::var(TOPOLOGY_ENV).as_deref() {
-        Ok("separate_nats") => Topology::SeparateNats,
-        Ok("shared_lan") => Topology::SharedLan,
-        other => panic!("unknown topology {other:?}"),
-    };
+    let topology = Topology::from_name(&env::var(TOPOLOGY_ENV).unwrap());
+    let peers: Vec<Peer> = env::var(PEERS_ENV)
+        .unwrap()
+        .split(',')
+        .map(Peer::from_name)
+        .collect();
 
     run("ip link set lo up");
     run("ip link add br0 type bridge");
@@ -250,14 +391,14 @@ fn orchestrator() {
 
     let (mut routers, mut hosts) = (vec![], vec![]);
     match topology {
-        Topology::SeparateNats => {
+        SeparateNats => {
             for i in 1..=2 {
                 let router = setup_router(i);
                 hosts.push(add_host(&router, i, 2));
                 routers.push(router);
             }
         }
-        Topology::SharedLan => {
+        SharedLan => {
             let router = setup_router(1);
             hosts.push(add_host(&router, 1, 2));
             hosts.push(add_host(&router, 1, 3));
@@ -268,9 +409,10 @@ fn orchestrator() {
     // Give the servers a moment to bind
     thread::sleep(Duration::from_millis(500));
 
-    let mut peers: Vec<Child> = hosts
+    let mut peers: Vec<Child> = peers
         .iter()
-        .map(|host| spawn_role("nat_peer", Some(host)))
+        .zip(&hosts)
+        .map(|(peer, host)| spawn_peer(*peer, host))
         .collect();
     let ok = peers.iter_mut().all(|peer| peer.wait().unwrap().success());
 

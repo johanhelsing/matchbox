@@ -4,7 +4,8 @@
 
 use matchbox_signaling::SignalingServer;
 use matchbox_socket::{
-    ChannelConfig, Error, Packet, PeerId, PeerState, RtcIceServerConfig, WebRtcSocket,
+    CandidatePair, CandidateType, ChannelConfig, Error, Packet, PeerId, PeerState,
+    RtcIceServerConfig, WebRtcSocket,
 };
 use std::{net::Ipv4Addr, time::Duration};
 use tokio::{
@@ -86,6 +87,20 @@ async fn wait_for_peer_within(
     .unwrap_or_else(|_| panic!("no peer became {state:?}"))
 }
 
+async fn wait_for_candidate_pair(socket: &mut WebRtcSocket, peer: PeerId) -> CandidatePair {
+    timeout(TIMEOUT, async {
+        loop {
+            socket.update_peers();
+            if let Some(pair) = socket.candidate_pair(peer) {
+                return pair;
+            }
+            sleep(POLL).await;
+        }
+    })
+    .await
+    .expect("candidate pair never reported")
+}
+
 /// Everything received the first time something arrives, so that nothing is dropped
 async fn wait_for_packets(socket: &mut WebRtcSocket) -> Vec<(PeerId, Packet)> {
     timeout(TIMEOUT, async {
@@ -116,6 +131,21 @@ async fn connect_pair(server: &Server) -> (WebRtcSocket, WebRtcSocket, PeerId, P
 async fn two_peers_connect_and_exchange_packets() {
     let server = Server::start();
     let (mut a, mut b, a_id, b_id) = connect_pair(&server).await;
+
+    // On one machine, straight between the interfaces. The peer may send from an interface it
+    // didn't signal, which shows as peer reflexive.
+    for (socket, peer) in [(&mut a, b_id), (&mut b, a_id)] {
+        let pair = wait_for_candidate_pair(socket, peer).await;
+        assert_eq!(pair.local, CandidateType::Host, "{pair:?}");
+        assert!(
+            matches!(
+                pair.remote,
+                CandidateType::Host | CandidateType::PeerReflexive
+            ),
+            "{pair:?}"
+        );
+        assert_eq!(socket.is_relayed(peer), Some(false));
+    }
 
     a.channel_mut(0).send(b"hello".to_vec().into(), b_id);
     assert_eq!(

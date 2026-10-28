@@ -25,7 +25,8 @@ use matchbox_protocol::PeerId;
 pub use messages::*;
 pub(crate) use socket::MessageLoopChannels;
 pub use socket::{
-    ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel, WebRtcSocket, WebRtcSocketBuilder,
+    CandidatePair, CandidateType, ChannelConfig, PeerState, RtcIceServerConfig, WebRtcChannel,
+    WebRtcSocket, WebRtcSocketBuilder,
 };
 use std::{collections::HashMap, pin::Pin, time::Duration};
 
@@ -168,7 +169,13 @@ trait Messenger {
         channel_configs: &[ChannelConfig],
     ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
 
-    async fn peer_loop(peer_uuid: PeerId, handshake_meta: Self::HandshakeMeta) -> PeerId;
+    /// Runs the connection to a peer until it ends, reporting the candidate pair it uses on
+    /// `candidate_pair_tx` whenever it changes
+    async fn peer_loop(
+        peer_uuid: PeerId,
+        handshake_meta: Self::HandshakeMeta,
+        candidate_pair_tx: UnboundedSender<(PeerId, CandidatePair)>,
+    ) -> PeerId;
 }
 
 async fn message_loop<M: Messenger>(
@@ -184,6 +191,7 @@ async fn message_loop<M: Messenger>(
         mut peer_messages_out_rx,
         messages_from_peers_tx,
         peer_state_tx,
+        candidate_pair_tx,
     } = channels;
 
     let mut handshakes = FuturesUnordered::new();
@@ -294,7 +302,7 @@ async fn message_loop<M: Messenger>(
                     // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore
                     break Ok(());
                 }
-                peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata));
+                peer_loops.push(M::peer_loop(handshake_result.peer_id, handshake_result.metadata, candidate_pair_tx.clone()));
             }
 
             peer_uuid = peer_loops.select_next_some() => {

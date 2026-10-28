@@ -4,7 +4,9 @@
 #![cfg(target_arch = "wasm32")]
 
 use futures_timer::Delay;
-use matchbox_socket::{ChannelConfig, Packet, PeerId, PeerState, RtcIceServerConfig, WebRtcSocket};
+use matchbox_socket::{
+    CandidatePair, ChannelConfig, Packet, PeerId, PeerState, RtcIceServerConfig, WebRtcSocket,
+};
 use std::time::Duration;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -32,6 +34,9 @@ async fn nat_peer() {
     });
 
     let peer = wait_for_peer(&mut socket, PeerState::Connected).await;
+    let pair = wait_for_candidate_pair(&mut socket, peer).await;
+    assert!(!pair.is_relayed(), "{pair:?}");
+
     if socket.id().unwrap() < peer {
         socket.channel_mut(0).send(b"ping".to_vec().into(), peer);
         assert_eq!(
@@ -56,6 +61,17 @@ async fn wait_for_peer(socket: &mut WebRtcSocket, state: PeerState) -> PeerId {
         Delay::new(POLL).await;
     }
     panic!("no peer became {state:?}");
+}
+
+async fn wait_for_candidate_pair(socket: &mut WebRtcSocket, peer: PeerId) -> CandidatePair {
+    for _ in 0..MAX_POLLS {
+        socket.update_peers();
+        if let Some(pair) = socket.candidate_pair(peer) {
+            return pair;
+        }
+        Delay::new(POLL).await;
+    }
+    panic!("candidate pair never reported");
 }
 
 async fn wait_for_packets(socket: &mut WebRtcSocket) -> Vec<(PeerId, Packet)> {

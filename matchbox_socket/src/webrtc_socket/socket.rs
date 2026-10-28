@@ -20,7 +20,13 @@ use futures_channel::mpsc::{
 };
 use log::{debug, error, info, warn};
 use matchbox_protocol::PeerId;
-use std::{collections::HashMap, pin::Pin, sync::Arc, task::Poll, time::Duration};
+use std::{
+    collections::HashMap,
+    pin::Pin,
+    sync::{Arc, Mutex, PoisonError},
+    task::Poll,
+    time::Duration,
+};
 
 /// Configuration options for an ICE server connection.
 /// See also: <https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer#example>
@@ -201,6 +207,7 @@ impl WebRtcSocketBuilder {
         );
 
         let (peer_state_tx, peer_state_rx) = futures_channel::mpsc::unbounded();
+        let (candidate_pair_tx, candidate_pair_rx) = futures_channel::mpsc::unbounded();
 
         let mut peer_messages_out_rx = Vec::with_capacity(self.config.channels.len());
         let mut messages_from_peers_tx = Vec::with_capacity(self.config.channels.len());
@@ -230,6 +237,7 @@ impl WebRtcSocketBuilder {
             self.config,
             peer_messages_out_rx,
             peer_state_tx,
+            candidate_pair_tx,
             messages_from_peers_tx,
         )
         // Transform the source into a user-error.
@@ -251,6 +259,8 @@ impl WebRtcSocketBuilder {
                 id_rx,
                 peer_state_rx,
                 peers: Default::default(),
+                candidate_pair_rx,
+                candidate_pairs: Default::default(),
                 channels,
             },
             Box::pin(socket_fut),
@@ -275,6 +285,82 @@ pub enum PeerState {
     /// - Some of the the data channels got disconnected/closed
     /// - The peer left the signaling server
     Disconnected,
+}
+
+/// The kind of ICE candidate one end of a peer connection uses, see [`CandidatePair`]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CandidateType {
+    /// The address of a network interface
+    Host,
+    /// The public address of the NAT in front of that end, learned by asking a STUN server
+    ServerReflexive,
+    /// An address learned from a packet the peer sent, before signaling delivered its candidate.
+    /// On the remote end, replaced by the type the peer signaled for that address once it
+    /// arrives, so mostly seen for candidates signaled under an mDNS name.
+    PeerReflexive,
+    /// An address on a TURN server, which relays the traffic
+    Relay,
+}
+
+/// The candidates a peer connection currently runs over, see [`WebRtcSocket::candidate_pair`].
+///
+/// `remote` tells how the peer is reached: directly, through its NAT's public address, or through
+/// a relay. Use `remote` or [`is_relayed`](Self::is_relayed) for decisions. `local` is diagnostic
+/// only, its type for the same path varies by platform.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct CandidatePair {
+    /// Our end
+    pub local: CandidateType,
+    /// The peer's end
+    pub remote: CandidateType,
+}
+
+impl CandidatePair {
+    /// Whether either end is a TURN relay, so the traffic goes through a TURN server
+    pub fn is_relayed(&self) -> bool {
+        self.local == CandidateType::Relay || self.remote == CandidateType::Relay
+    }
+}
+
+/// The candidates a peer signaled, by address, to put a type on the peer reflexive ones ICE
+/// learns from its packets before the candidate arrives
+pub(crate) type SignaledCandidates = Arc<Mutex<HashMap<(String, u16), CandidateType>>>;
+
+/// Records a signaled candidate from its SDP form, `candidate:... <ip> <port> typ <type> ...`
+pub(crate) fn record_signaled_candidate(candidates: &SignaledCandidates, sdp: &str) {
+    let fields: Vec<&str> = sdp.split_whitespace().collect();
+    let (Some(ip), Some(port), Some(typ)) = (
+        fields.get(4),
+        fields.get(5).and_then(|port| port.parse().ok()),
+        fields.get(7),
+    ) else {
+        return;
+    };
+    let typ = match *typ {
+        "host" => CandidateType::Host,
+        "srflx" => CandidateType::ServerReflexive,
+        "prflx" => CandidateType::PeerReflexive,
+        "relay" => CandidateType::Relay,
+        _ => return,
+    };
+    candidates
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert((ip.to_string(), port), typ);
+}
+
+/// The type the peer signaled for the candidate at this address, if any
+pub(crate) fn signaled_type(
+    candidates: &SignaledCandidates,
+    ip: &str,
+    port: u16,
+) -> Option<CandidateType> {
+    candidates
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&(ip.to_string(), port))
+        .copied()
 }
 /// Used to send and receive packets on a given WebRTC channel. Must be created as part of a
 /// [`WebRtcSocket`].
@@ -405,6 +491,8 @@ pub struct WebRtcSocket {
     id_rx: futures_channel::oneshot::Receiver<PeerId>,
     peer_state_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, PeerState)>,
     peers: HashMap<PeerId, PeerState>,
+    candidate_pair_rx: futures_channel::mpsc::UnboundedReceiver<(PeerId, CandidatePair)>,
+    candidate_pairs: HashMap<PeerId, CandidatePair>,
     /// The channels, in the order specified by the builder.
     /// These are [`Some`] even before any connection is made: the only transition to [`None`] when
     /// [`ChannelError::Taken`].
@@ -505,6 +593,9 @@ impl WebRtcSocket {
                     if old != Some(state) {
                         changes.push((id, state));
                     }
+                    if state == PeerState::Disconnected {
+                        self.candidate_pairs.remove(&id);
+                    }
                 }
                 // Report the changes received before the closure first (the last
                 // peer's disconnect often arrives together with it); the next call
@@ -516,7 +607,32 @@ impl WebRtcSocket {
             }
         }
 
+        while let Ok((id, pair)) = self.candidate_pair_rx.try_recv() {
+            if self.peers.get(&id) == Some(&PeerState::Connected) {
+                self.candidate_pairs.insert(id, pair);
+            }
+        }
+
         Ok(changes)
+    }
+
+    /// Whether a connected peer's traffic goes through a TURN relay, ours or the peer's.
+    ///
+    /// `None` while unknown: for about a second after the peer connected, for the whole
+    /// connection if the platform doesn't expose the pair, and for peers that aren't connected.
+    /// Early values can still change as signaling completes. Refreshed by
+    /// [`WebRtcSocket::update_peers`].
+    pub fn is_relayed(&self, peer: PeerId) -> Option<bool> {
+        self.candidate_pair(peer).map(|pair| pair.is_relayed())
+    }
+
+    /// The ICE candidate types of the pair a connected peer is reached through, for logs and
+    /// diagnostics. For the plain question see [`WebRtcSocket::is_relayed`].
+    ///
+    /// `None` while unknown, see [`WebRtcSocket::is_relayed`]. The pair is polled about once a
+    /// second and refreshed by [`WebRtcSocket::update_peers`].
+    pub fn candidate_pair(&self, peer: PeerId) -> Option<CandidatePair> {
+        self.candidate_pairs.get(&peer).copied()
     }
 
     /// Returns an iterator of the ids of the connected peers.
@@ -720,6 +836,7 @@ pub struct MessageLoopChannels {
     pub events_receiver: futures_channel::mpsc::UnboundedReceiver<PeerEvent>,
     pub peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     pub peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
+    pub candidate_pair_tx: futures_channel::mpsc::UnboundedSender<(PeerId, CandidatePair)>,
     pub messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 }
 
@@ -729,6 +846,7 @@ async fn run_socket(
     config: SocketConfig,
     peer_messages_out_rx: Vec<futures_channel::mpsc::UnboundedReceiver<(PeerId, Packet)>>,
     peer_state_tx: futures_channel::mpsc::UnboundedSender<(PeerId, PeerState)>,
+    candidate_pair_tx: futures_channel::mpsc::UnboundedSender<(PeerId, CandidatePair)>,
     messages_from_peers_tx: Vec<futures_channel::mpsc::UnboundedSender<(PeerId, Packet)>>,
 ) -> Result<(), SignalingError> {
     debug!("Starting WebRtcSocket");
@@ -751,6 +869,7 @@ async fn run_socket(
         events_receiver,
         peer_messages_out_rx,
         peer_state_tx,
+        candidate_pair_tx,
         messages_from_peers_tx,
     };
     let message_loop_fut = message_loop::<UseMessenger>(
@@ -882,6 +1001,7 @@ mod test {
         let (id_tx, _id_rx) = futures_channel::oneshot::channel();
         let (_peer_messages_out_tx, peer_messages_out_rx) = mpsc::unbounded::<(PeerId, Packet)>();
         let (peer_state_tx, _peer_state_rx) = mpsc::unbounded();
+        let (candidate_pair_tx, _candidate_pair_rx) = mpsc::unbounded();
         let (messages_from_peers_tx, _messages_from_peers_rx) = mpsc::unbounded();
 
         let config = SocketConfig {
@@ -898,6 +1018,7 @@ mod test {
             config,
             vec![peer_messages_out_rx],
             peer_state_tx,
+            candidate_pair_tx,
             vec![messages_from_peers_tx],
         )
         .await;

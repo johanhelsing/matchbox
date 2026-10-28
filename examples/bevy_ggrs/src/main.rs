@@ -38,11 +38,22 @@ fn main() {
         .rollback_component_with_clone::<Transform>()
         .rollback_component_with_clone::<Velocity>()
         .insert_resource(ClearColor(SKY_COLOR))
-        .add_plugins(DefaultPlugins.set(LogPlugin {
-            filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
-            level: bevy::log::Level::DEBUG,
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(LogPlugin {
+                    filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
+                    level: bevy::log::Level::DEBUG,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        // On the web, follow the page instead of a fixed size
+                        fit_canvas_to_parent: true,
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         // Some of our systems need the query parameters
         .insert_resource(args)
         .init_resource::<FrameCount>()

@@ -8,3 +8,9 @@ members = [
   "examples/*",
 ]
 resolver = "2" # Important! Bevy/WGPU needs this!
+
+# For the wasm examples, a debug build is over a gigabyte of wasm
+[profile.web-release]
+inherits = "release"
+opt-level = "s"
+strip = "debuginfo"

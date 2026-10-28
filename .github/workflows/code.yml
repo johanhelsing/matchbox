@@ -81,7 +81,11 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      # The test builds its NATs from network namespaces inside an unprivileged user namespace
+      # The test builds its NATs from network namespaces inside an unprivileged user namespace,
+      # which Ubuntu's AppArmor blocks by default
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Run NAT traversal tests
         run: cargo test -p matchbox_socket --test nat -- --ignored
 

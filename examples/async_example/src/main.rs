@@ -57,7 +57,7 @@ async fn async_main() {
                 PeerId,
                 (
                     (AbortOnDropHandle<()>, AbortOnDropHandle<()>),
-                    Sender<Box<[u8]>>,
+                    Sender<Packet>,
                 ),
             >,
         >,

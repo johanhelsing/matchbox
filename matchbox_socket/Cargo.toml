@@ -101,7 +101,14 @@ wasm-bindgen-test = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 matchbox_signaling = { path = "../matchbox_signaling" }
-tokio = { version = "1.32", features = ["macros", "rt-multi-thread", "time"] }
-# For the STUN server in tests/nat.rs
+tokio = { version = "1.32", features = [
+  "macros",
+  "rt-multi-thread",
+  "time",
+  "net",
+] }
+# For the STUN and TURN servers in tests/nat.rs
 rtc-stun = "0.21"
+turn = "0.17"
+webrtc-util = { version = "0.17", features = ["vnet"] }
 log = "0.4"

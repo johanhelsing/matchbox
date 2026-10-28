@@ -10,9 +10,11 @@
 //!
 //! The peers' host candidates are unreachable from each other, so connecting at all means the
 //! server reflexive candidates worked. A variant puts both peers on lan1, where they must connect
-//! directly although STUN gives them the same public address. Each peer is native, Chrome or
-//! Firefox, the browsers run through wasm-pack inside the LAN (see tests/nat_browser.rs and
-//! webdriver.json, Chrome's sandbox doesn't start inside a user namespace). Ignored by default:
+//! directly although STUN gives them the same public address, and another makes the NATs
+//! symmetric, where only the TURN server (also at 10.0.0.1) gets them through. Each peer is
+//! native, Chrome or Firefox, the browsers run through wasm-pack inside the LAN (see
+//! tests/nat_browser.rs and webdriver.json, Chrome's sandbox doesn't start inside a user
+//! namespace). Ignored by default:
 //! `cargo test -p matchbox_socket --test nat -- --ignored`
 //!
 //! Set `MATCHBOX_NAT_LOG` to a directory to get a debug log per process and the routers'
@@ -22,7 +24,9 @@
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use matchbox_signaling::SignalingServer;
-use matchbox_socket::{ChannelConfig, Packet, PeerId, PeerState, RtcIceServerConfig, WebRtcSocket};
+use matchbox_socket::{
+    CandidateType, ChannelConfig, Packet, PeerId, PeerState, RtcIceServerConfig, WebRtcSocket,
+};
 use rtc_stun::{
     fingerprint::FINGERPRINT,
     message::{BINDING_REQUEST, BINDING_SUCCESS, Message},
@@ -32,13 +36,23 @@ use std::{
     env,
     ffi::OsString,
     fs::{self, File},
-    net::{Ipv4Addr, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     path::Path,
     process::{self, Child, Command, Stdio},
+    sync::Arc,
     thread,
     time::Duration,
 };
 use tokio::time::{sleep, timeout};
+use turn::{
+    auth::{AuthHandler, generate_auth_key},
+    relay::relay_static::RelayAddressGeneratorStatic,
+    server::{
+        Server,
+        config::{ConnConfig, ServerConfig},
+    },
+};
+use webrtc_util::vnet::net::Net;
 
 /// Set for the processes the test spawns, so that the modes below do nothing when run directly
 const ROLE_ENV: &str = "MATCHBOX_NAT_ROLE";
@@ -46,14 +60,18 @@ const LOG_ENV: &str = "MATCHBOX_NAT_LOG";
 
 const INTERNET: Ipv4Addr = Ipv4Addr::new(10, 0, 0, 1);
 const STUN_PORT: u16 = 3478;
+const TURN_PORT: u16 = 3479;
+const TURN_USER: &str = "matchbox";
+const TURN_PASSWORD: &str = "hunter2";
+const TURN_REALM: &str = "matchbox";
 const SIGNALING_PORT: u16 = 3536;
 const TIMEOUT: Duration = Duration::from_secs(20);
 /// Long enough for ICE to have connected if it was going to
-const NO_STUN_WAIT: Duration = Duration::from_secs(5);
+const NO_CONNECTION_WAIT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(10);
 
-/// Set to run the peers without STUN
-const NO_STUN_ENV: &str = "MATCHBOX_NAT_NO_STUN";
+/// Which ICE servers the peers get, see [`Ice`]
+const ICE_ENV: &str = "MATCHBOX_NAT_ICE";
 /// Which network to build, see [`Topology`]
 const TOPOLOGY_ENV: &str = "MATCHBOX_NAT_TOPOLOGY";
 /// The two peers, see [`Peer`], comma separated
@@ -63,6 +81,9 @@ const PEERS_ENV: &str = "MATCHBOX_NAT_PEERS";
 enum Topology {
     /// Each peer on its own LAN behind its own NAT
     SeparateNats,
+    /// Like `SeparateNats`, but the NATs pick a new port per destination, so the address STUN
+    /// reports is useless and hole punching fails
+    SymmetricNats,
     /// Both peers on one LAN behind one NAT
     SharedLan,
 }
@@ -71,6 +92,7 @@ impl Topology {
     fn name(self) -> &'static str {
         match self {
             Self::SeparateNats => "separate_nats",
+            Self::SymmetricNats => "symmetric_nats",
             Self::SharedLan => "shared_lan",
         }
     }
@@ -78,8 +100,36 @@ impl Topology {
     fn from_name(name: &str) -> Self {
         match name {
             "separate_nats" => Self::SeparateNats,
+            "symmetric_nats" => Self::SymmetricNats,
             "shared_lan" => Self::SharedLan,
             _ => panic!("unknown topology {name}"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Ice {
+    /// Host candidates only
+    NoServers,
+    Stun,
+    StunAndTurn,
+}
+
+impl Ice {
+    fn name(self) -> &'static str {
+        match self {
+            Self::NoServers => "none",
+            Self::Stun => "stun",
+            Self::StunAndTurn => "turn",
+        }
+    }
+
+    fn from_name(name: &str) -> Self {
+        match name {
+            "none" => Self::NoServers,
+            "stun" => Self::Stun,
+            "turn" => Self::StunAndTurn,
+            _ => panic!("unknown ice setting {name}"),
         }
     }
 }
@@ -113,103 +163,145 @@ impl Peer {
     }
 }
 
+use Ice::{NoServers, Stun, StunAndTurn};
 use Peer::{Chrome, Firefox, Native};
-use Topology::{SeparateNats, SharedLan};
+use Topology::{SeparateNats, SharedLan, SymmetricNats};
 
 #[test]
 #[ignore]
 fn peers_behind_different_nats_connect() {
-    run_orchestrator(SeparateNats, [Native, Native], true);
+    run_orchestrator(SeparateNats, [Native, Native], Stun);
 }
 
 /// Checks that the NATs isolate the peers: without STUN they must not find each other
 #[test]
 #[ignore]
 fn peers_behind_different_nats_need_stun() {
-    run_orchestrator(SeparateNats, [Native, Native], false);
+    run_orchestrator(SeparateNats, [Native, Native], NoServers);
 }
 
 /// STUN tells both peers the same public address, they must connect over the LAN anyway
 #[test]
 #[ignore]
 fn peers_on_the_same_lan_connect() {
-    run_orchestrator(SharedLan, [Native, Native], true);
+    run_orchestrator(SharedLan, [Native, Native], Stun);
+}
+
+/// Checks that the symmetric NATs defeat hole punching: with STUN only, no connection
+#[test]
+#[ignore]
+fn peers_behind_symmetric_nats_need_turn() {
+    run_orchestrator(SymmetricNats, [Native, Native], Stun);
+}
+
+#[test]
+#[ignore]
+fn peers_behind_symmetric_nats_connect_through_turn() {
+    run_orchestrator(SymmetricNats, [Native, Native], StunAndTurn);
+}
+
+#[test]
+#[ignore]
+fn native_and_chrome_behind_symmetric_nats() {
+    run_orchestrator(SymmetricNats, [Native, Chrome], StunAndTurn);
+}
+
+#[test]
+#[ignore]
+fn native_and_firefox_behind_symmetric_nats() {
+    run_orchestrator(SymmetricNats, [Native, Firefox], StunAndTurn);
+}
+
+#[test]
+#[ignore]
+fn chrome_and_chrome_behind_symmetric_nats() {
+    run_orchestrator(SymmetricNats, [Chrome, Chrome], StunAndTurn);
+}
+
+#[test]
+#[ignore]
+fn firefox_and_firefox_behind_symmetric_nats() {
+    run_orchestrator(SymmetricNats, [Firefox, Firefox], StunAndTurn);
+}
+
+#[test]
+#[ignore]
+fn chrome_and_firefox_behind_symmetric_nats() {
+    run_orchestrator(SymmetricNats, [Chrome, Firefox], StunAndTurn);
 }
 
 #[test]
 #[ignore]
 fn native_and_chrome_behind_different_nats() {
-    run_orchestrator(SeparateNats, [Native, Chrome], true);
+    run_orchestrator(SeparateNats, [Native, Chrome], Stun);
 }
 
 #[test]
 #[ignore]
 fn native_and_firefox_behind_different_nats() {
-    run_orchestrator(SeparateNats, [Native, Firefox], true);
+    run_orchestrator(SeparateNats, [Native, Firefox], Stun);
 }
 
 #[test]
 #[ignore]
 fn chrome_and_chrome_behind_different_nats() {
-    run_orchestrator(SeparateNats, [Chrome, Chrome], true);
+    run_orchestrator(SeparateNats, [Chrome, Chrome], Stun);
 }
 
 #[test]
 #[ignore]
 fn firefox_and_firefox_behind_different_nats() {
-    run_orchestrator(SeparateNats, [Firefox, Firefox], true);
+    run_orchestrator(SeparateNats, [Firefox, Firefox], Stun);
 }
 
 #[test]
 #[ignore]
 fn chrome_and_firefox_behind_different_nats() {
-    run_orchestrator(SeparateNats, [Chrome, Firefox], true);
+    run_orchestrator(SeparateNats, [Chrome, Firefox], Stun);
 }
 
 #[test]
 #[ignore]
 fn native_and_chrome_on_the_same_lan() {
-    run_orchestrator(SharedLan, [Native, Chrome], true);
+    run_orchestrator(SharedLan, [Native, Chrome], Stun);
 }
 
 #[test]
 #[ignore]
 fn native_and_firefox_on_the_same_lan() {
-    run_orchestrator(SharedLan, [Native, Firefox], true);
+    run_orchestrator(SharedLan, [Native, Firefox], Stun);
 }
 
 #[test]
 #[ignore]
 fn chrome_and_chrome_on_the_same_lan() {
-    run_orchestrator(SharedLan, [Chrome, Chrome], true);
+    run_orchestrator(SharedLan, [Chrome, Chrome], Stun);
 }
 
 #[test]
 #[ignore]
 fn firefox_and_firefox_on_the_same_lan() {
-    run_orchestrator(SharedLan, [Firefox, Firefox], true);
+    run_orchestrator(SharedLan, [Firefox, Firefox], Stun);
 }
 
 #[test]
 #[ignore]
 fn chrome_and_firefox_on_the_same_lan() {
-    run_orchestrator(SharedLan, [Chrome, Firefox], true);
+    run_orchestrator(SharedLan, [Chrome, Firefox], Stun);
 }
 
-fn run_orchestrator(topology: Topology, peers: [Peer; 2], stun: bool) {
+fn run_orchestrator(topology: Topology, peers: [Peer; 2], ice: Ice) {
     // A new user and network namespace, where we are root and own the network
-    let mut command = Command::new("unshare");
-    command
+    let status = Command::new("unshare")
         .args(["--user", "--map-root-user", "--net"])
         .arg(env::current_exe().unwrap())
         .args(["orchestrator", "--exact", "--ignored", "--nocapture"])
         .env(ROLE_ENV, "orchestrator")
         .env(TOPOLOGY_ENV, topology.name())
-        .env(PEERS_ENV, peers.map(Peer::name).join(","));
-    if !stun {
-        command.env(NO_STUN_ENV, "1");
-    }
-    let status = command.status().expect("failed to run unshare");
+        .env(PEERS_ENV, peers.map(Peer::name).join(","))
+        .env(ICE_ENV, ice.name())
+        .status()
+        .expect("failed to run unshare");
     assert!(status.success(), "{status}");
 }
 
@@ -280,17 +372,15 @@ fn spawn_peer(peer: Peer, host: &Child) -> Child {
         Chrome => "--chrome",
         Firefox => "--firefox",
     };
+    // A wasm test can't read the environment, so the ICE servers are baked into two files
+    let test = match Ice::from_name(&env::var(ICE_ENV).unwrap()) {
+        StunAndTurn => "nat_browser_turn",
+        _ => "nat_browser",
+    };
     let mut command = Command::new("nsenter");
     command
         .args(["-t", &host.id().to_string(), "-n"])
-        .args([
-            "wasm-pack",
-            "test",
-            "--headless",
-            browser,
-            "--test",
-            "nat_browser",
-        ])
+        .args(["wasm-pack", "test", "--headless", browser, "--test", test])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .env(
             "RUSTFLAGS",
@@ -306,8 +396,8 @@ fn spawn_peer(peer: Peer, host: &Child) -> Child {
 }
 
 /// A NAT between the internet and LAN `i`, with the public address 10.0.0.1i and a bridge for
-/// the LAN 192.168.i.0/24
-fn setup_router(i: u8) -> Child {
+/// the LAN 192.168.i.0/24. A symmetric one maps every destination to a new public port.
+fn setup_router(i: u8, symmetric: bool) -> Child {
     let router = new_netns();
     let (pub_end, bridge_end) = (format!("r{i}-pub"), format!("r{i}-br"));
 
@@ -328,9 +418,10 @@ fn setup_router(i: u8) -> Child {
     in_netns(&router, &format!("ip addr add 192.168.{i}.1/24 dev lan"));
     in_netns(&router, "ip link set lan up");
     in_netns(&router, "sysctl -q net.ipv4.ip_forward=1");
+    let random_ports = if symmetric { " --random-fully" } else { "" };
     in_netns(
         &router,
-        &format!("iptables -t nat -A POSTROUTING -o {pub_end} -j MASQUERADE"),
+        &format!("iptables -t nat -A POSTROUTING -o {pub_end} -j MASQUERADE{random_ports}"),
     );
     // Drop unsolicited packets from the internet like a real NAT does. Accepted, they would
     // create conntrack entries that make MASQUERADE pick new ports for the peer's own flows,
@@ -386,20 +477,21 @@ fn orchestrator() {
 
     let mut servers = [
         spawn_role("stun_server", None),
+        spawn_role("turn_server", None),
         spawn_role("signaling_server", None),
     ];
 
     let (mut routers, mut hosts) = (vec![], vec![]);
     match topology {
-        SeparateNats => {
+        SeparateNats | SymmetricNats => {
             for i in 1..=2 {
-                let router = setup_router(i);
+                let router = setup_router(i, topology == SymmetricNats);
                 hosts.push(add_host(&router, i, 2));
                 routers.push(router);
             }
         }
         SharedLan => {
-            let router = setup_router(1);
+            let router = setup_router(1, false);
             hosts.push(add_host(&router, 1, 2));
             hosts.push(add_host(&router, 1, 3));
             routers.push(router);
@@ -414,7 +506,12 @@ fn orchestrator() {
         .zip(&hosts)
         .map(|(peer, host)| spawn_peer(*peer, host))
         .collect();
-    let ok = peers.iter_mut().all(|peer| peer.wait().unwrap().success());
+    // Wait for both, so that no peer process is left behind
+    let results: Vec<bool> = peers
+        .iter_mut()
+        .map(|peer| peer.wait().unwrap().success())
+        .collect();
+    let ok = results.iter().all(|ok| *ok);
 
     if let Some(dir) = log_dir() {
         for (i, router) in routers.iter().enumerate() {
@@ -481,6 +578,51 @@ async fn signaling_server() {
     server.serve().await.unwrap();
 }
 
+/// Relays for peers that can't reach each other, with the relay addresses on the internet side
+#[tokio::test]
+#[ignore]
+async fn turn_server() {
+    if role().as_deref() != Some("turn_server") {
+        return;
+    }
+    struct Auth;
+    impl AuthHandler for Auth {
+        fn auth_handle(
+            &self,
+            username: &str,
+            realm: &str,
+            _: SocketAddr,
+        ) -> Result<Vec<u8>, turn::Error> {
+            if username == TURN_USER && realm == TURN_REALM {
+                Ok(generate_auth_key(username, realm, TURN_PASSWORD))
+            } else {
+                Err(turn::Error::ErrFakeErr)
+            }
+        }
+    }
+
+    let socket = tokio::net::UdpSocket::bind((INTERNET, TURN_PORT))
+        .await
+        .unwrap();
+    let _server = Server::new(ServerConfig {
+        conn_configs: vec![ConnConfig {
+            conn: Arc::new(socket),
+            relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
+                relay_address: IpAddr::V4(INTERNET),
+                address: INTERNET.to_string(),
+                net: Arc::new(Net::new(None)),
+            }),
+        }],
+        realm: TURN_REALM.to_string(),
+        auth_handler: Arc::new(Auth),
+        channel_bind_timeout: Duration::from_secs(0),
+        alloc_close_notify: None,
+    })
+    .await
+    .unwrap();
+    std::future::pending::<()>().await;
+}
+
 /// Connects through the NAT and exchanges a packet with the other peer. The peer with the lower
 /// id pings and leaves once it has the pong, the other one answers and leaves once the first is
 /// gone, so that neither exits with a packet still queued.
@@ -491,30 +633,68 @@ async fn nat_peer() {
         return;
     }
     init_logging();
-    let stun = env::var_os(NO_STUN_ENV).is_none();
+    let topology = Topology::from_name(&env::var(TOPOLOGY_ENV).unwrap());
+    let ice = Ice::from_name(&env::var(ICE_ENV).unwrap());
+    let (urls, username, credential) = match ice {
+        NoServers => (vec![], None, None),
+        Stun => (vec![format!("stun:{INTERNET}:{STUN_PORT}")], None, None),
+        StunAndTurn => (
+            vec![
+                format!("stun:{INTERNET}:{STUN_PORT}"),
+                format!("turn:{INTERNET}:{TURN_PORT}"),
+            ],
+            Some(TURN_USER.to_string()),
+            Some(TURN_PASSWORD.to_string()),
+        ),
+    };
     let (mut socket, message_loop) =
         WebRtcSocket::builder(format!("ws://{INTERNET}:{SIGNALING_PORT}/nat"))
             .ice_server(RtcIceServerConfig {
-                urls: stun
-                    .then(|| format!("stun:{INTERNET}:{STUN_PORT}"))
-                    .into_iter()
-                    .collect(),
-                ..Default::default()
+                urls,
+                username,
+                credential,
             })
             .add_channel(ChannelConfig::reliable())
             .build();
     tokio::spawn(message_loop);
 
-    if !stun {
+    let can_connect = !matches!((topology, ice), (_, NoServers) | (SymmetricNats, Stun));
+    if !can_connect {
         let connected = timeout(
-            NO_STUN_WAIT,
+            NO_CONNECTION_WAIT,
             wait_for_peer(&mut socket, PeerState::Connected),
         );
-        assert!(connected.await.is_err(), "connected without STUN");
+        assert!(
+            connected.await.is_err(),
+            "connected where it shouldn't be possible"
+        );
         return;
     }
 
     let peer = wait_for_peer(&mut socket, PeerState::Connected).await;
+
+    let pair = timeout(TIMEOUT, async {
+        loop {
+            socket.update_peers();
+            if let Some(pair) = socket.candidate_pair(peer) {
+                return pair;
+            }
+            sleep(POLL).await;
+        }
+    })
+    .await
+    .expect("candidate pair never reported");
+    // Our own end is always the socket's address, the peer's tells the path
+    use CandidateType::{Host, PeerReflexive, ServerReflexive};
+    match topology {
+        // The address STUN told the peer
+        SeparateNats => assert_eq!(pair.remote, ServerReflexive, "{pair:?}"),
+        // Directly on the LAN. A browser signals its address as an mDNS name, which can't be
+        // matched to the address its packets come from, so that stays peer reflexive.
+        SharedLan => assert!(matches!(pair.remote, Host | PeerReflexive), "{pair:?}"),
+        SymmetricNats => assert!(pair.is_relayed(), "{pair:?}"),
+    }
+
     if socket.id().unwrap() < peer {
         socket.channel_mut(0).send(b"ping".to_vec().into(), peer);
         assert_eq!(

@@ -62,7 +62,7 @@ pub mod common_logic {
     use tokio::sync::mpsc::{self, UnboundedSender};
     use tokio_stream::wrappers::UnboundedReceiverStream;
 
-    /// Alias for Arc<Mutex<T>>
+    /// Alias for `Arc<Mutex<T>>`
     pub type StateObj<T> = Arc<Mutex<T>>;
 
     /// Alias for UnboundedSender<Result<Message, axum::Error>>

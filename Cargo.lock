@@ -532,7 +532,7 @@ dependencies = [
  "js-sys",
  "log",
  "matchbox_socket",
- "n0-future 0.2.0",
+ "n0-future",
  "serde",
  "serde_json",
  "tokio",
@@ -771,7 +771,7 @@ dependencies = [
  "bitflags 2.13.2",
  "blake3",
  "crossbeam-channel",
- "derive_more 2.1.1",
+ "derive_more",
  "disqualified",
  "downcast-rs",
  "either",
@@ -820,7 +820,7 @@ dependencies = [
  "bevy_transform",
  "bevy_utils",
  "bevy_window",
- "derive_more 2.1.1",
+ "derive_more",
  "downcast-rs",
  "serde",
  "smallvec",
@@ -852,7 +852,7 @@ dependencies = [
  "bevy_math",
  "bevy_reflect",
  "bytemuck",
- "derive_more 2.1.1",
+ "derive_more",
  "encase",
  "serde",
  "thiserror 2.0.21",
@@ -964,7 +964,7 @@ dependencies = [
  "bitflags 2.13.2",
  "bumpalo",
  "concurrent-queue",
- "derive_more 2.1.1",
+ "derive_more",
  "fixedbitset",
  "indexmap",
  "log",
@@ -1175,7 +1175,7 @@ dependencies = [
  "bevy_math",
  "bevy_platform",
  "bevy_reflect",
- "derive_more 2.1.1",
+ "derive_more",
  "log",
  "smol_str",
  "thiserror 2.0.21",
@@ -1356,7 +1356,7 @@ dependencies = [
  "approx",
  "arrayvec",
  "bevy_reflect",
- "derive_more 2.1.1",
+ "derive_more",
  "glam",
  "itertools",
  "libm",
@@ -1385,7 +1385,7 @@ dependencies = [
  "bevy_transform",
  "bitflags 2.13.2",
  "bytemuck",
- "derive_more 2.1.1",
+ "derive_more",
  "encase",
  "glam",
  "half",
@@ -1431,7 +1431,7 @@ dependencies = [
  "bevy_utils",
  "bitflags 2.13.2",
  "bytemuck",
- "derive_more 2.1.1",
+ "derive_more",
  "fixedbitset",
  "indexmap",
  "nonmax",
@@ -1529,7 +1529,7 @@ dependencies = [
  "bevy_ptr",
  "bevy_reflect_derive",
  "bevy_utils",
- "derive_more 2.1.1",
+ "derive_more",
  "disqualified",
  "downcast-rs",
  "erased-serde",
@@ -1592,7 +1592,7 @@ dependencies = [
  "bevy_window",
  "bitflags 2.13.2",
  "bytemuck",
- "derive_more 2.1.1",
+ "derive_more",
  "downcast-rs",
  "encase",
  "glam",
@@ -1731,7 +1731,7 @@ dependencies = [
  "bevy_utils",
  "bitflags 2.13.2",
  "bytemuck",
- "derive_more 2.1.1",
+ "derive_more",
  "fixedbitset",
  "nonmax",
  "tracing",
@@ -1777,7 +1777,7 @@ dependencies = [
  "bevy_platform",
  "concurrent-queue",
  "crossbeam-queue",
- "derive_more 2.1.1",
+ "derive_more",
  "futures-lite",
  "heapless",
  "web-task",
@@ -1839,7 +1839,7 @@ dependencies = [
  "bevy_reflect",
  "bevy_tasks",
  "bevy_utils",
- "derive_more 2.1.1",
+ "derive_more",
  "serde",
  "thiserror 2.0.21",
 ]
@@ -1872,7 +1872,7 @@ dependencies = [
  "bevy_transform",
  "bevy_utils",
  "bevy_window",
- "derive_more 2.1.1",
+ "derive_more",
  "parley",
  "smallvec",
  "swash",
@@ -1910,7 +1910,7 @@ dependencies = [
  "bevy_ui",
  "bevy_utils",
  "bytemuck",
- "derive_more 2.1.1",
+ "derive_more",
  "indexmap",
  "tracing",
 ]
@@ -2718,7 +2718,7 @@ dependencies = [
  "iroh-gossip",
  "js-sys",
  "matchbox_socket",
- "n0-future 0.3.2",
+ "n0-future",
  "serde",
  "serde_json",
  "tokio",
@@ -2805,32 +2805,11 @@ checksum = "9e9de72ce2ad1f90dc62fa25f0f430ef85eb4b0d8fa0be4f30373bc40a21d28e"
 
 [[package]]
 name = "derive_more"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
-dependencies = [
- "derive_more-impl 1.0.0",
-]
-
-[[package]]
-name = "derive_more"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d751e9e49156b02b44f9c1815bcb94b984cdcc4396ecc32521c739452808b134"
 dependencies = [
- "derive_more-impl 2.1.1",
-]
-
-[[package]]
-name = "derive_more-impl"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
- "unicode-xid",
+ "derive_more-impl",
 ]
 
 [[package]]
@@ -4115,7 +4094,7 @@ dependencies = [
  "cfg_aliases",
  "ctutils",
  "data-encoding",
- "derive_more 2.1.1",
+ "derive_more",
  "ed25519-dalek",
  "futures-util",
  "getrandom 0.4.3",
@@ -4126,7 +4105,7 @@ dependencies = [
  "iroh-metrics",
  "iroh-relay",
  "n0-error",
- "n0-future 0.3.2",
+ "n0-future",
  "n0-watcher",
  "netwatch",
  "noq",
@@ -4161,7 +4140,7 @@ dependencies = [
  "curve25519-dalek",
  "data-encoding",
  "data-encoding-macro",
- "derive_more 2.1.1",
+ "derive_more",
  "ed25519-dalek",
  "getrandom 0.4.3",
  "n0-error",
@@ -4179,11 +4158,11 @@ checksum = "7481d0792dde1035a2b06ec06ed3cf6d01fcb1a494e6931b489e32073382048d"
 dependencies = [
  "arc-swap",
  "cfg_aliases",
- "derive_more 2.1.1",
+ "derive_more",
  "iroh-base",
  "n0-dns-resolver",
  "n0-error",
- "n0-future 0.3.2",
+ "n0-future",
  "portable-atomic",
  "rand 0.10.3",
  "rustls",
@@ -4203,7 +4182,7 @@ dependencies = [
  "blake3",
  "bytes",
  "data-encoding",
- "derive_more 2.1.1",
+ "derive_more",
  "futures-concurrency",
  "hex",
  "indexmap",
@@ -4212,7 +4191,7 @@ dependencies = [
  "iroh-metrics",
  "irpc",
  "n0-error",
- "n0-future 0.3.2",
+ "n0-future",
  "postcard",
  "rand 0.10.3",
  "serde",
@@ -4258,7 +4237,7 @@ dependencies = [
  "bytes",
  "cfg_aliases",
  "data-encoding",
- "derive_more 2.1.1",
+ "derive_more",
  "getrandom 0.4.3",
  "http",
  "http-body-util",
@@ -4269,7 +4248,7 @@ dependencies = [
  "iroh-metrics",
  "lru",
  "n0-error",
- "n0-future 0.3.2",
+ "n0-future",
  "noq",
  "noq-proto",
  "num_enum",
@@ -4302,7 +4281,7 @@ dependencies = [
  "futures-util",
  "irpc-derive",
  "n0-error",
- "n0-future 0.3.2",
+ "n0-future",
  "serde",
  "tokio",
  "tokio-util",
@@ -4586,7 +4565,7 @@ name = "matchbox_protocol"
 version = "0.15.0"
 dependencies = [
  "cfg-if",
- "derive_more 2.1.1",
+ "derive_more",
  "serde",
  "serde_json",
  "uuid",
@@ -4607,8 +4586,8 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite 0.28.0",
- "tower-http",
+ "tokio-tungstenite 0.30.0",
+ "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -4628,8 +4607,8 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite 0.28.0",
- "tower-http",
+ "tokio-tungstenite 0.30.0",
+ "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -4644,7 +4623,7 @@ dependencies = [
  "bincode 2.0.1",
  "bytes",
  "cfg-if",
- "derive_more 2.1.1",
+ "derive_more",
  "futures",
  "futures-channel",
  "futures-test",
@@ -4808,12 +4787,12 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "535c99c9a786bee714155d2ee4fc2477405c2c43536e1bc6a51de09a0d1448f7"
 dependencies = [
- "derive_more 2.1.1",
+ "derive_more",
  "ipconfig",
  "jni 0.22.4",
  "lru",
  "n0-error",
- "n0-future 0.3.2",
+ "n0-future",
  "ndk-context",
  "rand 0.10.3",
  "reqwest",
@@ -4851,33 +4830,12 @@ dependencies = [
 
 [[package]]
 name = "n0-future"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89d7dd42bd0114c9daa9c4f2255d692a73bba45767ec32cf62892af6fe5d31f6"
-dependencies = [
- "cfg_aliases",
- "derive_more 1.0.0",
- "futures-buffered",
- "futures-lite",
- "futures-util",
- "js-sys",
- "pin-project",
- "send_wrapper",
- "tokio",
- "tokio-util",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-time",
-]
-
-[[package]]
-name = "n0-future"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2ab99dfb861450e68853d34ae665243a88b8c493d01ba957321a1e9b2312bbe"
 dependencies = [
  "cfg_aliases",
- "derive_more 2.1.1",
+ "derive_more",
  "futures-buffered",
  "futures-lite",
  "futures-util",
@@ -4897,9 +4855,9 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64bf1ecb076a87e0e3f5edcf726e7d29e788c273bb0161ba30666b53f085906c"
 dependencies = [
- "derive_more 2.1.1",
+ "derive_more",
  "n0-error",
- "n0-future 0.3.2",
+ "n0-future",
  "slotmap",
 ]
 
@@ -5116,12 +5074,12 @@ dependencies = [
  "atomic-waker",
  "bytes",
  "cfg_aliases",
- "derive_more 2.1.1",
+ "derive_more",
  "ipnet",
  "js-sys",
  "libc",
  "n0-error",
- "n0-future 0.3.2",
+ "n0-future",
  "n0-watcher",
  "netdev 0.45.1",
  "netdev 0.46.3",
@@ -5182,7 +5140,7 @@ checksum = "6249a065adc1edbc1704a95436f38dd60476064dbc3b7c47cf279e02d1590eb5"
 dependencies = [
  "bytes",
  "cfg_aliases",
- "derive_more 2.1.1",
+ "derive_more",
  "noq-proto",
  "noq-udp",
  "pin-project-lite",
@@ -5204,7 +5162,7 @@ checksum = "c01a35be3ed37558c8db69554419f24eff8a63599b54f711bbe3863ec727c47d"
 dependencies = [
  "aes-gcm",
  "bytes",
- "derive_more 2.1.1",
+ "derive_more",
  "enum-assoc",
  "getrandom 0.4.3",
  "identity-hash",
@@ -6375,7 +6333,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower",
- "tower-http",
+ "tower-http 0.6.11",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -7619,18 +7577,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d25a406cddcc431a75d3d9afc6a7c0f7428d4891dd973e4d54c56b46127bf857"
-dependencies = [
- "futures-util",
- "log",
- "tokio",
- "tungstenite 0.28.0",
-]
-
-[[package]]
-name = "tokio-tungstenite"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f72a05e828585856dacd553fba484c242c46e391fb0e58917c942ee9202915c"
@@ -7639,6 +7585,18 @@ dependencies = [
  "log",
  "tokio",
  "tungstenite 0.29.0",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite 0.30.0",
 ]
 
 [[package]]
@@ -7740,8 +7698,24 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
- "tracing",
  "url",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08a05a66a4fdd61cbbe0a1d755ffe0ca6aba159dd4820936a0ff8a8278245b9c"
+dependencies = [
+ "bitflags 2.13.2",
+ "bytes",
+ "http",
+ "http-body",
+ "percent-encoding",
+ "pin-project-lite",
+ "tower-layer",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -7846,23 +7820,6 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
-
-[[package]]
-name = "tungstenite"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8628dcc84e5a09eb3d8423d6cb682965dea9133204e8fb3efee74c2a0c259442"
-dependencies = [
- "bytes",
- "data-encoding",
- "http",
- "httparse",
- "log",
- "rand 0.9.5",
- "sha1 0.10.7",
- "thiserror 2.0.21",
- "utf-8",
-]
 
 [[package]]
 name = "tungstenite"
@@ -7986,12 +7943,6 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
-
-[[package]]
-name = "utf-8"
-version = "0.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 
 [[package]]
 name = "utf8_iter"

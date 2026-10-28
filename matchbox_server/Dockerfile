@@ -3,7 +3,7 @@
 # to build, run `docker build -f matchbox_server/Dockerfile` from root of the
 # repository
 
-FROM rust:1.93-slim-bullseye AS builder
+FROM rust:1.99-slim-trixie AS builder
 
 WORKDIR /usr/src/matchbox_server/
 
@@ -15,7 +15,6 @@ COPY matchbox_signaling /usr/src/matchbox_signaling
 
 RUN cargo build --release
 
-FROM debian:bullseye-slim
-RUN apt-get update && apt-get install -y libssl1.1 && rm -rf /var/lib/apt/lists/*
+FROM debian:trixie-slim
 COPY --from=builder /usr/src/matchbox_server/target/release/matchbox_server /usr/local/bin/matchbox_server
 CMD ["matchbox_server"]

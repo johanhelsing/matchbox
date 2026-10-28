@@ -6,19 +6,21 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Events which go from signaling server to peer.
+/// `PeerEvent`s go from signaling server to peer.
 pub type PeerEvent = matchbox_protocol::PeerEvent<PeerSignal>;
 
-/// Requests which go from peer to signaling server.
+/// `PeerRequest`s go from peer to signaling server.
 pub type PeerRequest = matchbox_protocol::PeerRequest<PeerSignal>;
 
-/// Signals which go from peer to peer via the signaling server.
+/// `PeerSignal`s go from peer to peer via the signaling server.
 ///
 /// Wrapped by [`PeerRequest::Signal`] on the way to the signaling server,
-/// and [`PeerEvent::Signal`] on the from the signalizing server the other peer.
+/// and [`PeerEvent::Signal`] on the way from the signaling server to the other peer.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum PeerSignal {
-    /// [Ice (Interactive Connectivity Establishment) Candidate](https://en.wikipedia.org/wiki/Interactive_Connectivity_Establishment).
+    /// [ICE (Interactive Connectivity Establishment) Candidate](https://en.wikipedia.org/wiki/Interactive_Connectivity_Establishment).
+    ///
+    /// The string `"null"` marks the end of the candidates.
     // JSON encoding of an [`RTCIceCandidate`](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate).
     //
     // Note that while [`RTCIceCandidate`](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate/RTCIceCandidate)'s
@@ -28,9 +30,8 @@ pub enum PeerSignal {
     //
     // When PeerSignal itself is JSON serialized, that results in JSON data as a string inside of
     // another JSON string: this is inefficient (but negligibly so) and reduces type safety.
-    // It may be preferable refactor the abstraction implemented by the native and wasm sockets to
-    // have a with a more specific type instead of this to deduplicate their encoding logic
-    // and help ensure they are well aligned and can interoperate.
+    // It may be preferable to give the native and wasm sockets a more specific type instead of
+    // this, to deduplicate their encoding logic and help keep them aligned.
     IceCandidate(String),
     /// Offer a handshake.
     ///

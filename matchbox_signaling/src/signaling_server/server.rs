@@ -51,14 +51,14 @@ impl SignalingServer {
 
     /// Returns the local address this server is bound to
     ///
-    /// The server needs to [`bind`] first
+    /// The server needs to [`bind`](Self::bind) first
     pub fn local_addr(&self) -> Option<SocketAddr> {
         self.listener.as_ref().map(|l| l.local_addr().unwrap())
     }
 
     /// Binds the server to a socket
     ///
-    /// Optional: Will happen automatically on [`serve`]
+    /// Optional: Will happen automatically on [`serve`](Self::serve)
     pub fn bind(&mut self) -> Result<SocketAddr, crate::Error> {
         let listener = TcpListener::bind(self.requested_addr).map_err(crate::Error::Bind)?;
         listener.set_nonblocking(true).map_err(crate::Error::Bind)?;

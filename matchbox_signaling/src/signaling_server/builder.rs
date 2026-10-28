@@ -10,7 +10,7 @@ use crate::{
 use axum::{Extension, Router, response::Response, routing::get};
 use matchbox_protocol::PeerId;
 use std::{convert::identity, net::SocketAddr};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 use tower_http::{
     LatencyUnit,
     cors::{Any, CorsLayer},
@@ -118,7 +118,9 @@ where
         self
     }
 
-    /// set receiver for gracefull shutdown
+    /// Shut down when the receiver fires: stop accepting connections, close the peers'
+    /// websockets, and return from [`SignalingServer::serve`] once they are gone (or after a
+    /// few seconds, for peers that never answer the close).
     pub fn with_shutdown(mut self, rx: oneshot::Receiver<()>) -> Self {
         self.shutdown_rx = Some(rx);
         self
@@ -134,11 +136,14 @@ where
         // Insert topology
         let state_machine: SignalingStateMachine<Cb, S> =
             SignalingStateMachine::from_topology(self.topology);
+        // Tells the websocket handlers to close their connections
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let info = alter(
             self.router
                 .route("/", get(ws_handler::<Cb, S>))
                 .route("/{path}", get(ws_handler::<Cb, S>))
                 .layer(Extension(state_machine))
+                .layer(Extension(shutdown_rx))
                 .layer(Extension(self.shared_callbacks))
                 .layer(Extension(self.callbacks))
                 .layer(Extension(self.state)),
@@ -149,6 +154,7 @@ where
             info,
             listener: None,
             shutdown_rx: self.shutdown_rx,
+            shutdown_tx,
         }
     }
 }

@@ -18,6 +18,7 @@ use futures::{StreamExt, stream::SplitStream};
 use hyper::{HeaderMap, StatusCode};
 use matchbox_protocol::{JsonPeerEvent, PeerId};
 use std::{collections::HashMap, net::SocketAddr};
+use tokio::sync::watch;
 use tracing::{error, info};
 
 /// Metastate used during by a signaling server's runtime
@@ -57,6 +58,7 @@ pub(crate) async fn ws_handler<Cb, S>(
     Extension(callbacks): Extension<Cb>,
     Extension(state): Extension<S>,
     Extension(state_machine): Extension<SignalingStateMachine<Cb, S>>,
+    Extension(shutdown): Extension<watch::Receiver<bool>>,
     ConnectInfo(origin): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse
 where
@@ -110,11 +112,35 @@ where
         let meta = WsStateMeta {
             room,
             peer_id,
-            sender,
+            sender: sender.clone(),
             receiver,
             callbacks,
             state,
         };
-        (*state_machine.0)(meta)
+        async move {
+            let handler = (*state_machine.0)(meta);
+            tokio::pin!(handler);
+            tokio::select! {
+                _ = &mut handler => {}
+                _ = shutting_down(shutdown) => {
+                    // The handler ends when the peer answers the close
+                    let _ = sender.send(Ok(Message::Close(None)));
+                    handler.await;
+                }
+            }
+        }
     })
+}
+
+/// Resolves when the server shuts down
+async fn shutting_down(mut shutdown: watch::Receiver<bool>) {
+    loop {
+        if *shutdown.borrow_and_update() {
+            return;
+        }
+        if shutdown.changed().await.is_err() {
+            // The server is gone without shutting down, let the handler run on
+            std::future::pending::<()>().await;
+        }
+    }
 }

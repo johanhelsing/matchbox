@@ -6,8 +6,14 @@ use crate::{
     },
 };
 use axum::{Router, extract::connect_info::IntoMakeServiceWithConnectInfo};
-use std::net::{SocketAddr, TcpListener};
-use tokio::net as tokio;
+use std::{
+    net::{SocketAddr, TcpListener},
+    time::Duration,
+};
+use tokio::{
+    net,
+    sync::{oneshot, watch},
+};
 
 /// Contains the interface end of a signaling server
 #[derive(Debug)]
@@ -19,6 +25,12 @@ pub struct SignalingServer {
     pub(crate) info: IntoMakeServiceWithConnectInfo<Router, SocketAddr>,
 
     pub(crate) listener: Option<TcpListener>,
+
+    pub(crate) shutdown_rx: Option<oneshot::Receiver<()>>,
+
+    /// Set to true to make the websocket handlers close their connections; closed once they
+    /// are all gone.
+    pub(crate) shutdown_tx: watch::Sender<bool>,
 }
 
 /// Common methods
@@ -64,10 +76,25 @@ impl SignalingServer {
             None => _ = self.bind()?,
         };
         let listener =
-            tokio::TcpListener::from_std(self.listener.expect("No listener, this is a bug!"))
+            net::TcpListener::from_std(self.listener.expect("No listener, this is a bug!"))
                 .map_err(crate::Error::Bind)?;
-        axum::serve(listener, self.info)
+
+        let server = axum::serve(listener, self.info);
+
+        let Some(rx) = self.shutdown_rx.take() else {
+            return server.await.map_err(crate::Error::Serve);
+        };
+
+        server
+            .with_graceful_shutdown(async move {
+                let _ = rx.await;
+            })
             .await
-            .map_err(crate::Error::Serve)
+            .map_err(crate::Error::Serve)?;
+
+        // Close the peers' websockets, the handlers hold the receivers until they are done
+        let _ = self.shutdown_tx.send(true);
+        let _ = tokio::time::timeout(Duration::from_secs(5), self.shutdown_tx.closed()).await;
+        Ok(())
     }
 }

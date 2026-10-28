@@ -86,11 +86,13 @@ async fn wait_for_peer_within(
     .unwrap_or_else(|_| panic!("no peer became {state:?}"))
 }
 
-async fn wait_for_packet(socket: &mut WebRtcSocket) -> (PeerId, Packet) {
+/// Everything received the first time something arrives, so that nothing is dropped
+async fn wait_for_packets(socket: &mut WebRtcSocket) -> Vec<(PeerId, Packet)> {
     timeout(TIMEOUT, async {
         loop {
-            if let Some(packet) = socket.channel_mut(0).receive().pop() {
-                return packet;
+            let packets = socket.channel_mut(0).receive();
+            if !packets.is_empty() {
+                return packets;
             }
             sleep(POLL).await;
         }
@@ -117,12 +119,15 @@ async fn two_peers_connect_and_exchange_packets() {
 
     a.channel_mut(0).send(b"hello".to_vec().into(), b_id);
     assert_eq!(
-        wait_for_packet(&mut b).await,
-        (a_id, b"hello".to_vec().into())
+        wait_for_packets(&mut b).await,
+        vec![(a_id, b"hello".to_vec().into())]
     );
 
     b.channel_mut(0).send(b"hi".to_vec().into(), a_id);
-    assert_eq!(wait_for_packet(&mut a).await, (b_id, b"hi".to_vec().into()));
+    assert_eq!(
+        wait_for_packets(&mut a).await,
+        vec![(b_id, b"hi".to_vec().into())]
+    );
 }
 
 #[tokio::test]
@@ -146,8 +151,8 @@ async fn signaling_loss_keeps_connected_peers() {
 
     a.channel_mut(0).send(b"still here".to_vec().into(), b_id);
     assert_eq!(
-        wait_for_packet(&mut b).await,
-        (a_id, b"still here".to_vec().into())
+        wait_for_packets(&mut b).await,
+        vec![(a_id, b"still here".to_vec().into())]
     );
 }
 

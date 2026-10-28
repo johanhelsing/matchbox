@@ -68,6 +68,14 @@ jobs:
       - name: Run browser tests
         run: cargo test -p matchbox_socket --test browser -- --ignored
 
+      # The NAT tests run the browsers inside network namespaces, see tests/nat.rs. Must come
+      # after the browser tests, which fetch the drivers: the namespaces have no internet.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Run NAT traversal tests with browsers
+        run: cargo test -p matchbox_socket --test nat -- --ignored chrome firefox --test-threads=2
+
   test-nat:
     name: Test NAT traversal
     runs-on: ubuntu-latest
@@ -87,7 +95,7 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Run NAT traversal tests
-        run: cargo test -p matchbox_socket --test nat -- --ignored
+        run: cargo test -p matchbox_socket --test nat -- --ignored peers_
 
   check-wasm:
     name: Check Wasm

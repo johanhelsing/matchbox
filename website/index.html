@@ -175,6 +175,14 @@
       // const app = params.get("app").replace(/\[^0-9a-z_-]/g, "")
       const app = "bevy_ggrs";
       console.log(`loading ${app}`);
+
+      // The app reads its signaling server from the query string. Default to the server that
+      // follows main, like this page does.
+      const url = new URL(document.location)
+      if (!url.searchParams.has("matchbox")) {
+        url.searchParams.set("matchbox", "wss://matchbox-edge.helsing.studio")
+        history.replaceState(null, "", url)
+      }
       const appRoot = `https://johanhelsing.github.io/matchbox/${app}`
 
       const appModule = await import(`${appRoot}/app.js`)

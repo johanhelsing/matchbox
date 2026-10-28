@@ -38,11 +38,22 @@ fn main() {
         .rollback_component_with_clone::<Transform>()
         .rollback_component_with_clone::<Velocity>()
         .insert_resource(ClearColor(SKY_COLOR))
-        .add_plugins(DefaultPlugins.set(LogPlugin {
-            filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
-            level: bevy::log::Level::DEBUG,
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(LogPlugin {
+                    filter: "info,wgpu_core=warn,wgpu_hal=warn,matchbox_socket=debug".into(),
+                    level: bevy::log::Level::DEBUG,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        // On the web, follow the page instead of a fixed size
+                        fit_canvas_to_parent: true,
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         // Some of our systems need the query parameters
         .insert_resource(args)
         .init_resource::<FrameCount>()
@@ -130,7 +141,11 @@ fn lobby_system(
 ) {
     // regularly call update_peers to update the list of connected peers
     let Ok(peer_changes) = socket.try_update_peers() else {
-        warn!("socket dropped");
+        // The socket ends when the signaling server can't be reached or is lost
+        text.0 = format!(
+            "Could not connect to the signaling server at {}",
+            args.matchbox
+        );
         return;
     };
 

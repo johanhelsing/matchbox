@@ -47,8 +47,10 @@ cargo install wasm-server-runner
 
 ### Serve
 
+A debug build is over a gigabyte of wasm, so use the `web-release` profile:
+
 ```sh
-cargo run --target wasm32-unknown-unknown
+cargo run --profile web-release --target wasm32-unknown-unknown
 ```
 
 ### Run

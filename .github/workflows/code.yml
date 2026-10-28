@@ -220,7 +220,8 @@ jobs:
           images: ${{ env.IMAGE_REPOSITORY }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags') }}
+            type=edge,branch=main
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -230,7 +231,7 @@ jobs:
         with:
           context: "."
           file: "matchbox_server/Dockerfile"
-          push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') }}
+          push: ${{ github.event_name == 'push' }}
           load: ${{ ! (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

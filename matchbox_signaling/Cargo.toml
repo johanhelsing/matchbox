@@ -24,7 +24,7 @@ matchbox_protocol = { version = "0.15", path = "../matchbox_protocol", features 
 axum = { version = "0.8", features = ["ws"] }
 hyper = { version = "1.2", features = ["server"] }
 tracing = { version = "0.1", features = ["log"] }
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower-http = { version = "0.7", features = ["cors", "trace"] }
 tokio = { version = "1.32", features = [
   "macros",
   "rt-multi-thread",
@@ -40,7 +40,7 @@ tokio-stream = "0.1"
 async-trait = "0.1"
 
 [dev-dependencies]
-tokio-tungstenite = "0.28"
+tokio-tungstenite = "0.30"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Rejecting a websocket upgrade returns an axum `Response`, which is 128 bytes and

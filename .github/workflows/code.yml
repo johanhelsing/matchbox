@@ -32,6 +32,30 @@ jobs:
         run: cargo test --doc
 
   # Should be upgraded to test when possible
+  test-browser:
+    name: Test Browser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      # Chrome and Firefox come with the runner, wasm-pack fetches their drivers
+      - name: Run browser tests
+        run: cargo test -p matchbox_socket --test browser -- --ignored
+
   check-wasm:
     name: Check Wasm
     runs-on: ubuntu-latest

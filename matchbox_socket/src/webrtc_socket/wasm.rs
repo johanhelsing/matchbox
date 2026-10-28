@@ -422,13 +422,17 @@ fn create_rtc_peer_connection(ice_server_config: &RtcIceServerConfig) -> RtcPeer
     }
 
     let peer_config = RtcConfiguration::new();
-    let ice_server_config = IceServerConfig {
-        urls: ice_server_config.urls.clone(),
-        username: ice_server_config.username.clone().unwrap_or_default(),
-        credential: ice_server_config.credential.clone().unwrap_or_default(),
+    // Browsers reject an ice server entry without urls
+    let ice_servers: Vec<IceServerConfig> = if ice_server_config.urls.is_empty() {
+        vec![]
+    } else {
+        vec![IceServerConfig {
+            urls: ice_server_config.urls.clone(),
+            username: ice_server_config.username.clone().unwrap_or_default(),
+            credential: ice_server_config.credential.clone().unwrap_or_default(),
+        }]
     };
-    let ice_server_config_list = [ice_server_config];
-    peer_config.set_ice_servers(&serde_wasm_bindgen::to_value(&ice_server_config_list).unwrap());
+    peer_config.set_ice_servers(&serde_wasm_bindgen::to_value(&ice_servers).unwrap());
     let connection = RtcPeerConnection::new_with_configuration(&peer_config).unwrap();
 
     let connection_1 = connection.clone();

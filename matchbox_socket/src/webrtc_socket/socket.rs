@@ -223,6 +223,7 @@ impl WebRtcSocketBuilder {
                 config: *channel_config,
                 rx: messages_from_peers_rx_curr,
                 tx: peer_messages_out_tx_curr,
+                warned_closed: false,
             }));
         }
 
@@ -371,6 +372,8 @@ pub struct WebRtcChannel {
     config: ChannelConfig,
     tx: UnboundedSender<(PeerId, Packet)>,
     rx: UnboundedReceiver<(PeerId, Packet)>,
+    /// Whether `send` has warned about the channel being closed, it only does so once
+    warned_closed: bool,
 }
 
 impl WebRtcChannel {
@@ -432,10 +435,14 @@ impl WebRtcChannel {
 
     /// Send a packet to the given peer. There is no guarantee of delivery.
     ///
-    /// # Panics
-    /// Panics if the socket future is dropped.
+    /// Once the channel is closed, or the socket has ended, packets are dropped with a warning,
+    /// logged once. See [`WebRtcChannel::try_send`] to find out at the call site, and
+    /// [`WebRtcSocket::try_update_peers`] for when the socket ends.
     pub fn send(&mut self, packet: Packet, peer: PeerId) {
-        self.try_send(packet, peer).expect("Send failed");
+        if self.try_send(packet, peer).is_err() && !self.warned_closed {
+            warn!("dropping packet for {peer}, the channel is closed");
+            self.warned_closed = true;
+        }
     }
 }
 

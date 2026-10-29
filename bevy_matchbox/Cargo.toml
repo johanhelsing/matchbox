@@ -17,7 +17,6 @@ categories = [
   "web-programming",
 ]
 repository = "https://github.com/johanhelsing/matchbox"
-homepage = "https://github.com/johanhelsing/matchbox"
 readme = "../README.md"
 
 [features]

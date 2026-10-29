@@ -131,7 +131,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerId> {
         debug!("making offer");
 
         let conn = create_rtc_peer_connection(ice_server_config);
@@ -139,7 +139,7 @@ impl Messenger for WasmMessenger {
         let (data_channel_ready_txs, data_channels_ready_fut) =
             create_data_channels_ready_fut(channel_configs);
 
-        let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
+        let (peer_disconnected_tx, mut peer_disconnected_rx) = futures_channel::mpsc::channel(1);
         notify_on_connection_failure(&conn, peer_disconnected_tx.clone());
 
         let data_channels = create_data_channels(
@@ -207,21 +207,25 @@ impl Messenger for WasmMessenger {
             .unwrap();
 
         let signaled = SignaledCandidates::default();
-        let peer_signal_rx = complete_handshake(
+        let Some(peer_signal_rx) = complete_handshake(
             signal_peer.clone(),
             conn.clone(),
             received_candidates,
             data_channels_ready_fut,
             peer_signal_rx,
+            &mut peer_disconnected_rx,
             signaled.clone(),
         )
-        .await;
+        .await
+        else {
+            return Err(signal_peer.id);
+        };
 
-        HandshakeResult {
+        Ok(HandshakeResult {
             peer_id: signal_peer.id,
             data_channels,
             metadata: (peer_disconnected_rx, conn, signaled, peer_signal_rx),
-        }
+        })
     }
 
     async fn accept_handshake(
@@ -230,7 +234,7 @@ impl Messenger for WasmMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerId> {
         debug!("handshake_accept");
 
         let conn = create_rtc_peer_connection(ice_server_config);
@@ -238,7 +242,7 @@ impl Messenger for WasmMessenger {
         let (data_channel_ready_txs, data_channels_ready_fut) =
             create_data_channels_ready_fut(channel_configs);
 
-        let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
+        let (peer_disconnected_tx, mut peer_disconnected_rx) = futures_channel::mpsc::channel(1);
         notify_on_connection_failure(&conn, peer_disconnected_tx.clone());
 
         let data_channels = create_data_channels(
@@ -315,21 +319,25 @@ impl Messenger for WasmMessenger {
         signal_peer.send(answer);
 
         let signaled = SignaledCandidates::default();
-        let peer_signal_rx = complete_handshake(
+        let Some(peer_signal_rx) = complete_handshake(
             signal_peer.clone(),
             conn.clone(),
             received_candidates,
             data_channels_ready_fut,
             peer_signal_rx,
+            &mut peer_disconnected_rx,
             signaled.clone(),
         )
-        .await;
+        .await
+        else {
+            return Err(signal_peer.id);
+        };
 
-        HandshakeResult {
+        Ok(HandshakeResult {
             peer_id: signal_peer.id,
             data_channels,
             metadata: (peer_disconnected_rx, conn, signaled, peer_signal_rx),
-        }
+        })
     }
 
     async fn peer_loop(
@@ -464,8 +472,9 @@ async fn complete_handshake(
     received_candidates: Vec<String>,
     mut data_channels_ready_fut: Pin<Box<futures::future::Fuse<impl Future<Output = ()>>>>,
     mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
+    peer_disconnected_rx: &mut Receiver<()>,
     signaled: SignaledCandidates,
-) -> UnboundedReceiver<PeerSignal> {
+) -> Option<UnboundedReceiver<PeerSignal>> {
     let onicecandidate: Box<dyn FnMut(RtcPeerConnectionIceEvent)> = Box::new(
         move |event: RtcPeerConnectionIceEvent| {
             let candidate_json = match event.candidate() {
@@ -498,11 +507,16 @@ async fn complete_handshake(
 
     // select for data channels ready or ice candidates
     debug!("waiting for data channels to open");
-    loop {
+    let channels_ready = loop {
         select! {
             _ = data_channels_ready_fut => {
                 debug!("data channels ready");
-                break;
+                break true;
+            }
+            // The connection failed or a channel closed before all of them opened
+            _ = peer_disconnected_rx.next() => {
+                debug!("peer connection failed during handshake");
+                break false;
             }
             msg = peer_signal_rx.next() => {
                 if let Some(PeerSignal::IceCandidate(candidate)) = msg {
@@ -510,7 +524,7 @@ async fn complete_handshake(
                 }
             }
         };
-    }
+    };
 
     // stop listening for ICE candidates
     // TODO: we should support getting new ICE candidates even after connecting,
@@ -524,11 +538,18 @@ async fn complete_handshake(
     conn.set_onicecandidate(Some(onicecandidate.as_ref().unchecked_ref()));
     onicecandidate.forget();
 
+    if !channels_ready {
+        // No peer loop will close it, see `peer_loop`
+        conn.set_onconnectionstatechange(None);
+        conn.close();
+        return None;
+    }
+
     debug!(
         "handshake completed, ice gathering state: {:?}",
         conn.ice_gathering_state()
     );
-    peer_signal_rx
+    Some(peer_signal_rx)
 }
 
 async fn try_add_rtc_ice_candidate(

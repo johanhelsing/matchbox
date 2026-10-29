@@ -153,21 +153,23 @@ trait Messenger {
     type DataChannel: PeerDataSender;
     type HandshakeMeta: Send;
 
+    /// Fails with the peer's id when the connection fails before the data channels open
     async fn offer_handshake(
         signal_peer: SignalPeer,
         mut peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerId>;
 
+    /// Fails with the peer's id when the connection fails before the data channels open
     async fn accept_handshake(
         signal_peer: SignalPeer,
         peer_signal_rx: UnboundedReceiver<PeerSignal>,
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta>;
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerId>;
 
     /// Runs the connection to a peer until it ends, reporting the candidate pair it uses on
     /// `candidate_pair_tx` whenever it changes
@@ -297,6 +299,19 @@ async fn message_loop<M: Messenger>(
             }
 
             handshake_result = handshakes.select_next_some() => {
+                let handshake_result = match handshake_result {
+                    Ok(handshake_result) => handshake_result,
+                    Err(peer_uuid) => {
+                        // Lets a later handshake with the same peer start over
+                        handshake_signals.remove(&peer_uuid);
+                        warn!("handshake with peer {peer_uuid} failed");
+                        if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
+                            // socket dropped, exit cleanly
+                            break Ok(());
+                        }
+                        continue;
+                    }
+                };
                 data_channels.insert(handshake_result.peer_id, handshake_result.data_channels);
                 if peer_state_tx.unbounded_send((handshake_result.peer_id, PeerState::Connected)).is_err() {
                     // sending can only fail on socket drop, in which case connected_peers is unavailable, ignore

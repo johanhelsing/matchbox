@@ -40,8 +40,8 @@ The Matchbox project contains:
 
 - [simple](examples/simple): A simple communication loop using matchbox_socket
 - [bevy_ggrs](examples/bevy_ggrs): An example browser game, using `bevy` and `bevy_ggrs`
-  - Live 2-player demo: <https://helsing.studio/box_game/>
-  - Live 4-player demo: <https://helsing.studio/box_game/?players=4>
+  - Live 2-player demo: <https://johanhelsing.github.io/matchbox/>
+  - Live 4-player demo: <https://johanhelsing.github.io/matchbox/?players=4>
 
 ## How it works
 
@@ -80,7 +80,7 @@ Projects using Matchbox:
 - [NES Bundler](https://github.com/tedsteen/nes-bundler) - Transform your NES game into a single executable targeting your favorite OS!
 - [Cargo Space](https://helsing.studio/cargospace) (in development) - A coop 2D space game about building and flying a ship together
 - [Extreme Bevy](https://helsing.studio/extreme) - Simple 2-player arcade shooter
-- [Matchbox demo](https://helsing.studio/box_game/)
+- [Matchbox demo](https://johanhelsing.github.io/matchbox/)
 - [A Janitors Nightmare](https://gorktheork.itch.io/bevy-jam-1-submission) - 2-player jam game
 - [Lavagna](https://github.com/alepez/lavagna) - collaborative blackboard for online meetings
 

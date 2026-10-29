@@ -31,7 +31,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType,
     RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcPeerConnectionIceEvent,
-    RtcSdpType, RtcSessionDescriptionInit,
+    RtcPeerConnectionState, RtcSdpType, RtcSessionDescriptionInit,
 };
 use ws_stream_wasm::{WsMessage, WsMeta, WsStream};
 
@@ -140,6 +140,7 @@ impl Messenger for WasmMessenger {
             create_data_channels_ready_fut(channel_configs);
 
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
+        notify_on_connection_failure(&conn, peer_disconnected_tx.clone());
 
         let data_channels = create_data_channels(
             conn.clone(),
@@ -238,6 +239,7 @@ impl Messenger for WasmMessenger {
             create_data_channels_ready_fut(channel_configs);
 
         let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
+        notify_on_connection_failure(&conn, peer_disconnected_tx.clone());
 
         let data_channels = create_data_channels(
             conn.clone(),
@@ -351,6 +353,10 @@ impl Messenger for WasmMessenger {
                 }
             }
         }
+        // Like native's ConnectionGuard: without a close the browser keeps the connection, and
+        // the remote peer keeps seeing us until ICE times out
+        conn.set_onconnectionstatechange(None);
+        conn.close();
         peer_uuid
     }
 }
@@ -622,6 +628,31 @@ async fn wait_for_ice_gathering_complete(conn: RtcPeerConnection) {
 
     conn.set_onicegatheringstatechange(None);
     debug!("Ice gathering completed");
+}
+
+/// Treats the peer connection failing like a data channel closing, so that a peer that vanishes
+/// without closing its channels is reported disconnected once ICE gives up on it. Same as native.
+fn notify_on_connection_failure(
+    connection: &RtcPeerConnection,
+    peer_disconnected_tx: futures_channel::mpsc::Sender<()>,
+) {
+    let conn = connection.clone();
+    let onconnectionstatechange: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
+        let state = conn.connection_state();
+        debug!("peer connection state changed: {state:?}");
+        // Closed only follows our own close, which browsers don't report here, so it's Failed
+        // that matters
+        if matches!(
+            state,
+            RtcPeerConnectionState::Failed | RtcPeerConnectionState::Closed
+        ) {
+            // Full only when a disconnect is already pending, which is just as good
+            let _ = peer_disconnected_tx.clone().try_send(());
+        }
+    });
+    let onconnectionstatechange = Closure::wrap(onconnectionstatechange);
+    connection.set_onconnectionstatechange(Some(onconnectionstatechange.as_ref().unchecked_ref()));
+    onconnectionstatechange.forget();
 }
 
 fn create_data_channels(

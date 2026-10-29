@@ -2,6 +2,9 @@ on:
   push:
     branches:
       - main
+    # Releases: the container job pushes the image for matchbox_server's tag
+    tags:
+      - "matchbox_server-v*"
   pull_request:
 
 name: Code

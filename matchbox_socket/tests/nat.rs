@@ -66,8 +66,8 @@ const TURN_PASSWORD: &str = "hunter2";
 const TURN_REALM: &str = "matchbox";
 const SIGNALING_PORT: u16 = 3536;
 const TIMEOUT: Duration = Duration::from_secs(20);
-/// Long enough for ICE to have connected if it was going to
-const NO_CONNECTION_WAIT: Duration = Duration::from_secs(5);
+/// Long enough for ICE to give up on a connection, which takes about 30 seconds
+const ICE_FAILURE_TIMEOUT: Duration = Duration::from_secs(60);
 const POLL: Duration = Duration::from_millis(10);
 
 /// Which ICE servers the peers get, see [`Ice`]
@@ -660,14 +660,23 @@ async fn nat_peer() {
 
     let can_connect = !matches!((topology, ice), (_, NoServers) | (SymmetricNats, Stun));
     if !can_connect {
-        let connected = timeout(
-            NO_CONNECTION_WAIT,
-            wait_for_peer(&mut socket, PeerState::Connected),
-        );
-        assert!(
-            connected.await.is_err(),
-            "connected where it shouldn't be possible"
-        );
+        // The failed handshake must still end, with the peer reported disconnected
+        let disconnected = timeout(ICE_FAILURE_TIMEOUT, async {
+            loop {
+                let states: Vec<_> = socket.update_peers().into_iter().map(|(_, s)| s).collect();
+                assert!(
+                    !states.contains(&PeerState::Connected),
+                    "connected where it shouldn't be possible"
+                );
+                if states.contains(&PeerState::Disconnected) {
+                    return;
+                }
+                sleep(POLL).await;
+            }
+        });
+        disconnected
+            .await
+            .expect("peer never reported disconnected after the connection failed");
         return;
     }
 

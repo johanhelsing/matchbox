@@ -152,9 +152,9 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerId> {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(channel_configs);
-        let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
+        let (peer_disconnected_tx, mut peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         debug!("making offer");
         let (connection, trickle) = create_rtc_peer_connection(
@@ -210,17 +210,21 @@ impl Messenger for NativeMessenger {
             .unwrap();
 
         let signaled = SignaledCandidates::default();
-        let trickle_fut = complete_handshake(
+        let Some(trickle_fut) = complete_handshake(
             &trickle,
             &connection,
             peer_signal_rx,
             data_channels_ready_fut,
             &mut event_forwarding,
+            &mut peer_disconnected_rx,
             signaled.clone(),
         )
-        .await;
+        .await
+        else {
+            return Err(signal_peer.id);
+        };
 
-        HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
+        Ok(HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
             peer_id: signal_peer.id,
             data_channels: to_peer_message_tx,
             metadata: NativeHandshakeMeta {
@@ -232,7 +236,7 @@ impl Messenger for NativeMessenger {
                 connection,
                 signaled,
             },
-        }
+        })
     }
 
     async fn accept_handshake(
@@ -241,9 +245,9 @@ impl Messenger for NativeMessenger {
         messages_from_peers_tx: Vec<UnboundedSender<(PeerId, Packet)>>,
         ice_server_config: &RtcIceServerConfig,
         channel_configs: &[ChannelConfig],
-    ) -> HandshakeResult<Self::DataChannel, Self::HandshakeMeta> {
+    ) -> Result<HandshakeResult<Self::DataChannel, Self::HandshakeMeta>, PeerId> {
         let (to_peer_message_tx, to_peer_message_rx) = new_senders_and_receivers(channel_configs);
-        let (peer_disconnected_tx, peer_disconnected_rx) = futures_channel::mpsc::channel(1);
+        let (peer_disconnected_tx, mut peer_disconnected_rx) = futures_channel::mpsc::channel(1);
 
         debug!("handshake_accept");
         let (connection, trickle) = create_rtc_peer_connection(
@@ -289,17 +293,21 @@ impl Messenger for NativeMessenger {
         connection.set_local_description(answer).await.unwrap();
 
         let signaled = SignaledCandidates::default();
-        let trickle_fut = complete_handshake(
+        let Some(trickle_fut) = complete_handshake(
             &trickle,
             &connection,
             peer_signal_rx,
             data_channels_ready_fut,
             &mut event_forwarding,
+            &mut peer_disconnected_rx,
             signaled.clone(),
         )
-        .await;
+        .await
+        else {
+            return Err(signal_peer.id);
+        };
 
-        HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
+        Ok(HandshakeResult::<Self::DataChannel, Self::HandshakeMeta> {
             peer_id: signal_peer.id,
             data_channels: to_peer_message_tx,
             metadata: NativeHandshakeMeta {
@@ -311,7 +319,7 @@ impl Messenger for NativeMessenger {
                 connection,
                 signaled,
             },
-        }
+        })
     }
 
     async fn peer_loop(
@@ -501,8 +509,9 @@ async fn complete_handshake<T: Future<Output = ()>>(
     peer_signal_rx: UnboundedReceiver<PeerSignal>,
     mut wait_for_channels: Pin<Box<Fuse<T>>>,
     event_forwarding: &mut EventForwarding,
+    peer_disconnected_rx: &mut Receiver<()>,
     signaled: SignaledCandidates,
-) -> CandidateListener {
+) -> Option<CandidateListener> {
     trickle.send_pending_candidates();
     let mut trickle_fut = Box::pin(
         CandidateTrickle::listen_for_remote_candidates(
@@ -518,6 +527,11 @@ async fn complete_handshake<T: Future<Output = ()>>(
             _ = wait_for_channels => {
                 break;
             },
+            // The connection failed or a channel closed before all of them opened
+            _ = peer_disconnected_rx.next() => {
+                debug!("peer connection failed during handshake");
+                return None;
+            },
             // The channels open through their events.
             _ = event_forwarding.as_mut() => continue,
             // TODO: this means that the signaling is down, should return an
@@ -526,7 +540,7 @@ async fn complete_handshake<T: Future<Output = ()>>(
         };
     }
 
-    trickle_fut
+    Some(trickle_fut)
 }
 
 struct CandidateTrickle {

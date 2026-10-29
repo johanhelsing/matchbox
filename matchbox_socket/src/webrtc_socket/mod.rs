@@ -302,8 +302,8 @@ async fn message_loop<M: Messenger>(
                 let handshake_result = match handshake_result {
                     Ok(handshake_result) => handshake_result,
                     Err(peer_uuid) => {
-                        // Lets a later handshake with the same peer start over
-                        handshake_signals.remove(&peer_uuid);
+                        // The signal sender stays in handshake_signals, like after a successful
+                        // handshake, so a late signal is dropped instead of starting a new one
                         warn!("handshake with peer {peer_uuid} failed");
                         if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
                             // socket dropped, exit cleanly

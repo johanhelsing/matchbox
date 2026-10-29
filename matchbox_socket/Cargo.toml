@@ -74,6 +74,7 @@ web-sys = { version = "0.3.22", default-features = false, features = [
   "RtcIceGatheringState",
   "RtcPeerConnection",
   "RtcPeerConnectionIceEvent",
+  "RtcPeerConnectionState",
   "RtcSdpType",
   "RtcSessionDescription",
   "RtcSessionDescriptionInit",

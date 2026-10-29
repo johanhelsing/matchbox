@@ -24,7 +24,8 @@ The Matchbox project contains:
 
   | bevy  | bevy_matchbox |
   | ----- | ------------- |
-  | 0.19  | 0.15, main    |
+  | 0.20  | main          |
+  | 0.19  | 0.15          |
   | 0.18  | 0.14          |
   | 0.17  | 0.13          |
   | 0.16  | 0.12          |

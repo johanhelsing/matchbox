@@ -353,6 +353,10 @@ impl Messenger for WasmMessenger {
                 }
             }
         }
+        // Like native's ConnectionGuard: without a close the browser keeps the connection, and
+        // the remote peer keeps seeing us until ICE times out
+        conn.set_onconnectionstatechange(None);
+        conn.close();
         peer_uuid
     }
 }
@@ -636,6 +640,8 @@ fn notify_on_connection_failure(
     let onconnectionstatechange: Box<dyn FnMut(JsValue)> = Box::new(move |_| {
         let state = conn.connection_state();
         debug!("peer connection state changed: {state:?}");
+        // Closed only follows our own close, which browsers don't report here, so it's Failed
+        // that matters
         if matches!(
             state,
             RtcPeerConnectionState::Failed | RtcPeerConnectionState::Closed

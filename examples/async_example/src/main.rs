@@ -84,6 +84,9 @@ async fn async_main() {
         while let Some((peer, state)) = socket.next().await {
             let mut tx0 = tx0.clone();
             match state {
+                PeerState::Connecting => {
+                    info!("Peer found, connecting: {peer}");
+                }
                 PeerState::Connected => {
                     info!("Peer joined: {peer}");
                     let (rx_sender, rx) = channel(1);

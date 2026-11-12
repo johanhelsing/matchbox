@@ -73,6 +73,26 @@ if socket.is_relayed(peer) == Some(true) {
 }
 ```
 
+A peer is reported as `PeerState::Connecting` as soon as the handshake with it starts. One that goes from there to `Disconnected` without ever being `Connected` was found but couldn't be reached, which usually means a TURN server is needed:
+
+```rust,ignore
+for (peer, state) in socket.update_peers() {
+    match state {
+        PeerState::Connecting => {
+            connecting.insert(peer);
+        }
+        PeerState::Connected => {
+            connecting.remove(&peer);
+        }
+        PeerState::Disconnected => {
+            if connecting.remove(&peer) {
+                warn!("found {peer}, but couldn't connect");
+            }
+        }
+    }
+}
+```
+
 ## Showcase
 
 Projects using Matchbox:

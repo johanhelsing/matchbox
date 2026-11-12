@@ -660,16 +660,20 @@ async fn nat_peer() {
 
     let can_connect = !matches!((topology, ice), (_, NoServers) | (SymmetricNats, Stun));
     if !can_connect {
-        // The failed handshake must still end, with the peer reported disconnected
+        // The peer is found, and the failed handshake must still end, with the peer reported
+        // disconnected
         let disconnected = timeout(ICE_FAILURE_TIMEOUT, async {
+            let mut connecting = false;
             loop {
-                let states: Vec<_> = socket.update_peers().into_iter().map(|(_, s)| s).collect();
-                assert!(
-                    !states.contains(&PeerState::Connected),
-                    "connected where it shouldn't be possible"
-                );
-                if states.contains(&PeerState::Disconnected) {
-                    return;
+                for (_, state) in socket.update_peers() {
+                    match state {
+                        PeerState::Connecting => connecting = true,
+                        PeerState::Connected => panic!("connected where it shouldn't be possible"),
+                        PeerState::Disconnected => {
+                            assert!(connecting, "disconnected without first connecting");
+                            return;
+                        }
+                    }
                 }
                 sleep(POLL).await;
             }

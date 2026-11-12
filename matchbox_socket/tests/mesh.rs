@@ -160,6 +160,47 @@ async fn two_peers_connect_and_exchange_packets() {
     );
 }
 
+/// Every change until a peer is connected, checking that a peer isn't among the connected ones
+/// before then
+async fn changes_until_connected(socket: &mut WebRtcSocket) -> Vec<(PeerId, PeerState)> {
+    let mut changes = Vec::new();
+    timeout(TIMEOUT, async {
+        loop {
+            changes.extend(socket.update_peers());
+            if changes.iter().any(|(_, s)| *s == PeerState::Connected) {
+                return;
+            }
+            assert_eq!(socket.connected_peers().count(), 0);
+            sleep(POLL).await;
+        }
+    })
+    .await
+    .expect("no peer connected");
+    changes
+}
+
+#[tokio::test]
+async fn peers_are_connecting_before_they_connect() {
+    let server = Server::start();
+    let (mut a, _a_loop) = connect(&server);
+    let (mut b, _b_loop) = connect(&server);
+
+    // One of them offers and the other answers, both report the peer as connecting first
+    let a_changes = changes_until_connected(&mut a).await;
+    let b_changes = changes_until_connected(&mut b).await;
+    let (a_id, b_id) = (a.id().unwrap(), b.id().unwrap());
+    assert_eq!(
+        a_changes,
+        vec![(b_id, PeerState::Connecting), (b_id, PeerState::Connected)]
+    );
+    assert_eq!(
+        b_changes,
+        vec![(a_id, PeerState::Connecting), (a_id, PeerState::Connected)]
+    );
+    assert_eq!(a.connected_peers().collect::<Vec<_>>(), vec![b_id]);
+    assert_eq!(b.connected_peers().collect::<Vec<_>>(), vec![a_id]);
+}
+
 #[tokio::test]
 async fn dropping_a_socket_disconnects_its_peer() {
     let server = Server::start();

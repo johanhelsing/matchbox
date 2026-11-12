@@ -152,6 +152,7 @@ fn lobby_system(
     for (peer, new_state) in peer_changes {
         // you can also handle the specific dis(connections) as they occur:
         match new_state {
+            PeerState::Connecting => info!("peer {peer} connecting"),
             PeerState::Connected => info!("peer {peer} connected"),
             PeerState::Disconnected => info!("peer {peer} disconnected"),
         }

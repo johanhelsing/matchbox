@@ -80,6 +80,9 @@ async fn async_main(node_id: Option<String>) {
         // Handle any new peers
         for (peer, state) in socket.update_peers() {
             match state {
+                PeerState::Connecting => {
+                    info!("Peer found, connecting: {peer}");
+                }
                 PeerState::Connected => {
                     info!("Peer joined: {peer}");
                     let packet = "hello friend!".as_bytes().to_vec().into();

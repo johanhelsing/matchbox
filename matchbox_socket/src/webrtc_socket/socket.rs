@@ -271,7 +271,18 @@ impl WebRtcSocketBuilder {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// The state of a connection to a peer
+///
+/// A peer goes from [`Connecting`](Self::Connecting) to [`Connected`](Self::Connected) to
+/// [`Disconnected`](Self::Disconnected), or straight from `Connecting` to `Disconnected` if the
+/// connection couldn't be established.
 pub enum PeerState {
+    /// The signaling server introduced us to the peer and the WebRTC handshake with it started,
+    /// but the data channels aren't open yet
+    ///
+    /// A peer that stays here, or goes to [`Disconnected`](Self::Disconnected) without ever being
+    /// [`Connected`](Self::Connected), was found but couldn't be reached, e.g. because both ends
+    /// are behind NATs that need a TURN server and none was configured.
+    Connecting,
     /// The peer is connected
     ///
     /// This means all of the following should be true:
@@ -285,6 +296,7 @@ pub enum PeerState {
     ///
     /// - Some of the the data channels got disconnected/closed
     /// - The peer left the signaling server
+    /// - The handshake failed before the data channels opened
     Disconnected,
 }
 
@@ -574,8 +586,8 @@ impl WebRtcSocket {
     /// Update the set of peers used by [`WebRtcSocket::connected_peers`] and
     /// [`WebRtcSocket::disconnected_peers`].
     ///
-    /// Returns the peers that connected or disconnected since the last time
-    /// this method was called.
+    /// Returns the peers that started connecting, connected or disconnected since
+    /// the last time this method was called, in the order it happened.
     ///
     /// See also: [`PeerState`]
     ///

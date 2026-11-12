@@ -250,7 +250,11 @@ async fn message_loop<M: Messenger>(
                                 let (signal_tx, signal_rx) = futures_channel::mpsc::unbounded();
                                 handshake_signals.insert(peer_uuid, signal_tx);
                                 let signal_peer = SignalPeer::new(peer_uuid, requests_sender.clone());
-                                handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs))
+                                handshakes.push(M::offer_handshake(signal_peer, signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs));
+                                if peer_state_tx.unbounded_send((peer_uuid, PeerState::Connecting)).is_err() {
+                                    // socket dropped, exit cleanly
+                                    break Ok(());
+                                }
                             },
                             PeerEvent::PeerLeft(peer_uuid) => {
                                 if peer_state_tx.unbounded_send((peer_uuid, PeerState::Disconnected)).is_err() {
@@ -259,15 +263,22 @@ async fn message_loop<M: Messenger>(
                                 }
                             },
                             PeerEvent::Signal { sender, data } => {
+                                let mut handshake_started = false;
                                 let signal_tx = handshake_signals.entry(sender).or_insert_with(|| {
                                     let (from_peer_tx, peer_signal_rx) = futures_channel::mpsc::unbounded();
                                     let signal_peer = SignalPeer::new(sender, requests_sender.clone());
                                     handshakes.push(M::accept_handshake(signal_peer, peer_signal_rx, messages_from_peers_tx.clone(), ice_server_config, channel_configs));
+                                    handshake_started = true;
                                     from_peer_tx
                                 });
 
                                 if signal_tx.unbounded_send(data).is_err() {
                                     warn!("ignoring signal from peer {sender} because the handshake has already finished");
+                                }
+
+                                if handshake_started && peer_state_tx.unbounded_send((sender, PeerState::Connecting)).is_err() {
+                                    // socket dropped, exit cleanly
+                                    break Ok(());
                                 }
                             },
                         }

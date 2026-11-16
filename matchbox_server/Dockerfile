@@ -3,7 +3,7 @@
 # to build, run `docker build -f matchbox_server/Dockerfile` from root of the
 # repository
 
-FROM rust:1.99-slim-trixie AS builder
+FROM rust:1.100-slim-trixie AS builder
 
 WORKDIR /usr/src/matchbox_server/
 

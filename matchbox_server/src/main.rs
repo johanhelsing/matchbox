@@ -10,6 +10,7 @@ use args::Args;
 use axum::{http::StatusCode, response::IntoResponse, routing::get};
 use clap::Parser;
 use matchbox_signaling::SignalingServerBuilder;
+use tokio::sync::oneshot;
 use tracing::info;
 use tracing_subscriber::prelude::*;
 
@@ -37,6 +38,13 @@ async fn main() {
     info!("Matchbox Signaling Server: {}", args.host);
 
     let mut state = ServerState::default();
+    let (shutdown_tx, shutdown_rx) = oneshot::channel();
+    tokio::spawn(async move {
+        shutdown_signal().await;
+        info!("Shutting down");
+        let _ = shutdown_tx.send(());
+    });
+
     let server = SignalingServerBuilder::new(args.host, MatchmakingDemoTopology, state.clone())
         .on_connection_request({
             let mut state = state.clone();
@@ -60,11 +68,34 @@ async fn main() {
         .cors()
         .trace()
         .mutate_router(|router| router.route("/health", get(health_handler)))
+        .with_shutdown(shutdown_rx)
         .build();
     server
         .serve()
         .await
         .expect("Unable to run signaling server, is it already running?")
+}
+
+/// Resolves on Ctrl+C, or on SIGTERM where there is one (`docker stop`, Kubernetes)
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen for Ctrl+C");
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to listen for SIGTERM")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => {}
+        _ = terminate => {}
+    }
 }
 
 pub async fn health_handler() -> impl IntoResponse {

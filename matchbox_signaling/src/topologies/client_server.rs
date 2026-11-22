@@ -103,6 +103,10 @@ impl SignalingTopology<ClientServerCallbacks, ClientServerState> for ClientServe
 
         // The state machine for the data channel established for this websocket.
         while let Some(request) = receiver.next().await {
+            if matches!(request, Ok(Message::Ping(_) | Message::Pong(_))) {
+                // Axum automatically replies to Ping with Pong.
+                continue;
+            }
             let request = match parse_request(request) {
                 Ok(request) => request,
                 Err(e) => {

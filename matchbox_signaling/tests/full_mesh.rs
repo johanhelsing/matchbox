@@ -4,10 +4,11 @@ mod tests {
     use futures::{SinkExt, StreamExt};
     use matchbox_protocol::{JsonPeerEvent, PeerId};
     use matchbox_signaling::SignalingServer;
-    use std::{net::Ipv4Addr, str::FromStr};
+    use std::{net::Ipv4Addr, str::FromStr, time::Duration};
     use tokio::{
         net::TcpStream,
         sync::mpsc::{error::TryRecvError, unbounded_channel},
+        time::timeout,
     };
     use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 
@@ -153,6 +154,21 @@ mod tests {
             JsonPeerEvent::NewPeer(PeerId(peer_uuid)) => peer_uuid.to_string(),
             _ => panic!("unexpected event"),
         };
+
+        let payload: &[u8] = b"keepalive";
+        client_a.send(Message::Ping(payload.into())).await.unwrap();
+        let pong = timeout(Duration::from_secs(5), client_a.next())
+            .await
+            .expect("expected a Pong")
+            .unwrap()
+            .unwrap();
+        assert_eq!(pong, Message::Pong(payload.into()));
+
+        // Browser clients still send a text keepalive.
+        client_a
+            .send(Message::text(r#""KeepAlive""#))
+            .await
+            .unwrap();
 
         _ = client_a
             .send(Message::text(format!(

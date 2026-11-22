@@ -21,7 +21,7 @@ use async_tungstenite::{
     smol::{ConnectStream, connect_async},
     tungstenite::Message,
 };
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use futures::{
     Future, FutureExt, StreamExt,
     future::{Fuse, FusedFuture, join_all},
@@ -91,25 +91,34 @@ impl SignallerBuilder for NativeSignallerBuilder {
 #[async_trait]
 impl Signaller for NativeSignaller {
     async fn send(&mut self, request: PeerRequest) -> Result<(), SignalingError> {
-        let request = serde_json::to_string(&request).expect("serializing request");
+        let message = match request {
+            PeerRequest::KeepAlive => Message::Ping(Bytes::new()),
+            request => {
+                let json = serde_json::to_string(&request).expect("serializing request");
+                Message::Text(json.into())
+            }
+        };
         self.websocket_stream
-            .send(Message::Text(request.into()))
+            .send(message)
             .await
             .map_err(SignalingError::from)
     }
 
     async fn next_message(&mut self) -> Result<PeerEvent, SignalingError> {
-        let message = match self.websocket_stream.next().await {
-            Some(Ok(Message::Text(message))) => Ok(message),
-            Some(Ok(_)) => Err(SignalingError::UnknownFormat),
-            Some(Err(err)) => Err(SignalingError::from(err)),
-            None => Err(SignalingError::StreamExhausted),
-        }?;
-        let message = serde_json::from_str(&message).map_err(|e| {
+        let message = loop {
+            match self.websocket_stream.next().await {
+                Some(Ok(Message::Text(message))) => break message,
+                // Reading again flushes Tungstenite's automatic Pong reply to a Ping.
+                Some(Ok(Message::Ping(_) | Message::Pong(_))) => continue,
+                Some(Ok(_)) => return Err(SignalingError::UnknownFormat),
+                Some(Err(err)) => return Err(err.into()),
+                None => return Err(SignalingError::StreamExhausted),
+            }
+        };
+        serde_json::from_str(&message).map_err(|e| {
             error!("failed to deserialize message: {e:?}");
             SignalingError::UnknownFormat
-        })?;
-        Ok(message)
+        })
     }
 }
 

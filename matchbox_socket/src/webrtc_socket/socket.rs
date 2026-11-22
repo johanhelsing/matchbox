@@ -109,7 +109,7 @@ pub(crate) struct SocketConfig {
     pub(crate) channels: Vec<ChannelConfig>,
     /// The amount of attempts to initiate connection
     pub(crate) attempts: Option<u16>,
-    /// Interval at which to send empty requests to the signaling server
+    /// Interval for keeping the signaling connection alive
     pub(crate) keep_alive_interval: Option<Duration>,
 }
 
@@ -158,14 +158,13 @@ impl WebRtcSocketBuilder {
         self
     }
 
-    /// Sets the interval at which to send empty requests to the signaling server.
+    /// Sets the interval for keeping the signaling connection alive.
     ///
-    /// Some web services (like e.g. nginx as a reverse proxy) will close idle
-    /// web sockets. Setting this interval will periodically send empty requests
-    /// to let the signaling server know the client is still connected and
-    /// prevent disconnections.
+    /// This helps prevent reverse proxies and other web services from closing idle WebSockets.
+    /// The built-in signaller sends WebSocket Ping frames on native targets and JSON keepalive
+    /// messages in browsers.
     ///
-    /// The defaults is 10 seconds.
+    /// The default is 10 seconds. Pass `None` to disable keepalive.
     pub fn signaling_keep_alive_interval(mut self, interval: Option<Duration>) -> Self {
         self.config.keep_alive_interval = interval;
         self

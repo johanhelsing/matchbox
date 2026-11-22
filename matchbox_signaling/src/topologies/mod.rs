@@ -73,7 +73,8 @@ pub mod common_logic {
         sender.send(Ok(message)).map_err(SignalingError::from)
     }
 
-    /// Helper to parse a request, currently we only support JSON text messages for signaling.
+    /// Parses a JSON text request. Skip WebSocket Ping and Pong frames before calling this
+    /// helper; Axum automatically replies to Ping frames.
     pub fn parse_request(
         request: Result<Message, axum::Error>,
     ) -> Result<JsonPeerRequest, ClientRequestError> {
